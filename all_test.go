@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package gc
+package gc // import "modernc.org/gc"
 
 import (
 	"bufio"
@@ -30,14 +30,14 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/cznic/lex"
-	dfa "github.com/cznic/lexer"
-	"github.com/cznic/mathutil"
-	"github.com/cznic/sortutil"
-	"github.com/cznic/strutil"
-	"github.com/cznic/token"
-	"github.com/cznic/y"
 	"github.com/edsrzf/mmap-go"
+	"modernc.org/lex"
+	dfa "modernc.org/lexer"
+	"modernc.org/mathutil"
+	"modernc.org/sortutil"
+	"modernc.org/strutil"
+	"modernc.org/token"
+	"modernc.org/y"
 )
 
 func caller(s string, va ...interface{}) {
@@ -1693,7 +1693,7 @@ func TestParser(t *testing.T) {
 	t.Run("Errchk", testParserErrchk)
 }
 
-// https://github.com/cznic/browse/issues/3
+// https://gitlab.com/cznic/browse/issues/3
 func TestBrowserIssue3(t *testing.T) {
 	ctx, err := newTestContext() //"noasm")
 	if err != nil {

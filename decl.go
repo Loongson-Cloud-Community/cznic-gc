@@ -2,12 +2,12 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package gc
+package gc // import "modernc.org/gc"
 
 import (
 	"fmt"
 
-	"github.com/cznic/token"
+	"modernc.org/token"
 )
 
 var (

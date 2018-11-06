@@ -1,4 +1,4 @@
-Wed Oct 31 13:41:15 CET 2018
+Tue Nov 6 17:16:01 CET 2018
 # go run run.go -- 64bit.go
 incorrect output
 syntax error: package statement must be first
@@ -253,13 +253,13 @@ ddd1.go:32: invalid use of ... in call to sum3
 
 FAIL	ddd1.go
 # go run run.go -- ddd2.go
-testdata/errchk/test/ddd2.dir/ddd3.go:9:8: cannot find package "/home/jnml/src/github.com/cznic/gc/testdata/errchk/test/ddd2.dir/ddd2" in any of:
+testdata/errchk/test/ddd2.dir/ddd3.go:9:8: cannot find package "/home/jnml/src/modernc.org/gc/testdata/errchk/test/ddd2.dir/ddd2" in any of:
 	/home/jnml/go/src (from GOROOT)
 	/home/jnml/src (from GOPATH)
 	. (from GOPATH)
 	. (from GOPATH)
 
-testdata/errchk/test/ddd2.dir/ddd3.go:9:8: cannot find package "/home/jnml/src/github.com/cznic/gc/testdata/errchk/test/ddd2.dir/ddd2" in any of:
+testdata/errchk/test/ddd2.dir/ddd3.go:9:8: cannot find package "/home/jnml/src/modernc.org/gc/testdata/errchk/test/ddd2.dir/ddd2" in any of:
 	/home/jnml/go/src (from GOROOT)
 	/home/jnml/src (from GOPATH)
 	. (from GOPATH)
@@ -2664,7 +2664,7 @@ import1.go:18: missing error "imported and not used: \\x22math\\x22$"
 
 FAIL	import1.go
 # go run run.go -- import2.go
-testdata/errchk/test/import2.dir/import3.go:10:8: cannot find package "/home/jnml/src/github.com/cznic/gc/testdata/errchk/test/import2.dir/import2" in any of:
+testdata/errchk/test/import2.dir/import3.go:10:8: cannot find package "/home/jnml/src/modernc.org/gc/testdata/errchk/test/import2.dir/import2" in any of:
 	/home/jnml/go/src (from GOROOT)
 	/home/jnml/src (from GOPATH)
 	. (from GOPATH)
@@ -2699,7 +2699,7 @@ testdata/errchk/test/import2.dir/import3.go:47:2: undefined: p
 testdata/errchk/test/import2.dir/import3.go:48:2: undefined: p
 testdata/errchk/test/import2.dir/import3.go:49:2: undefined: p
 
-testdata/errchk/test/import2.dir/import3.go:10:8: cannot find package "/home/jnml/src/github.com/cznic/gc/testdata/errchk/test/import2.dir/import2" in any of:
+testdata/errchk/test/import2.dir/import3.go:10:8: cannot find package "/home/jnml/src/modernc.org/gc/testdata/errchk/test/import2.dir/import2" in any of:
 	/home/jnml/go/src (from GOROOT)
 	/home/jnml/src (from GOPATH)
 	. (from GOPATH)
@@ -2869,7 +2869,7 @@ compilation succeeded unexpectedly
 
 FAIL	label1.go
 # go run run.go -- linkname.go
-XTODO 1561 [go tool compile -e -D . -I . -m testdata/errchk/test/linkname.dir/linkname1.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/linkname.dir/linkname1.go]
+XTODO 1561 [go tool compile -e -D . -I . -m testdata/errchk/test/linkname.dir/linkname1.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/linkname.dir/linkname1.go]
 
 FAIL	linkname.go
 # go run run.go -- live.go
@@ -3678,7 +3678,7 @@ assertinline.go:72: missing error "type assertion not inlined"
 
 FAIL	interface/assertinline.go
 # go run run.go -- interface/embed1.go
-testdata/errchk/test/interface/embed1.dir/embed1.go:9:8: cannot find package "/home/jnml/src/github.com/cznic/gc/testdata/errchk/test/interface/embed1.dir/embed0" in any of:
+testdata/errchk/test/interface/embed1.dir/embed1.go:9:8: cannot find package "/home/jnml/src/modernc.org/gc/testdata/errchk/test/interface/embed1.dir/embed0" in any of:
 	/home/jnml/go/src (from GOROOT)
 	/home/jnml/src (from GOPATH)
 	. (from GOPATH)
@@ -3689,7 +3689,7 @@ testdata/errchk/test/interface/embed1.dir/embed1.go:18:21: undefined: p
 testdata/errchk/test/interface/embed1.dir/embed1.go:18:21: interface contains embedded non-interface p.J
 testdata/errchk/test/interface/embed1.dir/embed1.go:34:9: undefined: p
 
-testdata/errchk/test/interface/embed1.dir/embed1.go:9:8: cannot find package "/home/jnml/src/github.com/cznic/gc/testdata/errchk/test/interface/embed1.dir/embed0" in any of:
+testdata/errchk/test/interface/embed1.dir/embed1.go:9:8: cannot find package "/home/jnml/src/modernc.org/gc/testdata/errchk/test/interface/embed1.dir/embed0" in any of:
 	/home/jnml/go/src (from GOROOT)
 	/home/jnml/src (from GOPATH)
 	. (from GOPATH)
@@ -3761,7 +3761,7 @@ compilation succeeded unexpectedly
 
 FAIL	interface/receiver1.go
 # go run run.go -- interface/recursive1.go
-testdata/errchk/test/interface/recursive1.dir/recursive2.go:10:8: cannot find package "/home/jnml/src/github.com/cznic/gc/testdata/errchk/test/interface/recursive1.dir/recursive1" in any of:
+testdata/errchk/test/interface/recursive1.dir/recursive2.go:10:8: cannot find package "/home/jnml/src/modernc.org/gc/testdata/errchk/test/interface/recursive1.dir/recursive1" in any of:
 	/home/jnml/go/src (from GOROOT)
 	/home/jnml/src (from GOPATH)
 	. (from GOPATH)
@@ -3769,7 +3769,7 @@ testdata/errchk/test/interface/recursive1.dir/recursive2.go:10:8: cannot find pa
 testdata/errchk/test/interface/recursive1.dir/recursive2.go:13:9: undefined: p
 testdata/errchk/test/interface/recursive1.dir/recursive2.go:14:9: undefined: p
 
-testdata/errchk/test/interface/recursive1.dir/recursive2.go:10:8: cannot find package "/home/jnml/src/github.com/cznic/gc/testdata/errchk/test/interface/recursive1.dir/recursive1" in any of:
+testdata/errchk/test/interface/recursive1.dir/recursive2.go:10:8: cannot find package "/home/jnml/src/modernc.org/gc/testdata/errchk/test/interface/recursive1.dir/recursive1" in any of:
 	/home/jnml/go/src (from GOROOT)
 	/home/jnml/src (from GOPATH)
 	. (from GOPATH)
@@ -3805,7 +3805,7 @@ semi3.go:12: undefined: z
 
 FAIL	syntax/semi3.go
 # go run run.go -- dwarf/dwarf.go
-XTODO 1567 [go tool compile -e -D . -I . testdata/errchk/test/dwarf/dwarf.dir/main.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z1.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z10.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z11.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z12.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z13.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z14.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z15.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z16.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z17.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z18.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z19.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z2.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z20.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z3.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z4.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z5.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z6.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z7.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z8.go /home/jnml/src/github.com/cznic/gc/testdata/errchk/test/dwarf/dwarf.dir/z9.go]
+XTODO 1567 [go tool compile -e -D . -I . testdata/errchk/test/dwarf/dwarf.dir/main.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z1.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z10.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z11.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z12.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z13.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z14.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z15.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z16.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z17.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z18.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z19.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z2.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z20.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z3.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z4.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z5.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z6.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z7.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z8.go /home/jnml/src/modernc.org/gc/testdata/errchk/test/dwarf/dwarf.dir/z9.go]
 
 FAIL	dwarf/dwarf.go
 # go run run.go -- fixedbugs/bug015.go
@@ -4425,14 +4425,14 @@ XTODO 1472 [go tool link -w -o a.exe -L . z.o]
 
 FAIL	fixedbugs/bug472.go
 # go run run.go -- fixedbugs/bug478.go
-testdata/errchk/test/fixedbugs/bug478.dir/b.go:7:8: cannot find package "/home/jnml/src/github.com/cznic/gc/testdata/errchk/test/fixedbugs/bug478.dir/a" in any of:
+testdata/errchk/test/fixedbugs/bug478.dir/b.go:7:8: cannot find package "/home/jnml/src/modernc.org/gc/testdata/errchk/test/fixedbugs/bug478.dir/a" in any of:
 	/home/jnml/go/src (from GOROOT)
 	/home/jnml/src (from GOPATH)
 	. (from GOPATH)
 	. (from GOPATH)
 testdata/errchk/test/fixedbugs/bug478.dir/b.go:10:2: undefined: p1
 
-testdata/errchk/test/fixedbugs/bug478.dir/b.go:7:8: cannot find package "/home/jnml/src/github.com/cznic/gc/testdata/errchk/test/fixedbugs/bug478.dir/a" in any of:
+testdata/errchk/test/fixedbugs/bug478.dir/b.go:7:8: cannot find package "/home/jnml/src/modernc.org/gc/testdata/errchk/test/fixedbugs/bug478.dir/a" in any of:
 	/home/jnml/go/src (from GOROOT)
 	/home/jnml/src (from GOPATH)
 	. (from GOPATH)
@@ -4441,14 +4441,14 @@ testdata/errchk/test/fixedbugs/bug478.dir/b.go:10:2: undefined: p1
 
 FAIL	fixedbugs/bug478.go
 # go run run.go -- fixedbugs/bug479.go
-testdata/errchk/test/fixedbugs/bug479.dir/b.go:7:8: cannot find package "/home/jnml/src/github.com/cznic/gc/testdata/errchk/test/fixedbugs/bug479.dir/a" in any of:
+testdata/errchk/test/fixedbugs/bug479.dir/b.go:7:8: cannot find package "/home/jnml/src/modernc.org/gc/testdata/errchk/test/fixedbugs/bug479.dir/a" in any of:
 	/home/jnml/go/src (from GOROOT)
 	/home/jnml/src (from GOPATH)
 	. (from GOPATH)
 	. (from GOPATH)
 testdata/errchk/test/fixedbugs/bug479.dir/b.go:10:2: undefined: p
 
-testdata/errchk/test/fixedbugs/bug479.dir/b.go:7:8: cannot find package "/home/jnml/src/github.com/cznic/gc/testdata/errchk/test/fixedbugs/bug479.dir/a" in any of:
+testdata/errchk/test/fixedbugs/bug479.dir/b.go:7:8: cannot find package "/home/jnml/src/modernc.org/gc/testdata/errchk/test/fixedbugs/bug479.dir/a" in any of:
 	/home/jnml/go/src (from GOROOT)
 	/home/jnml/src (from GOPATH)
 	. (from GOPATH)
@@ -5307,14 +5307,14 @@ issue22904.go:13:16: *gc.NamedType
 
 FAIL	fixedbugs/issue22904.go
 # go run run.go -- fixedbugs/issue22941.go
-testdata/errchk/test/fixedbugs/issue22941.dir/b.go:7:10: cannot find package "/home/jnml/src/github.com/cznic/gc/testdata/errchk/test/fixedbugs/issue22941.dir/a" in any of:
+testdata/errchk/test/fixedbugs/issue22941.dir/b.go:7:10: cannot find package "/home/jnml/src/modernc.org/gc/testdata/errchk/test/fixedbugs/issue22941.dir/a" in any of:
 	/home/jnml/go/src (from GOROOT)
 	/home/jnml/src (from GOPATH)
 	. (from GOPATH)
 	. (from GOPATH)
 testdata/errchk/test/fixedbugs/issue22941.dir/b.go:10:5: undefined: q.P
 
-testdata/errchk/test/fixedbugs/issue22941.dir/b.go:7:10: cannot find package "/home/jnml/src/github.com/cznic/gc/testdata/errchk/test/fixedbugs/issue22941.dir/a" in any of:
+testdata/errchk/test/fixedbugs/issue22941.dir/b.go:7:10: cannot find package "/home/jnml/src/modernc.org/gc/testdata/errchk/test/fixedbugs/issue22941.dir/a" in any of:
 	/home/jnml/go/src (from GOROOT)
 	/home/jnml/src (from GOPATH)
 	. (from GOPATH)
@@ -5947,26 +5947,26 @@ compilation succeeded unexpectedly
 FAIL	fixedbugs/issue9634.go
   944 ok  
   500 FAIL
---- FAIL: TestErrchk (44.71s)
+--- FAIL: TestErrchk (45.15s)
     errchk_test.go:1345: os.Exit(1)
 FAIL
 exit status 1
-FAIL	github.com/cznic/gc	45.610s
+FAIL	modernc.org/gc	46.035s
 4794:	issue15055.go:11: TODO3517
 4811:issue15055.go:11: TODO3517
 5198:-: TODO612
 goos: linux
 goarch: amd64
-pkg: github.com/cznic/gc
-BenchmarkScanner/StdGo-4         	      20	  70463594 ns/op	 136.09 MB/s	28173157 B/op	  709314 allocs/op
-BenchmarkScanner/Std-4           	      20	  55880070 ns/op	 171.61 MB/s	 9160909 B/op	   15502 allocs/op
-BenchmarkParser/StdGo-4          	       5	 244899047 ns/op	  39.16 MB/s	119444201 B/op	 2835357 allocs/op
-BenchmarkParser/Std-4            	       2	 556420205 ns/op	  17.23 MB/s	185161100 B/op	 4035026 allocs/op
-BenchmarkChecker/StdGo-4         	       1	2320889467 ns/op	   4.13 MB/s	377564312 B/op	 5196207 allocs/op
+pkg: modernc.org/gc
+BenchmarkScanner/StdGo-4         	      20	  71145249 ns/op	 134.80 MB/s	28178086 B/op	  709357 allocs/op
+BenchmarkScanner/Std-4           	      20	  61036045 ns/op	 157.13 MB/s	 9254542 B/op	   15614 allocs/op
+BenchmarkParser/StdGo-4          	       5	 247947994 ns/op	  38.68 MB/s	119439452 B/op	 2835375 allocs/op
+BenchmarkParser/Std-4            	       2	 525090855 ns/op	  18.26 MB/s	185162388 B/op	 4035094 allocs/op
+BenchmarkChecker/StdGo-4         	       1	2906265895 ns/op	   3.30 MB/s	380469296 B/op	 5199737 allocs/op
 --- FAIL: BenchmarkChecker/Std
     all_test.go:1078: /home/jnml/go/src/go/build/build.go:1711:15: undefined: getToolDir
         
 --- FAIL: BenchmarkChecker
 FAIL
 exit status 1
-FAIL	github.com/cznic/gc	12.003s
+FAIL	modernc.org/gc	11.828s
