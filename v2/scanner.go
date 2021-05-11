@@ -15,7 +15,8 @@ import (
 )
 
 var (
-	_ Node = (*Token)(nil)
+	_        Node = (*Token)(nil)
+	errTrace bool // test hook
 )
 
 type errItem struct {
@@ -54,10 +55,16 @@ func (e errList) Err(s *source) error {
 func (e *errList) err(off int32, skip int, msg string, args ...interface{}) {
 	errs := *e
 	msg = fmt.Sprintf(msg, args...)
-	*e = append(errs, errItem{off, fmt.Errorf("%s (%v:)", msg, origin(skip+2))})
+	switch {
+	case errTrace:
+		*e = append(errs, errItem{off, fmt.Errorf("%s (%v:)", msg, origin(skip+2))})
+	default:
+		*e = append(errs, errItem{off, fmt.Errorf("%s", msg)})
+	}
 }
 
-// Ch represents the lexical value of a Token.
+// Ch represents the lexical value of a Token. Valid values of type Ch are
+// non-zero.
 type Ch rune
 
 // Token translates, if possible, c to the lexeme value defined in go/token or
@@ -86,8 +93,8 @@ type Token struct { // 24 bytes on 64 bit arch
 	sepOff int32
 }
 
-func (n *Token) sepPosition() (r token.Position) {
-	if n == nil {
+func (n Token) sepPosition() (r token.Position) {
+	if !n.IsValid() {
 		return r
 	}
 
@@ -119,14 +126,14 @@ func (n pos) Position() (r token.Position) {
 }
 
 // Offset reports the starting offset of n, in bytes, within the source buffer.
-func (n *Token) Offset() int { return int(n.off) }
+func (n Token) Offset() int { return int(n.off) }
 
 // SepOffset reports the starting offset of n's preceding white space, if any,
 // in bytes, within the source buffer.
-func (n *Token) SepOffset() int { return int(n.sepOff) }
+func (n Token) SepOffset() int { return int(n.sepOff) }
 
 // String pretty formats n.
-func (n *Token) String() string {
+func (n Token) String() string {
 	if n.Ch <= beforeTokens || n.Ch >= afterTokens { //TODO
 		return fmt.Sprintf("%v: %q %#U", n.Position(), n.Src(), rune(n.Ch))
 	}
@@ -136,13 +143,13 @@ func (n *Token) String() string {
 
 // IsValid reports the validity of n. Tokens not present in some nodes will
 // report false.
-func (n *Token) IsValid() bool { return n.source != nil }
+func (n Token) IsValid() bool { return n.source != nil }
 
 // Sep returns the whitespace preceding n, if any. The result is read only.
-func (n *Token) Sep() []byte { return n.source.buf[n.sepOff:n.off] }
+func (n Token) Sep() []byte { return n.source.buf[n.sepOff:n.off] }
 
 // Src returns the original textual form of n. The result is read only.
-func (n *Token) Src() []byte { return n.source.buf[n.off:n.next] }
+func (n Token) Src() []byte { return n.source.buf[n.off:n.next] }
 
 type source struct {
 	buf  []byte
@@ -164,6 +171,7 @@ type Scanner struct {
 	c byte // Lookahead byte.
 
 	allErrros bool
+	eof       bool
 	isClosed  bool
 }
 
@@ -178,7 +186,10 @@ func NewScanner(buf []byte, name string, allErrros bool) (*Scanner, error) {
 		source:    &source{buf: buf, file: mtoken.NewFile(name, len(buf))},
 		allErrros: allErrros,
 	}
-	if len(buf) != 0 {
+	switch {
+	case len(buf) == 0:
+		r.eof = true
+	default:
 		r.c = buf[0]
 		if r.c == '\n' {
 			r.file.AddLine(int(r.off) + 1)
@@ -209,9 +220,6 @@ func (s *Scanner) close() {
 		return
 	}
 
-	if s.cnt == 1 {
-		s.err(s.off, 1, "empty input")
-	}
 	s.Tok.Ch = EOF
 	s.Tok.next = s.off
 	s.Tok.off = s.off
@@ -234,6 +242,8 @@ func isOctalDigit(c byte) bool  { return c >= '0' && c <= '7' }
 func (s *Scanner) next() {
 	if int(s.off) == len(s.buf)-1 {
 		s.c = 0
+		s.eof = true
+		s.Tok.next = s.off + 1
 		return
 	}
 
@@ -248,6 +258,8 @@ func (s *Scanner) next() {
 func (s *Scanner) nextN(n int) {
 	if int(s.off) == len(s.buf)-n {
 		s.c = 0
+		s.eof = true
+		s.Tok.next = s.off + int32(n)
 		return
 	}
 
@@ -293,6 +305,7 @@ again:
 		s.next()
 		goto again
 	case '/':
+		off := s.off
 		s.next()
 		switch s.c {
 		case '=':
@@ -302,7 +315,7 @@ again:
 			// Line comments start with the character sequence // and stop at the end of
 			// the line.
 			s.next()
-			if s.lineComment() {
+			if s.lineComment(off) {
 				return true
 			}
 
@@ -311,7 +324,7 @@ again:
 			// General comments start with the character sequence /* and stop with the
 			// first subsequent character sequence */.
 			s.next()
-			if s.generalComment() {
+			if s.generalComment(off) {
 				return true
 			}
 
@@ -323,20 +336,26 @@ again:
 		s.Tok.Ch = Ch(s.c)
 		s.next()
 	case '"':
+		off := s.off
 		s.next()
-		s.stringLiteral()
+		s.stringLiteral(off)
 	case '\'':
+		off := s.off
 		s.next()
-		s.runeLiteral()
+		s.runeLiteral(off)
 	case '`':
 		s.next()
 		for {
-			switch s.c {
-			case '`':
+			switch {
+			case s.c == '`':
 				s.next()
 				s.Tok.Ch = STRING_LIT
 				return true
-			case 0:
+			case s.eof:
+				s.err(s.off, 0, "raw string literal not terminated")
+				s.Tok.Ch = STRING_LIT
+				return true
+			case s.c == 0:
 				panic(todo("%v: %#U", s.position(), s.c))
 			default:
 				s.next()
@@ -344,8 +363,9 @@ again:
 		}
 	case '.':
 		s.next()
+		off := s.off
 		if isDigit(s.c) {
-			s.dot()
+			s.dot(false, true)
 			return true
 		}
 
@@ -359,7 +379,9 @@ again:
 		case s.c == '.':
 			s.next()
 		default:
-			s.err(s.off, 0, "expected '.'")
+			s.off = off
+			s.Tok.Ch = '.'
+			return true
 		}
 		s.Tok.Ch = ELLIPSIS
 	case '%':
@@ -512,13 +534,6 @@ again:
 		default:
 			s.Tok.Ch = '&'
 		}
-	case 0:
-		if s.injectSemi() {
-			return true
-		}
-
-		s.close()
-		return false
 	default:
 		switch {
 		case isIDFirst(s.c):
@@ -527,14 +542,30 @@ again:
 		case isDigit(s.c):
 			s.numericLiteral()
 		case s.c >= 0x80:
+			off := s.off
 			switch r := s.rune(); {
 			case unicode.IsLetter(r):
 				s.identifierOrKeyword()
+			case r == 0xfeff:
+				if off == 0 { // Ignore BOM, but only at buffer start.
+					goto again
+				}
+
+				s.err(off, 0, "illegal byte order mark")
 			default:
-				panic(todo("%v: %#U", s.position(), r))
+				s.err(s.off, 0, "illegal character %#U", r)
 			}
+		case s.eof:
+			if s.injectSemi() {
+				return true
+			}
+
+			s.close()
+			return false
+		case s.c == 0:
+			panic(todo("%v: %#U", s.position(), s.c))
 		default:
-			s.err(s.off, 0, "unexpected %#U", s.c)
+			s.err(s.off, 0, "illegal character %#U", s.c)
 			s.next()
 		}
 	}
@@ -550,7 +581,7 @@ again:
 func (s *Scanner) injectSemi() bool {
 	switch s.last {
 	case
-		IDENTIFIER, INT_LIT, FLOAT_LIT, IMAG, RUNE_LIT, STRING_LIT,
+		IDENTIFIER, INT_LIT, FLOAT_LIT, IMAG_LIT, RUNE_LIT, STRING_LIT,
 		BREAK, CONTINUE, FALLTHROUGH, RETURN,
 		INC, DEC, ')', ']', '}':
 
@@ -568,6 +599,7 @@ func (s *Scanner) injectSemi() bool {
 
 func (s *Scanner) numericLiteral() {
 	// Leading decimal digit not consumed.
+	var hasHexMantissa, needFrac bool
 more:
 	switch s.c {
 	case '0':
@@ -578,40 +610,81 @@ more:
 		case 'b', 'B':
 			s.next()
 			s.binaryLiteral()
-			s.Tok.Ch = INT_LIT
 			return
-		case 'e', 'E', 'p', 'P':
+		case 'e', 'E':
+			s.exponent()
+			s.Tok.Ch = FLOAT_LIT
+			return
+		case 'p', 'P':
+			s.err(s.off, 0, "'%c' exponent requires hexadecimal mantissa", s.c)
 			s.exponent()
 			s.Tok.Ch = FLOAT_LIT
 			return
 		case 'o', 'O':
-			panic(todo("%v: %#U", s.position(), s.c))
-		case 'x', 'X':
 			s.next()
-			if !isHexDigit(s.c) {
-				panic(todo("%v: %#U", s.position(), s.c))
+			s.octalLiteral()
+			return
+		case 'x', 'X':
+			hasHexMantissa = true
+			needFrac = true
+			s.Tok.Ch = INT_LIT
+			s.next()
+			if s.c == '.' {
+				s.next()
+				s.dot(hasHexMantissa, needFrac)
+				return
 			}
 
-			for isHexDigit(s.c) || s.c == '_' {
-				s.next()
+			if s.hexadecimals() == 0 {
+				s.err(s.off+1, 0, "hexadecimal literal has no digits")
+				return
 			}
-			if !isHexDigit(s.source.buf[s.off-1]) {
-				panic(todo("%v: %#U", s.position(), s.c))
-			}
-			s.Tok.Ch = INT_LIT
+
+			needFrac = false
 		case 'i':
 			s.next()
-			s.Tok.Ch = IMAG
+			s.Tok.Ch = IMAG_LIT
 			return
 		default:
-			for isOctalDigit(s.c) {
-				s.next()
+			invalidOff := int32(-1)
+			var invalidDigit byte
+			for {
+				if s.c == '_' {
+					for n := 0; s.c == '_'; n++ {
+						if n == 1 {
+							s.err(s.off, 0, "'_' must separate successive digits")
+						}
+						s.next()
+					}
+					if !isDigit(s.c) {
+						s.err(s.off-1, 0, "'_' must separate successive digits")
+					}
+				}
+				if isOctalDigit(s.c) {
+					s.next()
+					continue
+				}
+
+				if isDigit(s.c) {
+					if invalidOff < 0 {
+						invalidOff = s.off
+						invalidDigit = s.c
+					}
+					s.next()
+					continue
+				}
+
+				break
 			}
-			switch {
-			case s.c == '.':
+			switch s.c {
+			case '.', 'e', 'E', 'i':
 				break more
-			case isDigit(s.c):
+			}
+			if isDigit(s.c) {
 				break more
+			}
+			if invalidOff > 0 {
+				s.err(invalidOff, 0, "invalid digit '%c' in octal literal", invalidDigit)
 			}
 			s.Tok.Ch = INT_LIT
 			return
@@ -622,58 +695,210 @@ more:
 	switch s.c {
 	case '.':
 		s.next()
-		s.dot()
+		s.dot(hasHexMantissa, needFrac)
 	case 'e', 'E', 'p', 'P':
 		s.exponent()
 		if s.c == 'i' {
 			s.next()
-			s.Tok.Ch = IMAG
+			s.Tok.Ch = IMAG_LIT
 			return
 		}
 
 		s.Tok.Ch = FLOAT_LIT
 	case 'i':
 		s.next()
-		s.Tok.Ch = IMAG
+		s.Tok.Ch = IMAG_LIT
 	default:
 		s.Tok.Ch = INT_LIT
 	}
 }
 
-func (s *Scanner) dot() {
-	s.decimals()
+func (s *Scanner) octalLiteral() {
+	// Leading 0o consumed.
+	ok := false
+	invalidOff := int32(-1)
+	var invalidDigit byte
+	s.Tok.Ch = INT_LIT
+	for {
+		for n := 0; s.c == '_'; n++ {
+			if n == 1 {
+				s.err(s.off, 0, "'_' must separate successive digits")
+			}
+			s.next()
+		}
+		switch s.c {
+		case '0', '1', '2', '3', '4', '5', '6', '7':
+			s.next()
+			ok = true
+		case '8', '9':
+			if invalidOff < 0 {
+				invalidOff = s.off
+				invalidDigit = s.c
+			}
+			s.next()
+		case '.':
+			s.Tok.Ch = FLOAT_LIT
+			s.err(s.off, 0, "invalid radix point in octal literal")
+			s.next()
+		case 'e', 'E':
+			s.Tok.Ch = FLOAT_LIT
+			s.err(s.off, 0, "'%c' exponent requires decimal mantissa", s.c)
+			s.exponent()
+		case 'p', 'P':
+			s.Tok.Ch = FLOAT_LIT
+			s.err(s.off, 0, "'%c' exponent requires hexadecimal mantissa", s.c)
+			s.exponent()
+		default:
+			switch {
+			case !ok:
+				s.err(s.off+1, 0, "octal literal has no digits")
+			case invalidOff > 0:
+				s.err(invalidOff, 0, "invalid digit '%c' in octal literal", invalidDigit)
+			}
+			if s.c == 'i' {
+				s.next()
+				s.Tok.Ch = IMAG_LIT
+			}
+			return
+		}
+	}
+}
+
+func (s *Scanner) dot(hasHexMantissa, needFrac bool) {
+	// '.' already consumed
+	switch {
+	case hasHexMantissa:
+		if s.hexadecimals() == 0 && needFrac {
+			s.err(s.off, 0, "hexadecimal literal has no digits")
+		}
+		switch s.c {
+		case 'p', 'P':
+			// ok
+		default:
+			s.err(s.off, 0, "hexadecimal mantissa requires a 'p' exponent")
+		}
+	default:
+		if s.decimals() == 0 && needFrac {
+			panic(todo("%v: %#U", s.position(), s.c))
+		}
+	}
 	switch s.c {
-	case 'e', 'E', 'p', 'P':
+	case 'p', 'P':
+		if !hasHexMantissa {
+			s.err(s.off, 0, "'%c' exponent requires hexadecimal mantissa", s.c)
+		}
+		fallthrough
+	case 'e', 'E':
 		s.exponent()
 		if s.c == 'i' {
 			s.next()
-			s.Tok.Ch = IMAG
+			s.Tok.Ch = IMAG_LIT
 			return
 		}
 
 		s.Tok.Ch = FLOAT_LIT
 	case 'i':
 		s.next()
-		s.Tok.Ch = IMAG
+		s.Tok.Ch = IMAG_LIT
 	default:
 		s.Tok.Ch = FLOAT_LIT
+	}
+}
+
+func (s *Scanner) decimals() (r int) {
+	first := true
+	for {
+		switch {
+		case isDigit(s.c):
+			first = false
+			s.next()
+			r++
+		case s.c == '_':
+			for n := 0; s.c == '_'; n++ {
+				if first || n == 1 {
+					s.err(s.off, 0, "'_' must separate successive digits")
+				}
+				s.next()
+			}
+			if !isDigit(s.c) {
+				s.err(s.off-1, 0, "'_' must separate successive digits")
+			}
+		default:
+			return r
+		}
+	}
+}
+
+func (s *Scanner) hexadecimals() (r int) {
+	for {
+		switch {
+		case isHexDigit(s.c):
+			s.next()
+			r++
+		case s.c == '_':
+			for n := 0; s.c == '_'; n++ {
+				if n == 1 {
+					s.err(s.off, 0, "'_' must separate successive digits")
+				}
+				s.next()
+			}
+			if !isHexDigit(s.c) {
+				s.err(s.off-1, 0, "'_' must separate successive digits")
+			}
+		default:
+			return r
+		}
 	}
 }
 
 func (s *Scanner) binaryLiteral() {
 	// Leading 0b consumed.
 	ok := false
+	invalidOff := int32(-1)
+	var invalidDigit byte
+	s.Tok.Ch = INT_LIT
 	for {
-		if s.c == '_' {
+		for n := 0; s.c == '_'; n++ {
+			if n == 1 {
+				s.err(s.off, 0, "'_' must separate successive digits")
+			}
 			s.next()
 		}
 		switch s.c {
 		case '0', '1':
 			s.next()
 			ok = true
+		case '.':
+			s.Tok.Ch = FLOAT_LIT
+			s.err(s.off, 0, "invalid radix point in binary literal")
+			s.next()
+		case 'e', 'E':
+			s.Tok.Ch = FLOAT_LIT
+			s.err(s.off, 0, "'%c' exponent requires decimal mantissa", s.c)
+			s.exponent()
+		case 'p', 'P':
+			s.Tok.Ch = FLOAT_LIT
+			s.err(s.off, 0, "'%c' exponent requires hexadecimal mantissa", s.c)
+			s.exponent()
 		default:
-			if !ok {
-				panic(todo("%v: %#U", s.position(), s.c))
+			if isDigit(s.c) {
+				if invalidOff < 0 {
+					invalidOff = s.off
+					invalidDigit = s.c
+				}
+				s.next()
+				continue
+			}
+
+			switch {
+			case !ok:
+				s.err(s.off+1, 0, "binary literal has no digits")
+			case invalidOff > 0:
+				s.err(invalidOff, 0, "invalid digit '%c' in binary literal", invalidDigit)
+			}
+			if s.c == 'i' {
+				s.next()
+				s.Tok.Ch = IMAG_LIT
 			}
 			return
 		}
@@ -688,84 +913,132 @@ func (s *Scanner) exponent() {
 		s.next()
 	}
 	if !isDigit(s.c) {
-		panic(todo("%v: %#U", s.position(), s.c))
+		s.err(s.off+1, 0, "exponent has no digits")
+		return
 	}
 
 	s.decimals()
 }
 
-func (s *Scanner) decimals() {
-	for isDigit(s.c) {
-		s.next()
-	}
-}
-
-func (s *Scanner) runeLiteral() {
+func (s *Scanner) runeLiteral(off int32) {
 	// Leading ' consumed.
-	switch s.c {
-	case '\\':
-		s.next()
+	ok := 0
+	s.Tok.Ch = RUNE_LIT
+	expOff := int32(-1)
+	if s.eof {
+		s.err(off, 0, "rune literal not terminated")
+		return
+	}
+
+	for {
 		switch s.c {
-		case '\'', '\\', 'a', 'b', 'f', 'n', 'r', 't', 'v':
+		case '\\':
+			ok++
 			s.next()
-		case 'x', 'X':
-			s.next()
-			if !isHexDigit(s.c) {
-				panic(todo("%v: %#U", s.position(), s.c))
-			}
+			switch s.c {
+			case '\'', '\\', 'a', 'b', 'f', 'n', 'r', 't', 'v':
+				s.next()
+			case 'x', 'X':
+				// s.next()
+				// if !isHexDigit(s.c) {
+				// 	panic(todo("%v: %#U", s.position(), s.c))
+				// }
 
-			s.next()
-			if !isHexDigit(s.c) {
-				panic(todo("%v: %#U", s.position(), s.c))
-			}
+				// s.next()
+				// if !isHexDigit(s.c) {
+				// 	panic(todo("%v: %#U", s.position(), s.c))
+				// }
 
+				// s.next()
+
+				s.next()
+				for i := 0; i < 2; i++ {
+					if s.c == '\'' {
+						if i != 2 {
+							s.err(s.off, 0, "illegal character %#U in escape sequence", s.c)
+						}
+						s.next()
+						return
+					}
+
+					if !isHexDigit(s.c) {
+						s.err(s.off, 0, "illegal character %#U in escape sequence", s.c)
+						break
+					}
+					s.next()
+				}
+			case 'u':
+				s.u(4)
+			case 'U':
+				s.u(8)
+			default:
+				switch {
+				case s.eof:
+					s.err(s.off+1, 0, "escape sequence not terminated")
+					return
+				case isOctalDigit(s.c):
+					for i := 0; i < 3; i++ {
+						s.next()
+						if s.c == '\'' {
+							if i != 2 {
+								s.err(s.off, 0, "illegal character %#U in escape sequence", s.c)
+							}
+							s.next()
+							return
+						}
+
+						if !isOctalDigit(s.c) {
+							s.err(s.off, 0, "illegal character %#U in escape sequence", s.c)
+							break
+						}
+					}
+				default:
+					s.err(s.off, 0, "unknown escape sequence")
+				}
+			}
+		case '\'':
 			s.next()
-		case 'u':
-			s.u4()
-		case 'U':
-			s.u8()
+			if ok != 1 {
+				s.err(off, 0, "illegal rune literal")
+			}
+			return
+		case '\t':
+			s.next()
+			ok++
 		default:
 			switch {
-			case isOctalDigit(s.c):
-				s.next()
-				if isOctalDigit(s.c) {
-					s.next()
+			case s.eof:
+				switch {
+				case ok != 0:
+					s.err(expOff, 0, "rune literal not terminated")
+				default:
+					s.err(s.off+1, 0, "rune literal not terminated")
 				}
-				if isOctalDigit(s.c) {
-					s.next()
+				return
+			case s.c == 0:
+				panic(todo("%v: %#U", s.position(), s.c))
+			case s.c < ' ':
+				ok++
+				s.err(s.off, 0, "non-printable character: %#U", s.c)
+				s.next()
+			case s.c >= 0x80:
+				ok++
+				off := s.off
+				if c := s.rune(); c == 0xfeff {
+					s.err(off, 0, "illegal byte order mark")
 				}
 			default:
-				panic(todo("%v: %#U", s.position(), s.c))
+				ok++
+				s.next()
 			}
 		}
-		goto last
+		if ok != 0 && expOff < 0 {
+			expOff = s.off
+			if s.eof {
+				expOff++
+			}
+		}
 	}
-
-	switch {
-	case s.c == 0:
-		panic(todo("%v: %#U", s.position(), s.c))
-	case s.c == '\t':
-		s.next()
-	case s.c < ' ':
-		s.err(s.off, 0, "non-printable character: %#U", s.c)
-		s.next()
-	case s.c >= 0x80:
-		s.rune()
-	default:
-		s.next()
-	}
-
-last:
-	switch s.c {
-	case '\'':
-		s.next()
-	case 0:
-		panic(todo("%v: %#U", s.position(), s.c))
-	default:
-		panic(todo("%v: %#U", s.position(), s.c))
-	}
-	s.Tok.Ch = RUNE_LIT
-	return
 }
 
 func (s *Scanner) rune() rune {
@@ -773,22 +1046,24 @@ func (s *Scanner) rune() rune {
 	case r == utf8.RuneError && sz == 0:
 		panic(todo("%v: %#U", s.position(), s.c))
 	case r == utf8.RuneError && sz == 1:
-		panic(todo("%v: %#U", s.position(), s.c))
+		s.err(s.off, 0, "illegal UTF-8 encoding")
+		s.next()
+		return r
 	default:
 		s.nextN(sz)
 		return r
 	}
 }
 
-func (s *Scanner) stringLiteral() {
+func (s *Scanner) stringLiteral(off int32) {
 	// Leadind " consumed.
+	s.Tok.Ch = STRING_LIT
 	for {
-		switch s.c {
-		case '"':
+		switch {
+		case s.c == '"':
 			s.next()
-			s.Tok.Ch = STRING_LIT
 			return
-		case '\\':
+		case s.c == '\\':
 			s.next()
 			switch s.c {
 			case '"', '\\', 'a', 'b', 'f', 'n', 'r', 't', 'v':
@@ -808,10 +1083,10 @@ func (s *Scanner) stringLiteral() {
 				s.next()
 				continue
 			case 'u':
-				s.u4()
+				s.u(4)
 				continue
 			case 'U':
-				s.u8()
+				s.u(8)
 				continue
 			default:
 				switch {
@@ -828,8 +1103,11 @@ func (s *Scanner) stringLiteral() {
 					panic(todo("%v: %#U", s.position(), s.c))
 				}
 			}
-		case 0:
-			panic(todo("%v: %#U", s.position(), s.c))
+		case s.eof:
+			s.err(off, 0, "string literal not terminated")
+			return
+		case s.c == 0:
+			s.err(s.off, 0, "illegal character NUL")
 		}
 
 		switch {
@@ -838,33 +1116,51 @@ func (s *Scanner) stringLiteral() {
 		case s.c < ' ':
 			s.err(s.off, 0, "non-printable character: %#U", s.c)
 			s.next()
-		}
-		s.next()
-	}
-}
-
-func (s *Scanner) u4() {
-	// Leading u not consumed.
-	s.next()
-	for i := 0; i < 4; i++ {
-		if !isHexDigit(s.c) {
-			panic(todo("%v: %#U", s.position(), s.c))
+		case s.c >= 0x80:
+			off := s.off
+			if s.rune() == 0xfeff {
+				s.err(off, 0, "illegal byte order mark")
+			}
+			continue
 		}
 
 		s.next()
 	}
 }
 
-func (s *Scanner) u8() {
-	// Leading U not consumed.
+func (s *Scanner) u(n int) (r rune) {
+	// Leading u/U not consumed.
 	s.next()
-	for i := 0; i < 8; i++ {
-		if !isHexDigit(s.c) {
-			panic(todo("%v: %#U", s.position(), s.c))
+	off := s.off
+	for i := 0; i < n; i++ {
+		switch {
+		case isHexDigit(s.c):
+			var n rune
+			switch {
+			case s.c >= '0' && s.c <= '9':
+				n = rune(s.c) - '0'
+			case s.c >= 'a' && s.c <= 'f':
+				n = rune(s.c) - 'a'
+			case s.c >= 'A' && s.c <= 'F':
+				n = rune(s.c) - 'A'
+			}
+			r = 16*r + n
+		default:
+			switch {
+			case s.eof:
+				s.err(s.off+1, 0, "escape sequence not terminated")
+			default:
+				s.err(s.off, 0, "illegal character %#U in escape sequence", s.c)
+			}
+			return r
 		}
 
 		s.next()
 	}
+	if r > unicode.MaxRune {
+		s.err(off, 0, "escape sequence is invalid Unicode code point")
+	}
+	return r
 }
 
 func (s *Scanner) identifierOrKeyword() {
@@ -880,7 +1176,10 @@ out:
 			default:
 				panic(todo("%v: %#U", s.position(), r))
 			}
+		case s.eof:
+			break out
 		case s.c == 0:
+			panic(todo("%v: %#U", s.position(), s.c))
 			break out
 		default:
 			break out
@@ -892,12 +1191,12 @@ out:
 	return
 }
 
-func (s *Scanner) generalComment() bool {
+func (s *Scanner) generalComment(off int32) bool {
 	// Leading /* consumed
 	var nl bool
 	for {
-		switch s.c {
-		case '*':
+		switch {
+		case s.c == '*':
 			s.next()
 			switch s.c {
 			case '/':
@@ -908,10 +1207,14 @@ func (s *Scanner) generalComment() bool {
 
 				return false
 			}
-		case '\n':
+		case s.c == '\n':
 			nl = true
 			s.next()
-		case 0:
+		case s.eof:
+			s.Tok.Ch = 0
+			s.err(off, 0, "comment not terminated")
+			return true
+		case s.c == 0:
 			panic(todo("%v: %#U", s.position(), s.c))
 		default:
 			s.next()
@@ -919,18 +1222,29 @@ func (s *Scanner) generalComment() bool {
 	}
 }
 
-func (s *Scanner) lineComment() bool {
+func (s *Scanner) lineComment(off int32) bool {
 	// Leading // consumed
 	for {
-		switch s.c {
-		case '\n':
+		switch {
+		case s.c == '\n':
 			if s.injectSemi() {
 				return true
 			}
 
 			s.next()
 			return false
-		case 0:
+		case s.c >= 0x80:
+			if c := s.rune(); c == 0xfeff {
+				s.err(off+2, 0, "illegal byte order mark")
+			}
+		case s.eof:
+			if s.injectSemi() {
+				return true
+			}
+
+			return false
+		case s.c == 0:
+			panic(todo("%v: %#U", s.position(), s.c))
 			return false
 		default:
 			s.next()
@@ -969,7 +1283,7 @@ const (
 	GOTO           // goto
 	IDENTIFIER     // identifier
 	IF             // if
-	IMAG           // 123.45i
+	IMAG_LIT       // imaginary literal
 	IMPORT         // import
 	INC            // ++
 	INTERFACE      // interface
@@ -1053,7 +1367,7 @@ var xlat = map[Ch]token.Token{
 	GOTO:           token.GOTO,
 	IDENTIFIER:     token.IDENT,
 	IF:             token.IF,
-	IMAG:           token.IMAG,
+	IMAG_LIT:       token.IMAG,
 	IMPORT:         token.IMPORT,
 	INC:            token.INC,
 	INTERFACE:      token.INTERFACE,

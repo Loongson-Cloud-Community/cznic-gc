@@ -36,7 +36,7 @@ func _() {
 	_ = x[GOTO-57369]
 	_ = x[IDENTIFIER-57370]
 	_ = x[IF-57371]
-	_ = x[IMAG-57372]
+	_ = x[IMAG_LIT-57372]
 	_ = x[IMPORT-57373]
 	_ = x[INC-57374]
 	_ = x[INTERFACE-57375]
@@ -69,9 +69,9 @@ func _() {
 	_ = x[afterTokens-57402]
 }
 
-const _Ch_name = "beforeTokens+=&=&^&^=<-breakcasechanconstcontinue--defaultdefer:=...elseend of file==fallthroughfloating point literalforfunc>=gogotoidentifierif123.45iimport++interfaceinteger literal&&<=||map*=!=|=package/=range%=returnrune literalselect<<<<=>>>>=string literalstruct-=switchtypevar^=afterTokens"
+const _Ch_name = "beforeTokens+=&=&^&^=<-breakcasechanconstcontinue--defaultdefer:=...elseend of file==fallthroughfloating point literalforfunc>=gogotoidentifierifimaginary literalimport++interfaceinteger literal&&<=||map*=!=|=package/=range%=returnrune literalselect<<<<=>>>>=string literalstruct-=switchtypevar^=afterTokens"
 
-var _Ch_index = [...]uint16{0, 12, 14, 16, 18, 21, 23, 28, 32, 36, 41, 49, 51, 58, 63, 65, 68, 72, 83, 85, 96, 118, 121, 125, 127, 129, 133, 143, 145, 152, 158, 160, 169, 184, 186, 188, 190, 193, 195, 197, 199, 206, 208, 213, 215, 221, 233, 239, 241, 244, 246, 249, 263, 269, 271, 277, 281, 284, 286, 297}
+var _Ch_index = [...]uint16{0, 12, 14, 16, 18, 21, 23, 28, 32, 36, 41, 49, 51, 58, 63, 65, 68, 72, 83, 85, 96, 118, 121, 125, 127, 129, 133, 143, 145, 162, 168, 170, 179, 194, 196, 198, 200, 203, 205, 207, 209, 216, 218, 223, 225, 231, 243, 249, 251, 254, 256, 259, 273, 279, 281, 287, 291, 294, 296, 307}
 
 func (i Ch) String() string {
 	i -= 57344

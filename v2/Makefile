@@ -35,7 +35,6 @@ edit:
 
 editor: stringer.go
 	gofmt -l -s -w *.go 2>&1 | tee log
-	GO111MODULE=off go test 2>&1 | tee -a log
 	GO111MODULE=off go install -v ./... 2>&1 | tee -a log
 	@gofmt -l -s -w .
 

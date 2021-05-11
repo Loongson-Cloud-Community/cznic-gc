@@ -63,6 +63,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	flag.BoolVar(&errTrace, "errtrc", false, "")
 	flag.Parse()
 	if s := *oRE; s != "" {
 		re = regexp.MustCompile(s)
