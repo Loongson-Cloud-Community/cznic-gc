@@ -191,7 +191,7 @@ type Scanner struct {
 //
 // The scanner normally stops scanning after some number of errors. Passing
 // allErrros == true overides that.
-func NewScanner(buf []byte, name string, allErrros bool) (*Scanner, error) {
+func NewScanner(name string, buf []byte, allErrros bool) (*Scanner, error) {
 	r := &Scanner{
 		source:    &source{buf: buf, file: mtoken.NewFile(name, len(buf))},
 		allErrros: allErrros,

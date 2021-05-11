@@ -126,7 +126,7 @@ func testScanner(t *testing.T, root, skip string) {
 			s0.Init(fi, b, func(pos gotoken.Position, msg string) {
 				err0 = fmt.Errorf("%v: %s", pos, msg)
 			}, 0)
-			s, err := NewScanner(b, path, false)
+			s, err := NewScanner(path, b, false)
 			if err != nil {
 				return err
 			}
@@ -291,7 +291,7 @@ func BenchmarkScanner(b *testing.B) {
 			}
 			switch filepath.Ext(path) {
 			case ".go":
-				s, err := NewScanner(buf, path, false)
+				s, err := NewScanner(path, buf, false)
 				if err != nil {
 					return err
 				}
@@ -373,7 +373,7 @@ func TestTokenSet(t *testing.T) {
 	} {
 		ntoks := len(strings.Split(test, " "))
 		for itok := 0; itok < ntoks; itok++ {
-			s, err := NewScanner([]byte(test), fmt.Sprintf("%v.go", itest), false)
+			s, err := NewScanner(fmt.Sprintf("%v.go", itest), []byte(test), false)
 			if err != nil {
 				t.Fatal(itest, err)
 			}
