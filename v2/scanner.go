@@ -151,6 +151,16 @@ func (n Token) Sep() []byte { return n.source.buf[n.sepOff:n.off] }
 // Src returns the original textual form of n. The result is read only.
 func (n Token) Src() []byte { return n.source.buf[n.off:n.next] }
 
+// Set sets the result of n.Sep to be s[:srcOff] and n.Src() to be s[srcOff:].
+// Set will allocate at least len(s) bytes of additional memory.
+func (n *Token) Set(s []byte, srcOff int) {
+	off := int32(len(n.source.buf))
+	n.source.buf = append(n.source.buf, s...)
+	n.sepOff = off
+	n.off = off + int32(srcOff)
+	n.next = int32(len(n.source.buf))
+}
+
 type source struct {
 	buf  []byte
 	file *mtoken.File

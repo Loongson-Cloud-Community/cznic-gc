@@ -361,3 +361,66 @@ func BenchmarkGoScanner(b *testing.B) {
 	}
 	b.SetBytes(sz)
 }
+
+func TestTokenSet(t *testing.T) {
+	for itest, test := range []string{
+		"a",
+		"a b",
+		"a b c",
+		"a1",
+		"a1 b2",
+		"a1 b2 c2",
+	} {
+		ntoks := len(strings.Split(test, " "))
+		for itok := 0; itok < ntoks; itok++ {
+			s, err := NewScanner([]byte(test), fmt.Sprintf("%v.go", itest), false)
+			if err != nil {
+				t.Fatal(itest, err)
+			}
+
+			var toks []Token
+			var seps, srcs []string
+			for s.Scan() {
+				toks = append(toks, s.Tok)
+				seps = append(seps, string(s.Tok.Sep()))
+				srcs = append(srcs, string(s.Tok.Src()))
+			}
+
+			for j, v := range []struct{ sep, src string }{
+				{"", ""},
+				{"x", ""},
+				{"x", "y"},
+				{"", "y"},
+				{"xx", ""},
+				{"xx", "y"},
+				{"", "y"},
+				{"xx", ""},
+				{"xx", "yy"},
+				{"", "yy"},
+				{"x", ""},
+				{"x", "yy"},
+				{"", "yy"},
+			} {
+				s := []byte(v.sep + v.src)
+				toks[itok].Set(s, len(v.sep))
+				var sep, src string
+				for i, tok := range toks {
+					switch {
+					case i == itok:
+						sep = v.sep
+						src = v.src
+					default:
+						sep = seps[i]
+						src = srcs[i]
+					}
+					if g, e := string(tok.Sep()), sep; g != e {
+						t.Errorf("test %v, tok %v, j %v, got separator %q, expected %q", itest, itok, j, g, e)
+					}
+					if g, e := string(tok.Src()), src; g != e {
+						t.Errorf("test %v, tok %v, j %v, got source %q, expected %q", itest, itok, j, g, e)
+					}
+				}
+			}
+		}
+	}
+}
