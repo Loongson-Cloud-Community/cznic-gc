@@ -18,7 +18,7 @@ import (
 	"testing"
 )
 
-func TestScanErrors(t *testing.T) {
+func testScanErrors(t *testing.T) {
 	for itest, test := range []struct {
 		src string
 		ch  Ch
@@ -118,7 +118,7 @@ func TestScanErrors(t *testing.T) {
 	}
 }
 
-func TestNumbers(t *testing.T) {
+func testNumbers(t *testing.T) {
 	for itest, test := range []struct {
 		tok              Ch
 		src, tokens, err string

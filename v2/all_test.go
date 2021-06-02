@@ -5,11 +5,13 @@
 package gc // import "modernc.org/gc/v2"
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	goscanner "go/scanner"
 	gotoken "go/token"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path"
 	"path/filepath"
@@ -18,6 +20,9 @@ import (
 	"runtime/debug"
 	"strings"
 	"testing"
+	"unicode"
+
+	"modernc.org/scannertest"
 )
 
 func caller(s string, va ...interface{}) {
@@ -57,10 +62,35 @@ func init() {
 // ----------------------------------------------------------------------------
 
 var (
+	_ scannertest.Interface = (*testScanner)(nil)
+
 	oRE     = flag.String("re", "", "")
 	re      *regexp.Regexp
 	tempDir string
+
+	digits  = expand(unicode.Nd)
+	letters = expand(unicode.L)
 )
+
+func expand(cat *unicode.RangeTable) (r []rune) {
+	for _, v := range cat.R16 {
+		for x := v.Lo; x <= v.Hi; x += v.Stride {
+			r = append(r, rune(x))
+		}
+	}
+	for _, v := range cat.R32 {
+		for x := v.Lo; x <= v.Hi; x += v.Stride {
+			r = append(r, rune(x))
+		}
+	}
+	s := rand.NewSource(42)
+	rn := rand.New(s)
+	for i := range r {
+		j := rn.Intn(len(r))
+		r[i], r[j] = r[j], r[i]
+	}
+	return r
+}
 
 func TestMain(m *testing.M) {
 	flag.BoolVar(&errTrace, "errtrc", false, "")
@@ -83,7 +113,7 @@ func testMain(m *testing.M) int {
 	return m.Run()
 }
 
-func testScanner(t *testing.T, root, skip string) {
+func testScan(t *testing.T, root, skip string) {
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -256,8 +286,69 @@ func noGoLit(c Ch) bool {
 }
 
 func TestScanner(t *testing.T) {
-	t.Run(".", func(t *testing.T) { testScanner(t, ".", "") })
-	t.Run("GOROOT", func(t *testing.T) { testScanner(t, runtime.GOROOT(), "/test/") })
+	t.Run("states", func(t *testing.T) { testScanStates(t) })
+	t.Run(".", func(t *testing.T) { testScan(t, ".", "") })
+	t.Run("GOROOT", func(t *testing.T) { testScan(t, runtime.GOROOT(), "/test/") })
+	t.Run("errors", func(t *testing.T) { testScanErrors(t) })
+	t.Run("numbers", func(t *testing.T) { testNumbers(t) })
+}
+
+type testScanner struct {
+	inits int
+	mod   int
+	s     *Scanner
+}
+
+func newTestScanner() *testScanner {
+	return &testScanner{}
+}
+
+func (s *testScanner) Init(name string, src []byte) (err error) {
+	s.s, err = NewScanner(name, []byte(src), false)
+	s.inits++
+	return err
+}
+
+func (s *testScanner) Rune(c byte) (r rune, ok bool) {
+
+	switch c {
+	case 0:
+		return -1, false
+	case 0x80: // unicodeDigit
+		r = digits[s.mod%len(digits)]
+		s.mod++
+		return r, true
+	case 0x81: // unicodeLetter
+		r = letters[s.mod%len(letters)]
+		s.mod++
+		return r, true
+	}
+
+	if c < 128 {
+		return rune(c), true
+	}
+
+	return -1, false
+}
+
+func (s *testScanner) Scan() error {
+	s.s.Tok.source = s.s.source
+	s.s.scan()
+	return s.s.Err()
+}
+
+func testScanStates(t *testing.T) {
+	b, err := os.ReadFile(filepath.FromSlash("testdata/scanner/scanner.l"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s := newTestScanner()
+	if err := scannertest.TestStates("scanner.l", bytes.NewReader(b), s); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Logf("%v test cases", s.inits)
 }
 
 func BenchmarkScanner(b *testing.B) {

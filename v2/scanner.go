@@ -291,7 +291,7 @@ func (s *Scanner) nextN(n int) {
 //	if err := s.Err() {
 //		...
 //	}
-func (s *Scanner) Scan() bool {
+func (s *Scanner) Scan() (r bool) {
 	if s.isClosed {
 		return false
 	}
@@ -300,7 +300,15 @@ func (s *Scanner) Scan() bool {
 	s.last = s.Tok.Ch
 	s.Tok.sepOff = s.off
 	s.Tok.source = s.source
-again:
+	s.Tok.Ch = -1
+	for {
+		if r = s.scan(); !r || s.Tok.Ch >= 0 {
+			return r
+		}
+	}
+}
+
+func (s *Scanner) scan() (r bool) {
 	s.Tok.off = s.off
 	s.Tok.next = s.off
 	switch s.c {
@@ -313,7 +321,7 @@ again:
 		}
 
 		s.next()
-		goto again
+		return true
 	case '/':
 		off := s.off
 		s.next()
@@ -329,7 +337,7 @@ again:
 				return true
 			}
 
-			goto again
+			return true
 		case '*':
 			// General comments start with the character sequence /* and stop with the
 			// first subsequent character sequence */.
@@ -338,7 +346,7 @@ again:
 				return true
 			}
 
-			goto again
+			return true
 		default:
 			s.Tok.Ch = '/'
 		}
@@ -385,15 +393,15 @@ again:
 		}
 
 		s.next()
-		switch {
-		case s.c == '.':
-			s.next()
-		default:
+		if s.c != '.' {
 			s.off = off
 			s.Tok.Ch = '.'
 			return true
 		}
+
+		s.next()
 		s.Tok.Ch = ELLIPSIS
+		return true
 	case '%':
 		s.next()
 		switch s.c {
@@ -558,12 +566,14 @@ again:
 				s.identifierOrKeyword()
 			case r == 0xfeff:
 				if off == 0 { // Ignore BOM, but only at buffer start.
-					goto again
+					return true
 				}
 
 				s.err(off, 0, "illegal byte order mark")
+				s.Tok.Ch = 0
 			default:
 				s.err(s.off, 0, "illegal character %#U", r)
+				s.Tok.Ch = 0
 			}
 		case s.eof:
 			if s.injectSemi() {
@@ -577,17 +587,20 @@ again:
 		default:
 			s.err(s.off, 0, "illegal character %#U", s.c)
 			s.next()
+			s.Tok.Ch = 0
 		}
 	}
 	return true
 }
 
-// When the input is broken into tokens, a semicolon is automatically inserted into the token stream immediately after a line's final token if that token is
+// When the input is broken into tokens, a semicolon is automatically inserted
+// into the token stream immediately after a line's final token if that token
+// is
 //
-//	an identifier
-//	an integer, floating-point, imaginary, rune, or string literal
-//	one of the keywords break, continue, fallthrough, or return
-//	one of the operators and punctuation ++, --, ), ], or }
+//	- an identifier
+//	- an integer, floating-point, imaginary, rune, or string literal
+//	- one of the keywords break, continue, fallthrough, or return
+//	- one of the operators and punctuation ++, --, ), ], or }
 func (s *Scanner) injectSemi() bool {
 	switch s.last {
 	case
@@ -1189,7 +1202,6 @@ out:
 		case s.eof:
 			break out
 		case s.c == 0:
-			panic(todo("%v: %#U", s.position(), s.c))
 			break out
 		default:
 			break out
@@ -1201,7 +1213,7 @@ out:
 	return
 }
 
-func (s *Scanner) generalComment(off int32) bool {
+func (s *Scanner) generalComment(off int32) (injectSemi bool) {
 	// Leading /* consumed
 	var nl bool
 	for {
@@ -1232,7 +1244,7 @@ func (s *Scanner) generalComment(off int32) bool {
 	}
 }
 
-func (s *Scanner) lineComment(off int32) bool {
+func (s *Scanner) lineComment(off int32) (injectSemi bool) {
 	// Leading // consumed
 	for {
 		switch {
@@ -1254,7 +1266,6 @@ func (s *Scanner) lineComment(off int32) bool {
 
 			return false
 		case s.c == 0:
-			panic(todo("%v: %#U", s.position(), s.c))
 			return false
 		default:
 			s.next()
