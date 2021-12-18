@@ -500,7 +500,7 @@ func testScannerStates(t *testing.T) {
 			case classLTLT, classGTGT, classBOM:
 				src += "@"
 			default:
-				src += string(c)
+				src += string(rune(c))
 			}
 
 			fi := token.NewFile("", len(src))
