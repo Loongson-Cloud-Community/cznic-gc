@@ -87,6 +87,7 @@ white			[ \n\r\t]+
 "|="
 "||"
 "}"
+"~"
 
 break
 case

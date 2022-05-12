@@ -23,20 +23,11 @@ func newParser() *parser {
 	panic(todo(""))
 }
 
-// ParseSourceFileConfig represents configuration used by ParseSourceFile.
-type ParseSourceFileConfig struct {
-	Tags      []string
-	AllErrors bool
-}
-
-// ParseSourceFile parser buf and returns the *SourceFile or an error, if any.
+// ParseSourceFile parses buf and returns the *SourceFile or an error, if any.
 // Positions are reported as if buf is coming from a file named name. The
 // buffer becomes owned by the *SourceFile and must not be modified after
 // calling ParseSourceFile.
-//
-// The parser normally stops parsing after some number of errors. Passing
-// allErrros == true overides that.
-func ParseSourceFile(cfg *ParseSourceFileConfig, name string, buf []string) (*SourceFile, error) {
+func ParseSourceFile(name string, buf []string) (*SourceFile, error) {
 	panic(todo(""))
 }
 
@@ -58,16 +49,39 @@ type SourceFile struct {
 // Position implements Node.
 func (n *SourceFile) Position() token.Position { return n.PackageClause.Position() }
 
-type PackageClause struct{}
+// PackageClause represents the package clause od a source file.
+//
+// A package clause begins each source file and defines the package to which the file belongs.
+//
+//	PackageClause  = "package" PackageName .
+//	PackageName    = identifier .
+type PackageClause struct {
+	//TODO
+}
 
 // Position implements Node.
 func (n *PackageClause) Position() token.Position { panic(todo("")) }
 
+// ImportDecl represents an import declaration of a source file.
+//
+// An import declaration states that the source file containing the declaration
+// depends on functionality of the imported package (§Program initialization
+// and execution) and enables access to exported identifiers of that package.
+// The import names an identifier (PackageName) to be used for access and an
+// ImportPath that specifies the package to be imported.
+//
+//	ImportDecl       = "import" ( ImportSpec | "(" { ImportSpec ";" } ")" ) .
+//	ImportSpec       = [ "." | PackageName ] ImportPath .
+//	ImportPath       = string_lit .
 type ImportDecl struct{}
 
 // Position implements Node.
 func (n *ImportDecl) Position() token.Position { panic(todo("")) }
 
+// TopLevelDecl represents a declaration, function declaration or a method
+// declaration.
+//
+//	TopLevelDecl  = Declaration | FunctionDecl | MethodDecl .
 type TopLevelDecl struct{}
 
 // Position implements Node.

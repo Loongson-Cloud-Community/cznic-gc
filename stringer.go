@@ -4,6 +4,18 @@ package gc
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[ConstDeclaration-0]
+	_ = x[FuncDeclaration-1]
+	_ = x[ImportDeclaration-2]
+	_ = x[MethodDeclaration-3]
+	_ = x[TypeDeclaration-4]
+	_ = x[VarDeclaration-5]
+}
+
 const _DeclarationKind_name = "ConstDeclarationFuncDeclarationImportDeclarationMethodDeclarationTypeDeclarationVarDeclaration"
 
 var _DeclarationKind_index = [...]uint8{0, 16, 31, 48, 65, 80, 94}
@@ -13,6 +25,15 @@ func (i DeclarationKind) String() string {
 		return "DeclarationKind(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
 	return _DeclarationKind_name[_DeclarationKind_index[i]:_DeclarationKind_index[i+1]]
+}
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[UniverseScope-0]
+	_ = x[PackageScope-1]
+	_ = x[FileScope-2]
+	_ = x[BlockScope-3]
 }
 
 const _ScopeKind_name = "UniverseScopePackageScopeFileScopeBlockScope"
@@ -25,6 +46,13 @@ func (i ScopeKind) String() string {
 	}
 	return _ScopeKind_name[_ScopeKind_index[i]:_ScopeKind_index[i+1]]
 }
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[TxChan-1]
+	_ = x[RxChan-2]
+}
 
 const _ChanDir_name = "TxChanRxChan"
 
@@ -36,6 +64,15 @@ func (i ChanDir) String() string {
 		return "ChanDir(" + strconv.FormatInt(int64(i+1), 10) + ")"
 	}
 	return _ChanDir_name[_ChanDir_index[i]:_ChanDir_index[i+1]]
+}
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[checking-1]
+	_ = x[checked-2]
+	_ = x[checkedFalse-3]
+	_ = x[checkedTrue-4]
 }
 
 const _sentinel_name = "checkingcheckedcheckedFalsecheckedTrue"

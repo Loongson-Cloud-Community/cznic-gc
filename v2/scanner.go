@@ -110,28 +110,6 @@ func (n Token) Position() (r token.Position) {
 	return r
 }
 
-func (n Token) pos() pos { return pos{n.source, n.off} }
-
-type pos struct {
-	source *source
-	off    int32
-}
-
-func (n pos) Position() (r token.Position) {
-	if n.source != nil {
-		return token.Position(n.source.file.PositionFor(mtoken.Pos(n.off+1), true))
-	}
-
-	return r
-}
-
-// Offset reports the starting offset of n, in bytes, within the source buffer.
-func (n Token) Offset() int { return int(n.off) }
-
-// SepOffset reports the starting offset of n's preceding white space, if any,
-// in bytes, within the source buffer.
-func (n Token) SepOffset() int { return int(n.sepOff) }
-
 // String pretty formats n.
 func (n Token) String() string {
 	if n.Ch <= beforeTokens || n.Ch >= afterTokens { //TODO
@@ -145,15 +123,31 @@ func (n Token) String() string {
 // report false.
 func (n Token) IsValid() bool { return n.source != nil }
 
-// Sep returns the whitespace preceding n, if any. The result is read only.
-func (n Token) Sep() []byte { return n.source.buf[n.sepOff:n.off] }
+// Sep returns the whitespace preceding n, if any.
+func (n Token) Sep() string { return string(n.source.buf[n.sepOff:n.off]) }
 
-// Src returns the original textual form of n. The result is read only.
-func (n Token) Src() []byte { return n.source.buf[n.off:n.next] }
+// Src returns the textual form of n.
+func (n Token) Src() string { return string(n.source.buf[n.off:n.next]) }
 
-// Set sets the result of n.Sep to be s[:srcOff] and n.Src() to be s[srcOff:].
-// Set will allocate at least len(s) bytes of additional memory.
-func (n *Token) Set(s []byte, srcOff int) {
+func (n Token) src() []byte { return n.source.buf[n.off:n.next] }
+
+// Set sets the result of n.Sep to be sep and n.Src() to be src.
+// Set will allocate at least len(sep+src) bytes of additional memory.
+func (n *Token) Set(sep, src string) { n.set([]byte(sep+src), len(sep)) }
+
+// SetSep sets the result of n.Sep to be sep.  SetSep will allocate at least
+// len(sep+n.Src()) bytes of additional memory. Using Set is more effective
+// when bot the results of .Sep() and .Src() should be altered.
+func (n *Token) SetSep(sep string) { n.Set(sep, n.Src()) }
+
+// SetSrc sets the result of n.Src to be src.  SetSrc will allocate at least
+// len(n.Sep()+src()) bytes of additional memory. Using Set is more effective
+// when bot the results of .Sep() and .Src() should be altered.
+func (n *Token) SetSrc(src string) { n.Set(n.Sep(), src) }
+
+// set sets the result of n.Sep to be s[:srcOff] and n.Src() to be s[srcOff:].
+// set will allocate at least len(s) bytes of additional memory.
+func (n *Token) set(s []byte, srcOff int) {
 	off := int32(len(n.source.buf))
 	n.source.buf = append(n.source.buf, s...)
 	n.sepOff = off
@@ -180,21 +174,16 @@ type Scanner struct {
 
 	c byte // Lookahead byte.
 
-	allErrros bool
-	eof       bool
-	isClosed  bool
+	eof      bool
+	isClosed bool
 }
 
 // NewScanner returns a newly created scanner that will tokenize buf. Positions
 // are reported as if buf is coming from a file named name. The buffer becomes
 // owned by the scanner and must not be modified after calling NewScanner.
-//
-// The scanner normally stops scanning after some number of errors. Passing
-// allErrros == true overides that.
-func NewScanner(name string, buf []byte, allErrros bool) (*Scanner, error) {
+func NewScanner(name string, buf []byte) (*Scanner, error) {
 	r := &Scanner{
-		source:    &source{buf: buf, file: mtoken.NewFile(name, len(buf))},
-		allErrros: allErrros,
+		source: &source{buf: buf, file: mtoken.NewFile(name, len(buf))},
 	}
 	switch {
 	case len(buf) == 0:
@@ -217,11 +206,6 @@ func (s *Scanner) position() token.Position {
 func (s *Scanner) Err() error { return s.errs.Err(s.source) }
 
 func (s *Scanner) err(off int32, skip int, msg string, args ...interface{}) {
-	if len(s.errs) == 10 && !s.allErrros {
-		s.close()
-		return
-	}
-
 	s.errs.err(off, skip+1, msg, args...)
 }
 
@@ -350,7 +334,7 @@ func (s *Scanner) scan() (r bool) {
 		default:
 			s.Tok.Ch = '/'
 		}
-	case '(', ')', '[', ']', '{', '}', ',', ';':
+	case '(', ')', '[', ']', '{', '}', ',', ';', '~':
 		s.Tok.Ch = Ch(s.c)
 		s.next()
 	case '"':
@@ -962,18 +946,6 @@ func (s *Scanner) runeLiteral(off int32) {
 			case '\'', '\\', 'a', 'b', 'f', 'n', 'r', 't', 'v':
 				s.next()
 			case 'x', 'X':
-				// s.next()
-				// if !isHexDigit(s.c) {
-				// 	panic(todo("%v: %#U", s.position(), s.c))
-				// }
-
-				// s.next()
-				// if !isHexDigit(s.c) {
-				// 	panic(todo("%v: %#U", s.position(), s.c))
-				// }
-
-				// s.next()
-
 				s.next()
 				for i := 0; i < 2; i++ {
 					if s.c == '\'' {
@@ -1207,7 +1179,7 @@ out:
 			break out
 		}
 	}
-	if s.Tok.Ch = Keywords[string(s.Tok.Src())]; s.Tok.Ch == 0 {
+	if s.Tok.Ch = Keywords[string(s.Tok.src())]; s.Tok.Ch == 0 {
 		s.Tok.Ch = IDENTIFIER
 	}
 	return
@@ -1331,6 +1303,7 @@ const (
 	STRUCT         // struct
 	SUB_ASSIGN     // -=
 	SWITCH         // switch
+	TILDE          // ~
 	TYPE           // type
 	VAR            // var
 	XOR_ASSIGN     // ^=
@@ -1361,6 +1334,7 @@ var xlat = map[Ch]token.Token{
 	'{':            token.LBRACE,
 	'|':            token.OR,
 	'}':            token.RBRACE,
+	'~':            token.TILDE,
 	ADD_ASSIGN:     token.ADD_ASSIGN,
 	AND_ASSIGN:     token.AND_ASSIGN,
 	AND_NOT:        token.AND_NOT,

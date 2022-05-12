@@ -90,7 +90,7 @@ func testScanErrors(t *testing.T) {
 		{`'`, RUNE_LIT, 0, `'`, "rune literal not terminated"},
 		{`…`, 0, 0, "", "illegal character U+2026 '…'"},
 	} {
-		s, err := NewScanner(fmt.Sprintf("%d.go", itest), []byte(test.src), false)
+		s, err := NewScanner(fmt.Sprintf("%d.go", itest), []byte(test.src))
 		if err != nil {
 			t.Fatalf("%v: %v", itest, err)
 		}
@@ -279,7 +279,7 @@ func testNumbers(t *testing.T) {
 		{INT_LIT, "0x___0", "0x___0", "'_' must separate successive digits"},
 		{FLOAT_LIT, "0x1.0_p0", "0x1.0_p0", "'_' must separate successive digits"},
 	} {
-		s, err := NewScanner(fmt.Sprintf("%d.go", itest), []byte(test.src), false)
+		s, err := NewScanner(fmt.Sprintf("%d.go", itest), []byte(test.src))
 		if err != nil {
 			t.Fatalf("%v: %v", itest, err)
 		}
@@ -307,7 +307,7 @@ func testNumbers(t *testing.T) {
 				}
 			}
 
-			if g, e := string(s.Tok.Src()), want; g != e {
+			if g, e := s.Tok.Src(), want; g != e {
 				t.Errorf("%q: got literal %q (%s); want %s", test.src, g, s.Tok.Ch, e)
 			}
 		}

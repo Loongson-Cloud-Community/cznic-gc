@@ -103,8 +103,7 @@ func TestMain(m *testing.M) {
 
 func testMain(m *testing.M) int {
 	var err error
-	tempDir, err = ioutil.TempDir("", "run-test-")
-	if err != nil {
+	if tempDir, err = ioutil.TempDir("", "run-test-"); err != nil {
 		panic(err) //TODOOK
 	}
 
@@ -156,7 +155,7 @@ func testScan(t *testing.T, root, skip string) {
 			s0.Init(fi, b, func(pos gotoken.Position, msg string) {
 				err0 = fmt.Errorf("%v: %s", pos, msg)
 			}, 0)
-			s, err := NewScanner(path, b, false)
+			s, err := NewScanner(path, b)
 			if err != nil {
 				return err
 			}
@@ -165,9 +164,7 @@ func testScan(t *testing.T, root, skip string) {
 				pos0, tok0, lit0 := s0.Scan()
 				position0 := fi.Position(pos0)
 				eof0 := tok0 == gotoken.EOF
-				// off0 := s.off //TODO-
 				eof := !s.Scan()
-				// trc("%v: tok0 %q lit0 %q, %v: tok %q lit %q, off0 %v, off %v", fi.Position(pos0), tok0, lit0, s.Tok.Position(), s.Tok.Ch, s.Tok.Src(), off0, s.off) //TODO-
 				err := s.Err()
 				if g, e := s.Tok.Token(), tok0; g != e {
 					t.Logf("%v: tok0 %q lit0 %q, %v: tok %q lit %q", fi.Position(pos0), tok0, lit0, s.Tok.Position(), s.Tok.Ch, s.Tok.Src())
@@ -175,7 +172,7 @@ func testScan(t *testing.T, root, skip string) {
 					return nil
 				}
 
-				if g, e := string(s.Tok.Src()), lit0; g != e {
+				if g, e := s.Tok.Src(), lit0; g != e {
 					switch {
 					case tok0 == gotoken.SEMICOLON && lit0 != ";":
 						// Ok, our result for injected semis is different.
@@ -253,6 +250,7 @@ func noGoLit(c Ch) bool {
 		'{',
 		'|',
 		'}',
+		'~',
 		ADD_ASSIGN,
 		AND_ASSIGN,
 		AND_NOT,
@@ -304,13 +302,12 @@ func newTestScanner() *testScanner {
 }
 
 func (s *testScanner) Init(name string, src []byte) (err error) {
-	s.s, err = NewScanner(name, []byte(src), false)
+	s.s, err = NewScanner(name, []byte(src))
 	s.inits++
 	return err
 }
 
 func (s *testScanner) Rune(c byte) (r rune, ok bool) {
-
 	switch c {
 	case 0:
 		return -1, false
@@ -382,7 +379,7 @@ func BenchmarkScanner(b *testing.B) {
 			}
 			switch filepath.Ext(path) {
 			case ".go":
-				s, err := NewScanner(path, buf, false)
+				s, err := NewScanner(path, buf)
 				if err != nil {
 					return err
 				}
@@ -464,7 +461,7 @@ func TestTokenSet(t *testing.T) {
 	} {
 		ntoks := len(strings.Split(test, " "))
 		for itok := 0; itok < ntoks; itok++ {
-			s, err := NewScanner(fmt.Sprintf("%v.go", itest), []byte(test), false)
+			s, err := NewScanner(fmt.Sprintf("%v.go", itest), []byte(test))
 			if err != nil {
 				t.Fatal(itest, err)
 			}
@@ -473,8 +470,8 @@ func TestTokenSet(t *testing.T) {
 			var seps, srcs []string
 			for s.Scan() {
 				toks = append(toks, s.Tok)
-				seps = append(seps, string(s.Tok.Sep()))
-				srcs = append(srcs, string(s.Tok.Src()))
+				seps = append(seps, s.Tok.Sep())
+				srcs = append(srcs, s.Tok.Src())
 			}
 
 			for j, v := range []struct{ sep, src string }{
@@ -492,8 +489,7 @@ func TestTokenSet(t *testing.T) {
 				{"x", "yy"},
 				{"", "yy"},
 			} {
-				s := []byte(v.sep + v.src)
-				toks[itok].Set(s, len(v.sep))
+				toks[itok].Set(v.sep, v.src)
 				var sep, src string
 				for i, tok := range toks {
 					switch {
@@ -504,10 +500,10 @@ func TestTokenSet(t *testing.T) {
 						sep = seps[i]
 						src = srcs[i]
 					}
-					if g, e := string(tok.Sep()), sep; g != e {
+					if g, e := tok.Sep(), sep; g != e {
 						t.Errorf("test %v, tok %v, j %v, got separator %q, expected %q", itest, itok, j, g, e)
 					}
-					if g, e := string(tok.Src()), src; g != e {
+					if g, e := tok.Src(), src; g != e {
 						t.Errorf("test %v, tok %v, j %v, got source %q, expected %q", itest, itok, j, g, e)
 					}
 				}
