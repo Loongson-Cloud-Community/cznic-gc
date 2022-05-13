@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 
-.PHONY:	clean edit editor
+.PHONY:	clean edit editor tmp
 
 clean:
 	rm -f log-* cpu.test mem.test *.out
@@ -17,3 +17,8 @@ editor:
 	gofmt -l -s -w *.go
 	go test -o /dev/null -c
 	go install -v | tee log-editor
+
+tmp:
+	go test -v -run TestParser -trc 2>&1 | tee log
+	grep -a '^TODO' log | sort | uniq -c | sort -n | tee log-2
+	grep -a 'TOTAL\|\<FAIL\>\|\<PASS\>' log || true

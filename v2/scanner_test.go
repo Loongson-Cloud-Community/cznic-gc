@@ -22,7 +22,7 @@ func testScanErrors(t *testing.T) {
 	for itest, test := range []struct {
 		src string
 		ch  Ch
-		off int32
+		off int
 		_   string // not used
 		err string
 	}{
@@ -107,7 +107,7 @@ func testScanErrors(t *testing.T) {
 			if g, e := s.errs[0].err.Error(), test.err; g != e {
 				t.Errorf("%v: %q: got err %q, expected %q", itest, test.src, g, test.err)
 			}
-			if g, e := s.errs[0].off, test.off; g != e {
+			if g, e := s.errs[0].pos.Offset, test.off; g != e {
 				t.Errorf("%v: %q: got error offset %d, expected %d", itest, test.src, g, e)
 			}
 		default:

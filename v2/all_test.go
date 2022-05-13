@@ -65,6 +65,7 @@ var (
 	_ scannertest.Interface = (*testScanner)(nil)
 
 	oRE     = flag.String("re", "", "")
+	oTrc    = flag.Bool("trc", false, "")
 	re      *regexp.Regexp
 	tempDir string
 
@@ -93,7 +94,7 @@ func expand(cat *unicode.RangeTable) (r []rune) {
 }
 
 func TestMain(m *testing.M) {
-	flag.BoolVar(&errTrace, "errtrc", false, "")
+	extendedErrors = true
 	flag.Parse()
 	if s := *oRE; s != "" {
 		re = regexp.MustCompile(s)
@@ -112,8 +113,8 @@ func testMain(m *testing.M) int {
 	return m.Run()
 }
 
-func testScan(t *testing.T, root, skip string) {
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+func testScan(p *parallel, t *testing.T, root, skip string) {
+	if err := filepath.Walk(root, func(path0 string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -124,30 +125,36 @@ func testScan(t *testing.T, root, skip string) {
 
 		switch {
 		case re == nil:
-			if strings.Contains(filepath.ToSlash(path), "/errchk/") {
+			if strings.Contains(filepath.ToSlash(path0), "/errchk/") {
 				return nil
 			}
 
-			if strings.Contains(filepath.ToSlash(path), "/testdata/") {
+			if strings.Contains(filepath.ToSlash(path0), "/testdata/") {
 				return nil
 			}
 
-			if skip != "" && strings.Contains(filepath.ToSlash(path), skip) {
+			if skip != "" && strings.Contains(filepath.ToSlash(path0), skip) {
 				return nil
 			}
 		default:
-			if !re.MatchString(path) {
+			if !re.MatchString(path0) {
 				return nil
 			}
 		}
 
-		b, err := ioutil.ReadFile(path)
-		if err != nil {
-			return err
+		if filepath.Ext(path0) != ".go" {
+			return nil
 		}
 
-		switch filepath.Ext(path) {
-		case ".go":
+		path := path0
+		p.file()
+		p.exec(func() error {
+			b, err := os.ReadFile(path)
+			if err != nil {
+				p.fail()
+				return err
+			}
+
 			fs := gotoken.NewFileSet()
 			fi := fs.AddFile(path, -1, len(b))
 			var s0 goscanner.Scanner
@@ -157,6 +164,7 @@ func testScan(t *testing.T, root, skip string) {
 			}, 0)
 			s, err := NewScanner(path, b)
 			if err != nil {
+				p.fail()
 				return err
 			}
 
@@ -166,10 +174,9 @@ func testScan(t *testing.T, root, skip string) {
 				eof0 := tok0 == gotoken.EOF
 				eof := !s.Scan()
 				err := s.Err()
-				if g, e := s.Tok.Token(), tok0; g != e {
-					t.Logf("%v: tok0 %q lit0 %q, %v: tok %q lit %q", fi.Position(pos0), tok0, lit0, s.Tok.Position(), s.Tok.Ch, s.Tok.Src())
-					t.Fatalf("%v: token, got %v, expected %v", position0, g, e)
-					return nil
+				if g, e := s.Tok.token(), tok0; g != e {
+					p.fail()
+					return fmt.Errorf("%v: token, got %v, expected %v", position0, g, e)
 				}
 
 				if g, e := s.Tok.Src(), lit0; g != e {
@@ -179,9 +186,8 @@ func testScan(t *testing.T, root, skip string) {
 					case noGoLit(s.Tok.Ch):
 						// Ok, go/scanner does not return the literal string.
 					default:
-						t.Logf("%v: tok0 %q lit0 %q, %v: tok %q lit %q", fi.Position(pos0), tok0, lit0, s.Tok.Position(), s.Tok.Ch, s.Tok.Src())
-						t.Fatalf("%v: source, got %q, expected %q", position0, g, e)
-						return nil
+						p.fail()
+						return fmt.Errorf("%v: source, got %q, expected %q", position0, g, e)
 					}
 				}
 
@@ -196,33 +202,31 @@ func testScan(t *testing.T, root, skip string) {
 						ok = s.Tok.Position().Filename == position0.Filename && s.Tok.Position().Line == position0.Line
 					}
 					if !ok {
-						t.Logf("%v: tok0 %q lit0 %q, %v: tok %q lit %q", fi.Position(pos0), tok0, lit0, s.Tok.Position(), s.Tok.Ch, s.Tok.Src())
-						t.Fatalf("%v: got %v:", e, g)
-						return nil
+						p.fail()
+						return fmt.Errorf("%v: got %v:", e, g)
 					}
 				}
 
 				if g, e := err, err0; (g != nil) != (e != nil) {
-					t.Logf("%v: tok0 %q lit0 %q, %v: tok %q lit %q", fi.Position(pos0), tok0, lit0, s.Tok.Position(), s.Tok.Ch, s.Tok.Src())
-					t.Fatalf("%v: error, got %v, expected %v", position0, g, e)
-					return nil
+					p.fail()
+					return fmt.Errorf("%v: error, got %v, expected %v", position0, g, e)
 				}
 
 				if g, e := eof, eof0; g != e {
-					t.Logf("%v: tok0 %q lit0 %q, %v: tok %q lit %q", fi.Position(pos0), tok0, lit0, s.Tok.Position(), s.Tok.Ch, s.Tok.Src())
-					t.Fatalf("%v: EOF, got %v, expected %v", position0, g, e)
-					return nil
+					p.fail()
+					return fmt.Errorf("%v: EOF, got %v, expected %v", position0, g, e)
 				}
 
 				if eof {
-					return nil
+					break
 				}
 			}
-		}
+			p.ok()
+			return nil
+		})
 		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
+	}); err != nil {
+		t.Error(err)
 	}
 }
 
@@ -284,11 +288,16 @@ func noGoLit(c Ch) bool {
 }
 
 func TestScanner(t *testing.T) {
+	p := newParallel()
 	t.Run("states", func(t *testing.T) { testScanStates(t) })
-	t.Run(".", func(t *testing.T) { testScan(t, ".", "") })
-	t.Run("GOROOT", func(t *testing.T) { testScan(t, runtime.GOROOT(), "/test/") })
+	t.Run(".", func(t *testing.T) { testScan(p, t, ".", "") })
+	t.Run("GOROOT", func(t *testing.T) { testScan(p, t, runtime.GOROOT(), "/test/") })
 	t.Run("errors", func(t *testing.T) { testScanErrors(t) })
 	t.Run("numbers", func(t *testing.T) { testNumbers(t) })
+	if err := p.wait(); err != nil {
+		t.Error(err)
+	}
+	t.Logf("TOTAL files %v, ok %v, fails %v", p.files, p.oks, p.fails)
 }
 
 type testScanner struct {
@@ -335,6 +344,10 @@ func (s *testScanner) Scan() error {
 }
 
 func testScanStates(t *testing.T) {
+	if testing.Short() {
+		t.Skip("-short")
+	}
+
 	b, err := os.ReadFile(filepath.FromSlash("testdata/scanner/scanner.l"))
 	if err != nil {
 		t.Fatal(err)
@@ -353,7 +366,9 @@ func BenchmarkScanner(b *testing.B) {
 	skip := filepath.ToSlash(root + "/test/")
 	var sz int64
 	files := 0
+	debug.FreeOSMemory()
 	b.ReportAllocs()
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		err := filepath.Walk(runtime.GOROOT(), func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -404,7 +419,9 @@ func BenchmarkGoScanner(b *testing.B) {
 	skip := filepath.ToSlash(root + "/test/")
 	var sz int64
 	files := 0
+	debug.FreeOSMemory()
 	b.ReportAllocs()
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		err := filepath.Walk(runtime.GOROOT(), func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -509,5 +526,76 @@ func TestTokenSet(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestParser(t *testing.T) {
+	return //TODO-
+	p := newParallel()
+	t.Run(".", func(t *testing.T) { testParser(p, t, ".", "") })
+	t.Run("GOROOT", func(t *testing.T) { testParser(p, t, runtime.GOROOT(), "/test/") })
+	if err := p.wait(); err != nil {
+		t.Error(err)
+	}
+	t.Logf("TOTAL files %v, ok %v, fails %v", p.files, p.oks, p.fails)
+}
+
+func testParser(p *parallel, t *testing.T, root, skip string) {
+	err := filepath.Walk(root, func(path0 string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		switch {
+		case re == nil:
+			if strings.Contains(filepath.ToSlash(path0), "/errchk/") {
+				return nil
+			}
+
+			if strings.Contains(filepath.ToSlash(path0), "/testdata/") {
+				return nil
+			}
+
+			if skip != "" && strings.Contains(filepath.ToSlash(path0), skip) {
+				return nil
+			}
+		default:
+			if !re.MatchString(path0) {
+				return nil
+			}
+		}
+
+		if filepath.Ext(path0) != ".go" {
+			return nil
+		}
+
+		if *oTrc {
+			fmt.Println(path0)
+		}
+		path := path0
+		p.file()
+		p.exec(func() error {
+			b, err := os.ReadFile(path)
+			if err != nil {
+				p.fail()
+				return err
+			}
+
+			if _, err = ParseSourceFile(path, b); err != nil {
+				p.fail()
+				return err
+			}
+
+			p.ok()
+			return nil
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

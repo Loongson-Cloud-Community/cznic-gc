@@ -15,30 +15,25 @@ import (
 )
 
 var (
-	_        Node = (*Token)(nil)
-	errTrace bool // test hook
+	_ Node = (*Token)(nil)
 )
 
-type errItem struct {
-	off int32
+type errWithPosition struct {
+	pos token.Position
 	err error
 }
 
-func (n errItem) position(s *source) token.Position {
-	return token.Position(s.file.PositionFor(mtoken.Pos(n.off+1), true))
-}
+type errList []errWithPosition
 
-type errList []errItem
-
-func (e errList) Err(s *source) error {
+func (e errList) Err() error {
 	if len(e) == 0 {
 		return nil
 	}
 
 	w := 0
-	prev := errItem{off: -1}
+	prev := errWithPosition{pos: token.Position{Offset: -1}}
 	for _, v := range e {
-		if v.off != prev.off || v.err.Error() != prev.err.Error() {
+		if v.pos.Line == 0 || v.pos.Offset != prev.pos.Offset || v.err.Error() != prev.err.Error() {
 			e[w] = v
 			w++
 			prev = v
@@ -47,29 +42,22 @@ func (e errList) Err(s *source) error {
 
 	var a []string
 	for _, v := range e {
-		a = append(a, fmt.Sprintf("%v: %v", token.Position(s.file.PositionFor(mtoken.Pos(v.off+1), true)), v.err))
+		a = append(a, fmt.Sprintf("%v: %v", v.pos, v.err))
 	}
 	return fmt.Errorf("%s", strings.Join(a, "\n"))
 }
 
-func (e *errList) err(off int32, skip int, msg string, args ...interface{}) {
-	errs := *e
-	msg = fmt.Sprintf(msg, args...)
-	switch {
-	case errTrace:
-		*e = append(errs, errItem{off, fmt.Errorf("%s (%v:)", msg, origin(skip+2))})
-	default:
-		*e = append(errs, errItem{off, fmt.Errorf("%s", msg)})
-	}
+func (e *errList) err(pos token.Position, msg string, args ...interface{}) {
+	*e = append(*e, errWithPosition{pos, fmt.Errorf("%s", fmt.Sprintf(msg, args...))})
 }
 
 // Ch represents the lexical value of a Token. Valid values of type Ch are
 // non-zero.
 type Ch rune
 
-// Token translates, if possible, c to the lexeme value defined in go/token or
+// token translates, if possible, c to the lexeme value defined in go/token or
 // token.ILLEGAL otherwise.
-func (c Ch) Token() token.Token {
+func (c Ch) token() token.Token {
 	if r, ok := xlat[c]; ok {
 		return r
 	}
@@ -119,6 +107,14 @@ func (n Token) String() string {
 	return fmt.Sprintf("%v: %q %s", n.Position(), n.Src(), n.Ch)
 }
 
+func (n Token) str() string {
+	if n.Ch <= beforeTokens || n.Ch >= afterTokens { //TODO
+		return fmt.Sprintf("%q %#U", n.Src(), rune(n.Ch))
+	}
+
+	return fmt.Sprintf("%q %s", n.Src(), n.Ch)
+}
+
 // IsValid reports the validity of n. Tokens not present in some nodes will
 // report false.
 func (n Token) IsValid() bool { return n.source != nil }
@@ -163,8 +159,8 @@ type source struct {
 // Scanner provides lexical analysis of its buffer.
 type Scanner struct {
 	*source
-	// Tok is the current token. It is valid after first call to Scan. The
-	// value is read only.
+	// Tok is the current token. It is valid after first call to Scan. The value is
+	// read only.
 	Tok  Token
 	errs errList
 
@@ -203,10 +199,14 @@ func (s *Scanner) position() token.Position {
 
 // Err reports any errors the scanner encountered during .Scan() invocations.
 // For typical use please see the .Scan() documentation.
-func (s *Scanner) Err() error { return s.errs.Err(s.source) }
+func (s *Scanner) Err() error { return s.errs.Err() }
 
-func (s *Scanner) err(off int32, skip int, msg string, args ...interface{}) {
-	s.errs.err(off, skip+1, msg, args...)
+func (s *Scanner) pos(off int32) token.Position {
+	return token.Position(s.file.PositionFor(mtoken.Pos(off+1), true))
+}
+
+func (s *Scanner) err(off int32, msg string, args ...interface{}) {
+	s.errs.err(s.pos(off), msg, args...)
 }
 
 func (s *Scanner) close() {
@@ -354,7 +354,7 @@ func (s *Scanner) scan() (r bool) {
 				s.Tok.Ch = STRING_LIT
 				return true
 			case s.eof:
-				s.err(s.off, 0, "raw string literal not terminated")
+				s.err(s.off, "raw string literal not terminated")
 				s.Tok.Ch = STRING_LIT
 				return true
 			case s.c == 0:
@@ -553,10 +553,10 @@ func (s *Scanner) scan() (r bool) {
 					return true
 				}
 
-				s.err(off, 0, "illegal byte order mark")
+				s.err(off, "illegal byte order mark")
 				s.Tok.Ch = 0
 			default:
-				s.err(s.off, 0, "illegal character %#U", r)
+				s.err(s.off, "illegal character %#U", r)
 				s.Tok.Ch = 0
 			}
 		case s.eof:
@@ -569,7 +569,7 @@ func (s *Scanner) scan() (r bool) {
 		case s.c == 0:
 			panic(todo("%v: %#U", s.position(), s.c))
 		default:
-			s.err(s.off, 0, "illegal character %#U", s.c)
+			s.err(s.off, "illegal character %#U", s.c)
 			s.next()
 			s.Tok.Ch = 0
 		}
@@ -623,7 +623,7 @@ more:
 			s.Tok.Ch = FLOAT_LIT
 			return
 		case 'p', 'P':
-			s.err(s.off, 0, "'%c' exponent requires hexadecimal mantissa", s.c)
+			s.err(s.off, "'%c' exponent requires hexadecimal mantissa", s.c)
 			s.exponent()
 			s.Tok.Ch = FLOAT_LIT
 			return
@@ -643,7 +643,7 @@ more:
 			}
 
 			if s.hexadecimals() == 0 {
-				s.err(s.off+1, 0, "hexadecimal literal has no digits")
+				s.err(s.off+1, "hexadecimal literal has no digits")
 				return
 			}
 
@@ -659,12 +659,12 @@ more:
 				if s.c == '_' {
 					for n := 0; s.c == '_'; n++ {
 						if n == 1 {
-							s.err(s.off, 0, "'_' must separate successive digits")
+							s.err(s.off, "'_' must separate successive digits")
 						}
 						s.next()
 					}
 					if !isDigit(s.c) {
-						s.err(s.off-1, 0, "'_' must separate successive digits")
+						s.err(s.off-1, "'_' must separate successive digits")
 					}
 				}
 				if isOctalDigit(s.c) {
@@ -691,7 +691,7 @@ more:
 				break more
 			}
 			if invalidOff > 0 {
-				s.err(invalidOff, 0, "invalid digit '%c' in octal literal", invalidDigit)
+				s.err(invalidOff, "invalid digit '%c' in octal literal", invalidDigit)
 			}
 			s.Tok.Ch = INT_LIT
 			return
@@ -729,7 +729,7 @@ func (s *Scanner) octalLiteral() {
 	for {
 		for n := 0; s.c == '_'; n++ {
 			if n == 1 {
-				s.err(s.off, 0, "'_' must separate successive digits")
+				s.err(s.off, "'_' must separate successive digits")
 			}
 			s.next()
 		}
@@ -745,22 +745,22 @@ func (s *Scanner) octalLiteral() {
 			s.next()
 		case '.':
 			s.Tok.Ch = FLOAT_LIT
-			s.err(s.off, 0, "invalid radix point in octal literal")
+			s.err(s.off, "invalid radix point in octal literal")
 			s.next()
 		case 'e', 'E':
 			s.Tok.Ch = FLOAT_LIT
-			s.err(s.off, 0, "'%c' exponent requires decimal mantissa", s.c)
+			s.err(s.off, "'%c' exponent requires decimal mantissa", s.c)
 			s.exponent()
 		case 'p', 'P':
 			s.Tok.Ch = FLOAT_LIT
-			s.err(s.off, 0, "'%c' exponent requires hexadecimal mantissa", s.c)
+			s.err(s.off, "'%c' exponent requires hexadecimal mantissa", s.c)
 			s.exponent()
 		default:
 			switch {
 			case !ok:
-				s.err(s.off+1, 0, "octal literal has no digits")
+				s.err(s.off+1, "octal literal has no digits")
 			case invalidOff > 0:
-				s.err(invalidOff, 0, "invalid digit '%c' in octal literal", invalidDigit)
+				s.err(invalidOff, "invalid digit '%c' in octal literal", invalidDigit)
 			}
 			if s.c == 'i' {
 				s.next()
@@ -776,13 +776,13 @@ func (s *Scanner) dot(hasHexMantissa, needFrac bool) {
 	switch {
 	case hasHexMantissa:
 		if s.hexadecimals() == 0 && needFrac {
-			s.err(s.off, 0, "hexadecimal literal has no digits")
+			s.err(s.off, "hexadecimal literal has no digits")
 		}
 		switch s.c {
 		case 'p', 'P':
 			// ok
 		default:
-			s.err(s.off, 0, "hexadecimal mantissa requires a 'p' exponent")
+			s.err(s.off, "hexadecimal mantissa requires a 'p' exponent")
 		}
 	default:
 		if s.decimals() == 0 && needFrac {
@@ -792,7 +792,7 @@ func (s *Scanner) dot(hasHexMantissa, needFrac bool) {
 	switch s.c {
 	case 'p', 'P':
 		if !hasHexMantissa {
-			s.err(s.off, 0, "'%c' exponent requires hexadecimal mantissa", s.c)
+			s.err(s.off, "'%c' exponent requires hexadecimal mantissa", s.c)
 		}
 		fallthrough
 	case 'e', 'E':
@@ -823,12 +823,12 @@ func (s *Scanner) decimals() (r int) {
 		case s.c == '_':
 			for n := 0; s.c == '_'; n++ {
 				if first || n == 1 {
-					s.err(s.off, 0, "'_' must separate successive digits")
+					s.err(s.off, "'_' must separate successive digits")
 				}
 				s.next()
 			}
 			if !isDigit(s.c) {
-				s.err(s.off-1, 0, "'_' must separate successive digits")
+				s.err(s.off-1, "'_' must separate successive digits")
 			}
 		default:
 			return r
@@ -845,12 +845,12 @@ func (s *Scanner) hexadecimals() (r int) {
 		case s.c == '_':
 			for n := 0; s.c == '_'; n++ {
 				if n == 1 {
-					s.err(s.off, 0, "'_' must separate successive digits")
+					s.err(s.off, "'_' must separate successive digits")
 				}
 				s.next()
 			}
 			if !isHexDigit(s.c) {
-				s.err(s.off-1, 0, "'_' must separate successive digits")
+				s.err(s.off-1, "'_' must separate successive digits")
 			}
 		default:
 			return r
@@ -867,7 +867,7 @@ func (s *Scanner) binaryLiteral() {
 	for {
 		for n := 0; s.c == '_'; n++ {
 			if n == 1 {
-				s.err(s.off, 0, "'_' must separate successive digits")
+				s.err(s.off, "'_' must separate successive digits")
 			}
 			s.next()
 		}
@@ -877,15 +877,15 @@ func (s *Scanner) binaryLiteral() {
 			ok = true
 		case '.':
 			s.Tok.Ch = FLOAT_LIT
-			s.err(s.off, 0, "invalid radix point in binary literal")
+			s.err(s.off, "invalid radix point in binary literal")
 			s.next()
 		case 'e', 'E':
 			s.Tok.Ch = FLOAT_LIT
-			s.err(s.off, 0, "'%c' exponent requires decimal mantissa", s.c)
+			s.err(s.off, "'%c' exponent requires decimal mantissa", s.c)
 			s.exponent()
 		case 'p', 'P':
 			s.Tok.Ch = FLOAT_LIT
-			s.err(s.off, 0, "'%c' exponent requires hexadecimal mantissa", s.c)
+			s.err(s.off, "'%c' exponent requires hexadecimal mantissa", s.c)
 			s.exponent()
 		default:
 			if isDigit(s.c) {
@@ -899,9 +899,9 @@ func (s *Scanner) binaryLiteral() {
 
 			switch {
 			case !ok:
-				s.err(s.off+1, 0, "binary literal has no digits")
+				s.err(s.off+1, "binary literal has no digits")
 			case invalidOff > 0:
-				s.err(invalidOff, 0, "invalid digit '%c' in binary literal", invalidDigit)
+				s.err(invalidOff, "invalid digit '%c' in binary literal", invalidDigit)
 			}
 			if s.c == 'i' {
 				s.next()
@@ -920,7 +920,7 @@ func (s *Scanner) exponent() {
 		s.next()
 	}
 	if !isDigit(s.c) {
-		s.err(s.off+1, 0, "exponent has no digits")
+		s.err(s.off+1, "exponent has no digits")
 		return
 	}
 
@@ -933,7 +933,7 @@ func (s *Scanner) runeLiteral(off int32) {
 	s.Tok.Ch = RUNE_LIT
 	expOff := int32(-1)
 	if s.eof {
-		s.err(off, 0, "rune literal not terminated")
+		s.err(off, "rune literal not terminated")
 		return
 	}
 
@@ -950,14 +950,14 @@ func (s *Scanner) runeLiteral(off int32) {
 				for i := 0; i < 2; i++ {
 					if s.c == '\'' {
 						if i != 2 {
-							s.err(s.off, 0, "illegal character %#U in escape sequence", s.c)
+							s.err(s.off, "illegal character %#U in escape sequence", s.c)
 						}
 						s.next()
 						return
 					}
 
 					if !isHexDigit(s.c) {
-						s.err(s.off, 0, "illegal character %#U in escape sequence", s.c)
+						s.err(s.off, "illegal character %#U in escape sequence", s.c)
 						break
 					}
 					s.next()
@@ -969,32 +969,32 @@ func (s *Scanner) runeLiteral(off int32) {
 			default:
 				switch {
 				case s.eof:
-					s.err(s.off+1, 0, "escape sequence not terminated")
+					s.err(s.off+1, "escape sequence not terminated")
 					return
 				case isOctalDigit(s.c):
 					for i := 0; i < 3; i++ {
 						s.next()
 						if s.c == '\'' {
 							if i != 2 {
-								s.err(s.off, 0, "illegal character %#U in escape sequence", s.c)
+								s.err(s.off, "illegal character %#U in escape sequence", s.c)
 							}
 							s.next()
 							return
 						}
 
 						if !isOctalDigit(s.c) {
-							s.err(s.off, 0, "illegal character %#U in escape sequence", s.c)
+							s.err(s.off, "illegal character %#U in escape sequence", s.c)
 							break
 						}
 					}
 				default:
-					s.err(s.off, 0, "unknown escape sequence")
+					s.err(s.off, "unknown escape sequence")
 				}
 			}
 		case '\'':
 			s.next()
 			if ok != 1 {
-				s.err(off, 0, "illegal rune literal")
+				s.err(off, "illegal rune literal")
 			}
 			return
 		case '\t':
@@ -1005,22 +1005,22 @@ func (s *Scanner) runeLiteral(off int32) {
 			case s.eof:
 				switch {
 				case ok != 0:
-					s.err(expOff, 0, "rune literal not terminated")
+					s.err(expOff, "rune literal not terminated")
 				default:
-					s.err(s.off+1, 0, "rune literal not terminated")
+					s.err(s.off+1, "rune literal not terminated")
 				}
 				return
 			case s.c == 0:
 				panic(todo("%v: %#U", s.position(), s.c))
 			case s.c < ' ':
 				ok++
-				s.err(s.off, 0, "non-printable character: %#U", s.c)
+				s.err(s.off, "non-printable character: %#U", s.c)
 				s.next()
 			case s.c >= 0x80:
 				ok++
 				off := s.off
 				if c := s.rune(); c == 0xfeff {
-					s.err(off, 0, "illegal byte order mark")
+					s.err(off, "illegal byte order mark")
 				}
 			default:
 				ok++
@@ -1041,7 +1041,7 @@ func (s *Scanner) rune() rune {
 	case r == utf8.RuneError && sz == 0:
 		panic(todo("%v: %#U", s.position(), s.c))
 	case r == utf8.RuneError && sz == 1:
-		s.err(s.off, 0, "illegal UTF-8 encoding")
+		s.err(s.off, "illegal UTF-8 encoding")
 		s.next()
 		return r
 	default:
@@ -1099,22 +1099,22 @@ func (s *Scanner) stringLiteral(off int32) {
 				}
 			}
 		case s.eof:
-			s.err(off, 0, "string literal not terminated")
+			s.err(off, "string literal not terminated")
 			return
 		case s.c == 0:
-			s.err(s.off, 0, "illegal character NUL")
+			s.err(s.off, "illegal character NUL")
 		}
 
 		switch {
 		case s.c == '\t':
 			// ok
 		case s.c < ' ':
-			s.err(s.off, 0, "non-printable character: %#U", s.c)
+			s.err(s.off, "non-printable character: %#U", s.c)
 			s.next()
 		case s.c >= 0x80:
 			off := s.off
 			if s.rune() == 0xfeff {
-				s.err(off, 0, "illegal byte order mark")
+				s.err(off, "illegal byte order mark")
 			}
 			continue
 		}
@@ -1143,9 +1143,9 @@ func (s *Scanner) u(n int) (r rune) {
 		default:
 			switch {
 			case s.eof:
-				s.err(s.off+1, 0, "escape sequence not terminated")
+				s.err(s.off+1, "escape sequence not terminated")
 			default:
-				s.err(s.off, 0, "illegal character %#U in escape sequence", s.c)
+				s.err(s.off, "illegal character %#U in escape sequence", s.c)
 			}
 			return r
 		}
@@ -1153,7 +1153,7 @@ func (s *Scanner) u(n int) (r rune) {
 		s.next()
 	}
 	if r > unicode.MaxRune {
-		s.err(off, 0, "escape sequence is invalid Unicode code point")
+		s.err(off, "escape sequence is invalid Unicode code point")
 	}
 	return r
 }
@@ -1206,7 +1206,7 @@ func (s *Scanner) generalComment(off int32) (injectSemi bool) {
 			s.next()
 		case s.eof:
 			s.Tok.Ch = 0
-			s.err(off, 0, "comment not terminated")
+			s.err(off, "comment not terminated")
 			return true
 		case s.c == 0:
 			panic(todo("%v: %#U", s.position(), s.c))
@@ -1229,7 +1229,7 @@ func (s *Scanner) lineComment(off int32) (injectSemi bool) {
 			return false
 		case s.c >= 0x80:
 			if c := s.rune(); c == 0xfeff {
-				s.err(off+2, 0, "illegal byte order mark")
+				s.err(off+2, "illegal byte order mark")
 			}
 		case s.eof:
 			if s.injectSemi() {
