@@ -9,8 +9,8 @@ import (
 	"flag"
 	"fmt"
 	goparser "go/parser"
-	goscanner "go/scanner"
-	gotoken "go/token"
+	"go/scanner"
+	"go/token"
 	"io/fs"
 	"io/ioutil"
 	"math"
@@ -68,7 +68,7 @@ func init() {
 // ----------------------------------------------------------------------------
 
 const (
-	maxTokenToken = iota + gotoken.TILDE
+	maxTokenToken = iota + token.TILDE
 	tokenBODY
 )
 
@@ -81,7 +81,7 @@ var (
 	digits    = expand(unicode.Nd)
 	letters   = expand(unicode.L)
 	re        *regexp.Regexp
-	str2token = map[string]gotoken.Token{}
+	str2token = map[string]token.Token{}
 	tempDir   string
 	yp0       *yParser
 )
@@ -110,7 +110,7 @@ type yParser struct {
 	*y.Parser
 	reports   [][]byte
 	terminals []*y.Symbol
-	tok2sym   map[gotoken.Token]*y.Symbol
+	tok2sym   map[token.Token]*y.Symbol
 }
 
 func newYParser(yaccFile string) *yParser {
@@ -128,7 +128,7 @@ func newYParser(yaccFile string) *yParser {
 			fn = os.Args[i+1]
 		}
 	}
-	fset := gotoken.NewFileSet()
+	fset := token.NewFileSet()
 	var out bytes.Buffer
 	p, err := y.ProcessFile(fset, yaccFile, &y.Options{
 		Closures:  closures,
@@ -158,7 +158,7 @@ func newYParser(yaccFile string) *yParser {
 		s = s + e + 1
 	}
 
-	m := make(map[gotoken.Token]*y.Symbol, len(p.Syms))
+	m := make(map[token.Token]*y.Symbol, len(p.Syms))
 	for k, v := range p.Syms {
 		if !v.IsTerminal || k == "BODY" || k[0] == '_' {
 			continue
@@ -188,7 +188,7 @@ func newYParser(yaccFile string) *yParser {
 		default:
 		}
 	}
-	m[gotoken.EOF] = p.Syms["$end"]
+	m[token.EOF] = p.Syms["$end"]
 	m[tokenBODY] = p.Syms["BODY"]
 	var t []*y.Symbol
 	for _, v := range p.Syms {
@@ -206,7 +206,7 @@ func newYParser(yaccFile string) *yParser {
 
 func TestMain(m *testing.M) {
 	extendedErrors = true
-	for i := gotoken.IDENT; i <= maxTokenToken; i++ {
+	for i := token.IDENT; i <= maxTokenToken; i++ {
 		s := strings.ToUpper(i.String())
 		if _, ok := str2token[s]; ok {
 			panic(todo(""))
@@ -214,7 +214,7 @@ func TestMain(m *testing.M) {
 
 		str2token[s] = i
 	}
-	str2token["ILLEGAL"] = gotoken.ILLEGAL
+	str2token["ILLEGAL"] = token.ILLEGAL
 	yp0 = newYParser("testdata/parser/parser.y")
 	flag.Parse()
 	if s := *oRE; s != "" {
@@ -276,11 +276,11 @@ func testScan(p *parallel, t *testing.T, root, skip string) {
 				return err
 			}
 
-			fs := gotoken.NewFileSet()
+			fs := token.NewFileSet()
 			fi := fs.AddFile(path, -1, len(b))
-			var s0 goscanner.Scanner
+			var s0 scanner.Scanner
 			var err0 error
-			s0.Init(fi, b, func(pos gotoken.Position, msg string) {
+			s0.Init(fi, b, func(pos token.Position, msg string) {
 				err0 = fmt.Errorf("%v: %s", pos, msg)
 			}, 0)
 			s, err := NewScanner(path, b)
@@ -292,7 +292,7 @@ func testScan(p *parallel, t *testing.T, root, skip string) {
 			for {
 				pos0, tok0, lit0 := s0.Scan()
 				position0 := fi.Position(pos0)
-				eof0 := tok0 == gotoken.EOF
+				eof0 := tok0 == token.EOF
 				eof := !s.Scan()
 				err := s.Err()
 				if g, e := s.Tok.token(), tok0; g != e {
@@ -302,7 +302,7 @@ func testScan(p *parallel, t *testing.T, root, skip string) {
 
 				if g, e := s.Tok.Src(), lit0; g != e {
 					switch {
-					case tok0 == gotoken.SEMICOLON && lit0 != ";":
+					case tok0 == token.SEMICOLON && lit0 != ";":
 						// Ok, our result for injected semis is different.
 					case noGoLit(s.Tok.Ch):
 						// Ok, go/scanner does not return the literal string.
@@ -319,7 +319,7 @@ func testScan(p *parallel, t *testing.T, root, skip string) {
 						if a, b := s.Tok.Position().Offset, position0.Offset; a-b == 1 || b-a == 1 {
 							ok = true
 						}
-					case tok0 == gotoken.SEMICOLON && lit0 == "\n":
+					case tok0 == token.SEMICOLON && lit0 == "\n":
 						ok = s.Tok.Position().Filename == position0.Filename && s.Tok.Position().Line == position0.Line
 					}
 					if !ok {
@@ -568,13 +568,13 @@ func BenchmarkGoScanner(b *testing.B) {
 			}
 			switch filepath.Ext(path) {
 			case ".go":
-				fs := gotoken.NewFileSet()
+				fs := token.NewFileSet()
 				fi := fs.AddFile(path, -1, len(buf))
-				var s goscanner.Scanner
-				s.Init(fi, buf, nil, goscanner.ScanComments)
+				var s scanner.Scanner
+				s.Init(fi, buf, nil, scanner.ScanComments)
 				for {
 					_, tok, _ := s.Scan()
-					if tok == gotoken.EOF {
+					if tok == token.EOF {
 						break
 					}
 				}
@@ -653,12 +653,12 @@ func TestTokenSet(t *testing.T) {
 func TestParser(t *testing.T) {
 	p := newParallel()
 	t.Run("grammar", testParserGrammar)
-	//TODO t.Run(".", func(t *testing.T) { testParser(p, t, ".", "") })
-	//TODO t.Run("GOROOT", func(t *testing.T) { testParser(p, t, runtime.GOROOT(), "/test/") })
+	// t.Run("parse", func(t *testing.T) { testParser(p, t, ".") })
+	// t.Run("parseGOROOT", func(t *testing.T) { testParser(p, t, runtime.GOROOT()) })
 	if err := p.wait(); err != nil {
 		t.Error(err)
 	}
-	t.Logf("TOTAL files %v, ok %v, fails %v", p.files, p.oks, p.fails)
+	t.Logf("TOTAL files %v, skip %v, ok %v, fails %v", h(p.files), h(p.skips), h(p.oks), h(p.fails))
 }
 
 type yparser struct {
@@ -775,8 +775,8 @@ type ylex struct {
 	loophack      bool
 	loophackStack []bool
 	p             *yparser
-	pos           gotoken.Position
-	tok           gotoken.Token
+	pos           token.Position
+	tok           token.Token
 }
 
 func newYlex(l *Scanner, p *yparser) *ylex {
@@ -790,8 +790,8 @@ func newYlex(l *Scanner, p *yparser) *ylex {
 	return yl
 }
 
-func (l *ylex) lex() (gotoken.Position, *y.Symbol) {
-	var tok gotoken.Token
+func (l *ylex) lex() (token.Position, *y.Symbol) {
+	var tok token.Token
 	l.Scan()
 	l.pos = l.Tok.Position()
 	tok = l.Tok.token()
@@ -801,26 +801,26 @@ func (l *ylex) lex() (gotoken.Position, *y.Symbol) {
 	}
 
 	switch tok {
-	case gotoken.FOR, gotoken.IF, gotoken.SELECT, gotoken.SWITCH:
+	case token.FOR, token.IF, token.SELECT, token.SWITCH:
 		l.loophack = true
-	case gotoken.LPAREN, gotoken.LBRACK:
+	case token.LPAREN, token.LBRACK:
 		if l.loophack || len(l.loophackStack) != 0 {
 			l.loophackStack = append(l.loophackStack, l.loophack)
 			l.loophack = false
 		}
-	case gotoken.RPAREN, gotoken.RBRACK:
+	case token.RPAREN, token.RBRACK:
 		if n := len(l.loophackStack); n != 0 {
 			l.loophack = l.loophackStack[n-1]
 			l.loophackStack = l.loophackStack[:n-1]
 		}
-	case gotoken.LBRACE:
+	case token.LBRACE:
 		l.lbrace++
 		if l.loophack {
 			tok = tokenBODY
 			sym = l.p.tok2sym[tok]
 			l.loophack = false
 		}
-	case gotoken.RBRACE:
+	case token.RBRACE:
 		l.lbrace--
 		if n := len(l.lbraceStack); n != 0 && l.lbraceStack[n-1] == l.lbrace {
 			l.lbraceStack = l.lbraceStack[:n-1]
@@ -834,10 +834,10 @@ func (l *ylex) lex() (gotoken.Position, *y.Symbol) {
 func (l *ylex) fixLbr() {
 	n := l.lbrace - 1
 	switch l.tok {
-	case gotoken.RBRACE:
+	case token.RBRACE:
 		l.loophack = true
 		return
-	case gotoken.LBRACE:
+	case token.LBRACE:
 		n--
 	}
 
@@ -897,7 +897,7 @@ outer:
 		}
 
 		yl = newYlex(l, yp)
-		var pos gotoken.Position
+		var pos token.Position
 		if err = yp.parse(
 			func(int) (s *y.Symbol) {
 				pos, s = yl.lex()
@@ -966,7 +966,7 @@ func h(v interface{}) string {
 }
 
 func parserFails(fn string, src []byte) bool {
-	_, err := goparser.ParseFile(gotoken.NewFileSet(), fn, src, 0)
+	_, err := goparser.ParseFile(token.NewFileSet(), fn, src, 0)
 	return err != nil
 }
 
@@ -992,7 +992,9 @@ func findGoFiles(t *testing.T, dir string) (r []string) {
 	return r
 }
 
-func testParser(p *parallel, t *testing.T, root, skip string) {
+func testParser(p *parallel, t *testing.T, root string) {
+	// blackList := map[string]struct{}{}
+	cfg := &ParseSourceFileConfig{}
 	err := filepath.Walk(root, func(path0 string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -1009,10 +1011,6 @@ func testParser(p *parallel, t *testing.T, root, skip string) {
 			}
 
 			if strings.Contains(filepath.ToSlash(path0), "/testdata/") {
-				return nil
-			}
-
-			if skip != "" && strings.Contains(filepath.ToSlash(path0), skip) {
 				return nil
 			}
 		default:
@@ -1037,7 +1035,12 @@ func testParser(p *parallel, t *testing.T, root, skip string) {
 				return err
 			}
 
-			if _, err = ParseSourceFile(path, b); err != nil {
+			if _, err = ParseSourceFile(cfg, path, b); err != nil {
+				if parserFails(path, b) {
+					p.skip()
+					return nil
+				}
+
 				p.fail()
 				return err
 			}
@@ -1051,3 +1054,18 @@ func testParser(p *parallel, t *testing.T, root, skip string) {
 		t.Fatal(err)
 	}
 }
+
+// func TestTmp(t *testing.T) {
+// 	for i, v := range []string{
+// 		"// foo\npackage bar /* baz */\nimport",
+// 		"// foo\npackage bar // baz\nimport",
+// 		"// foo\npackage bar; /* baz */\nimport",
+// 		"// foo\npackage bar; // baz\nimport",
+// 	} {
+// 		s, _ := NewScanner(fmt.Sprintf("%d.go", i), []byte(v))
+// 		t.Log(i)
+// 		for s.Scan() {
+// 			t.Logf("%q %v", s.Tok.Sep(), s.Tok)
+// 		}
+// 	}
+// }

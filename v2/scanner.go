@@ -1312,6 +1312,8 @@ const (
 	VAR            // var
 	XOR_ASSIGN     // ^=
 
+	body // body
+
 	afterTokens
 )
 

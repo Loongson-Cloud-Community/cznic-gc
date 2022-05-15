@@ -67,12 +67,13 @@ func _() {
 	_ = x[TYPE-57400]
 	_ = x[VAR-57401]
 	_ = x[XOR_ASSIGN-57402]
-	_ = x[afterTokens-57403]
+	_ = x[body-57403]
+	_ = x[afterTokens-57404]
 }
 
-const _Ch_name = "beforeTokens+=&=&^&^=<-breakcasechanconstcontinue--defaultdefer:=...elseend of file==fallthroughfloating point literalforfunc>=gogotoidentifierifimaginary literalimport++interfaceinteger literal&&<=||map*=!=|=package/=range%=returnrune literalselect<<<<=>>>>=string literalstruct-=switch~typevar^=afterTokens"
+const _Ch_name = "beforeTokens+=&=&^&^=<-breakcasechanconstcontinue--defaultdefer:=...elseend of file==fallthroughfloating point literalforfunc>=gogotoidentifierifimaginary literalimport++interfaceinteger literal&&<=||map*=!=|=package/=range%=returnrune literalselect<<<<=>>>>=string literalstruct-=switch~typevar^=bodyafterTokens"
 
-var _Ch_index = [...]uint16{0, 12, 14, 16, 18, 21, 23, 28, 32, 36, 41, 49, 51, 58, 63, 65, 68, 72, 83, 85, 96, 118, 121, 125, 127, 129, 133, 143, 145, 162, 168, 170, 179, 194, 196, 198, 200, 203, 205, 207, 209, 216, 218, 223, 225, 231, 243, 249, 251, 254, 256, 259, 273, 279, 281, 287, 288, 292, 295, 297, 308}
+var _Ch_index = [...]uint16{0, 12, 14, 16, 18, 21, 23, 28, 32, 36, 41, 49, 51, 58, 63, 65, 68, 72, 83, 85, 96, 118, 121, 125, 127, 129, 133, 143, 145, 162, 168, 170, 179, 194, 196, 198, 200, 203, 205, 207, 209, 216, 218, 223, 225, 231, 243, 249, 251, 254, 256, 259, 273, 279, 281, 287, 288, 292, 295, 297, 301, 312}
 
 func (i Ch) String() string {
 	i -= 57344

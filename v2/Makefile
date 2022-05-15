@@ -19,6 +19,6 @@ editor:
 	go install -v | tee log-editor
 
 tmp:
-	go test -v -run TestParser -trc 2>&1 | tee log
+	go test -v -run TestParser/parse -trc 2>&1 | tee log
 	grep -a '^TODO' log | sort | uniq -c | sort -n | tee log-2
-	grep -a 'TOTAL\|\<FAIL\>\|\<PASS\>' log || true
+	grep -a 'TOTAL\|\[^"\]\<FAIL\>\|\<PASS\>' log || true

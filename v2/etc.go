@@ -97,6 +97,7 @@ type parallel struct {
 	fails int32
 	files int32
 	oks   int32
+	skips int32
 }
 
 func newParallel() *parallel {
@@ -108,6 +109,7 @@ func newParallel() *parallel {
 func (p *parallel) fail() { atomic.AddInt32(&p.fails, 1) }
 func (p *parallel) file() { atomic.AddInt32(&p.files, 1) }
 func (p *parallel) ok()   { atomic.AddInt32(&p.oks, 1) }
+func (p *parallel) skip() { atomic.AddInt32(&p.skips, 1) }
 
 func (p *parallel) err(err error) {
 	if err == nil {
