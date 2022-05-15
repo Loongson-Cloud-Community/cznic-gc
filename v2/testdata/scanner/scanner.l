@@ -29,7 +29,6 @@ octal_digits		{octal_digit}(_?{octal_digit})*
 octal_lit		0[oO]?_?{octal_digits}
 raw_string_lit		`({unicode_char}|\n)*`
 rune_lit		'({unicode_value}|{byte_value})'
-sep			{white}
 string_lit		{raw_string_lit}|{interpreted_string_lit}
 unicode_char		[^\n]
 unicode_digit		\x80
@@ -120,5 +119,5 @@ var
 {imaginary_lit}
 {int_lit}
 {rune_lit}
-{sep}
 {string_lit}
+{white}

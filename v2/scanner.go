@@ -1083,6 +1083,9 @@ func (s *Scanner) stringLiteral(off int32) {
 			case 'U':
 				s.u(8)
 				continue
+			case '\'':
+				s.err(off, "unknown escape")
+				return
 			default:
 				switch {
 				case isOctalDigit(s.c):
@@ -1169,7 +1172,8 @@ out:
 			case unicode.IsLetter(r) || unicode.IsDigit(r):
 				// already consumed
 			default:
-				panic(todo("%v: %#U", s.position(), r))
+				s.err(s.off, "invalid character %#U in identifier", r)
+				break out
 			}
 		case s.eof:
 			break out

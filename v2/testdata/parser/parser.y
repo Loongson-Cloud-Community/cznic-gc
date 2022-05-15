@@ -91,6 +91,7 @@
 
 file:
 	"package" IDENT ';' imports topLevelDeclList
+|	'~' // We need to use the ~ symbol for TestParser/grammar to work
 
 imports:
 |	imports "import" '(' ')' ';'
