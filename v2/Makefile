@@ -15,7 +15,7 @@ edit:
 editor:
 	stringer -output stringer.go -linecomment -type=Ch
 	gofmt -l -s -w *.go
-	go test -o /dev/null -c
+	go test -run @ -- -out report -closures | tee log-editor
 	go install -v | tee log-editor
 
 tmp:

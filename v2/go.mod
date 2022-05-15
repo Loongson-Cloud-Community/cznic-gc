@@ -5,4 +5,5 @@ go 1.16
 require (
 	modernc.org/scannertest v1.0.0
 	modernc.org/token v1.0.0
+	modernc.org/y v1.0.2
 )
