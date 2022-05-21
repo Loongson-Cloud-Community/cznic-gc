@@ -1,0 +1,280 @@
+body = "BODY" .
+eof = "EOF" .
+float_lit = "FLOAT" .
+identifier = "IDENT" .
+imaginary_lit = "IMAG" .
+int_lit = "INT" .
+lbrace = body | "{" .
+rune_lit = "CHAR" .
+string_lit = "STRING" .
+
+AliasDecl = identifier "=" Type .
+Arguments =
+          "(" ")"
+	| "(" ExpressionList [ "..." ] [ "," ] ")" 
+	| "(" Type "," ExpressionList [ "..." ] [ "," ] ")"
+	| "(" Type [ "..." ] [ "," ] ")" .
+ArrayLength = Expression .
+ArrayType = "[" ArrayLength "]" ElementType .
+Assignment = ExpressionList assign_op ExpressionList .
+BaseType = Type .
+BasicLit = int_lit | float_lit | imaginary_lit | rune_lit | string_lit .
+Block = "{" StatementList "}" .
+LoopBody = body StatementList "}" .
+BreakStmt = "break" [ Label ] .
+Channel = Expression .
+ChannelType =
+	  "<-" "chan" ElementType
+	| "chan" "<-" ElementType
+	| "chan" ElementType .
+CommCase =
+	  "case" SendStmt
+	| "case" RecvStmt
+	| "default" .
+CommClause = CommCase ":" StatementList .
+CompositeLit =
+	  LiteralType1 LiteralValue1
+	| LiteralType2 LiteralValue2 .
+Condition = Expression .
+ConstDecl = 
+	  "const" "(" ")"
+	| "const" "(" ConstSpec { ";" ConstSpec } ";" ")" 
+	| "const" "(" ConstSpec { ";" ConstSpec } ")" 
+	| "const" ConstSpec .
+ConstSpec =
+	  IdentifierList "=" ExpressionList
+	| IdentifierList Type "=" ExpressionList
+	| IdentifierList .
+ContinueStmt = "continue" [ Label ] .
+Conversion = Type "(" Expression [ "," ] ")" .
+Declaration =
+	  ConstDecl
+	| TypeDecl
+	| VarDecl .
+DeferStmt = "defer" Expression .
+Element =
+	  Expression
+	| LiteralValue1 .
+ElementList = KeyedElement { "," KeyedElement } .
+ElementType = Type .
+EmbeddedField =
+	  "*" TypeName
+	| TypeName .
+// EmptyStmt = .
+ExprCaseClause = ExprSwitchCase ":" StatementList .
+ExprSwitchCase =
+	  "case" ExpressionList
+	| "default" .
+ExprSwitchStmt = "switch" [ SimpleStmt ";" ] [ Expression ] body { ExprCaseClause } "}" .
+Expression = UnaryExpr { binary_op Expression } .
+ExpressionList = Expression { "," Expression } .
+ExpressionStmt = Expression .
+FallthroughStmt = "fallthrough" .
+FieldDecl =
+	  IdentifierList Type [ Tag ]
+	| EmbeddedField [ Tag ] .
+// FieldName = identifier .
+ForClause = [ InitStmt ] ";" [ Condition ] ";" [ PostStmt ] .
+ForStmt =
+	  "for" ForClause LoopBody
+	| "for" RangeClause LoopBody
+	| "for" Condition LoopBody
+	| "for" LoopBody .
+FunctionBody = Block .
+FunctionDecl =
+	  "func" FunctionName TypeParameters Signature [ FunctionBody ]
+	| "func" FunctionName Signature [ FunctionBody ] .
+FunctionLit = "func" Signature lbrace StatementList "#fixlbr" "}" .
+FunctionName = identifier .
+FunctionType = "func" Signature .
+GoStmt = "go" Expression .
+GotoStmt = "goto" Label .
+IdentifierList = identifier { "," identifier } .
+IfStmt = "if" [ SimpleStmt ";" ] Expression LoopBody [ "else" ( IfStmt | Block ) ] .
+ImportDecl = 
+	  "import" ImportSpec
+	| "import" "(" { ImportSpec ";" } ")" .
+ImportPath = string_lit .
+ImportSpec = 
+	  "." ImportPath
+	| PackageName ImportPath
+	| ImportPath .
+IncDecStmt =
+	Expression "++"
+	| Expression "--" .
+Index = "[" Expression "]" .
+InitStmt = SimpleStmt .
+InterfaceElem =
+	  MethodElem
+	| TypeElem .
+InterfaceType = 
+	  "interface" lbrace "#fixlbr" "}"
+	| "interface" lbrace InterfaceElem { ";" InterfaceElem } [ ";" ] "#fixlbr" "}" .
+Key = /* FieldName | */ 
+	  Expression
+	| LiteralValue1 .
+KeyType = Type .
+KeyedElement =
+	  Key ":" Element
+	| Element .
+Label = identifier .
+LabeledStmt = Label ":" [ Statement ] .
+Literal =
+	  BasicLit
+	| CompositeLit
+	| FunctionLit .
+LiteralType1 =
+	  TypeLit
+	| "[" "..." "]" ElementType .
+LiteralType2 =
+	  TypeName
+	  | "(" Type ")" .
+LiteralValue1 =
+	  lbrace ElementList [ "," ] "#fixlbr" "}"
+	| lbrace "#fixlbr" "}" .
+LiteralValue2 =
+	  "{" "}"
+	| "{" ElementList [ "," ] "}" .
+MapType = "map" "[" KeyType "]" ElementType .
+MethodDecl = "func" Receiver MethodName Signature [ FunctionBody ] .
+MethodElem = MethodName Signature .
+MethodExpr = ReceiverType "." MethodName .
+MethodName = identifier .
+Operand =
+	  Literal
+	  | OperandName [ TypeArgs ]
+	  | "(" Expression ")" .
+OperandName =
+	  QualifiedIdent
+	  | identifier .
+PackageClause = "package" PackageName .
+PackageName = identifier .
+ParameterDecl =
+	  identifier "..." Type
+	| identifier Type
+	| "..." Type
+	| Type .
+ParameterList = ParameterDecl { "," ParameterDecl } .
+Parameters = "(" [ ParameterList [ "," ] ] ")" .
+PointerType = "*" BaseType .
+PostStmt = SimpleStmt .
+PrimaryExpr =
+	  Operand { Arguments | Index | Selector | Slice | TypeAssertion }
+	| Conversion { Arguments | Index | Selector | Slice | TypeAssertion }
+	| MethodExpr { Arguments | Index | Selector | Slice | TypeAssertion } .
+QualifiedIdent = PackageName "." identifier .
+RangeClause =
+	  ExpressionList "=" "range" Expression
+	| IdentifierList ":=" "range" Expression
+	| "range" Expression .
+Receiver = Parameters .
+ReceiverType = Type .
+RecvExpr = Expression .
+RecvStmt =
+	  ExpressionList "=" RecvExpr
+	| IdentifierList ":=" RecvExpr
+	| RecvExpr .
+Result =
+	  Parameters
+	| Type .
+ReturnStmt = "return" [ ExpressionList ] .
+SelectStmt = "select" "{" { CommClause } "}" .
+Selector = "." identifier .
+SendStmt = Channel "<-" Expression .
+ShortVarDecl = IdentifierList ":=" ExpressionList .
+Signature = Parameters [ Result ] .
+SimpleStmt = /* EmptyStmt | */
+	  IncDecStmt
+	| ShortVarDecl
+	| Assignment
+	| SendStmt
+	| ExpressionStmt .
+Slice =
+	  "[" [ Expression ] ":" [ Expression ] "]"
+	| "[" [ Expression ] ":" Expression ":" Expression "]" .
+SliceType = "[" "]" ElementType .
+SourceFile = PackageClause ";" { ImportDecl ";" } { TopLevelDecl ";" } eof .
+Statement =
+	  Declaration
+	| LabeledStmt
+	| SimpleStmt
+	| GoStmt
+	| ReturnStmt
+	| BreakStmt
+	| ContinueStmt
+	| GotoStmt
+	| FallthroughStmt
+	| Block
+	| IfStmt
+	| SwitchStmt
+	| SelectStmt
+	| ForStmt
+	| DeferStmt  .
+StatementList = { [ Statement ] ";" } [ Statement ] .
+StructType =
+	  "struct" lbrace "#fixlbr" "}"
+	| "struct" lbrace FieldDecl { ";" FieldDecl } [ ";" ] "#fixlbr" "}" .
+SwitchStmt =
+	  ExprSwitchStmt
+	| TypeSwitchStmt .
+Tag = string_lit .
+TopLevelDecl =
+	  Declaration
+	| FunctionDecl
+	| MethodDecl .
+Type =
+	  TypeName
+	| TypeLit
+	| "(" Type ")" .
+TypeArgs = "[" TypeList [ "," ] "]" .
+TypeAssertion = "." "(" Type ")" .
+TypeCaseClause = TypeSwitchCase ":" StatementList .
+TypeConstraint = TypeElem .
+TypeDecl =
+	  "type" TypeSpec
+	| "type" "(" { TypeSpec ";" } ")" .
+TypeDef = identifier [ TypeParameters ] Type .
+TypeElem = TypeTerm { "|" TypeTerm } .
+TypeList = Type { "," Type } .
+TypeLit =
+	  ArrayType
+	| StructType
+	| PointerType
+	| FunctionType
+	| InterfaceType
+	| SliceType
+	| MapType
+	| ChannelType .
+TypeName =
+	  QualifiedIdent [ TypeArgs ]
+	| identifier [ TypeArgs ] .
+TypeParamDecl = IdentifierList TypeConstraint .
+TypeParamList = TypeParamDecl { "," TypeParamDecl } .
+TypeParameters = "[" TypeParamList [ "," ] "]" .
+TypeSpec =
+	  AliasDecl
+	| TypeDef .
+TypeSwitchCase =
+	  "case" TypeList
+	| "default" .
+TypeSwitchGuard = [ identifier ":=" ] PrimaryExpr "." "(" "type" ")" .
+TypeSwitchStmt = "switch" [ SimpleStmt ";" ] TypeSwitchGuard body { TypeCaseClause } "}" .
+TypeTerm =
+	  Type
+	| UnderlyingType .
+UnaryExpr =
+	  PrimaryExpr
+	| unary_op UnaryExpr .
+UnderlyingType = "~" Type .
+VarDecl =
+	  "var" VarSpec
+	| "var" "(" { VarSpec ";" } ")" .
+VarSpec =
+	  IdentifierList Type [ "=" ExpressionList ]
+	| IdentifierList "=" ExpressionList .
+add_op = "+" | "-" | "|" | "^" .
+assign_op = "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" .
+binary_op = "||" | "&&" | rel_op | add_op | mul_op .
+mul_op = "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" .
+rel_op = "==" | "!=" | "<" | "<=" | ">" | ">=" .
+unary_op = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .

@@ -1,0 +1,425 @@
+add_op = "+"
+	| "-"
+	| "|"
+	| "^" .
+assign_op = "="
+	| "+="
+	| "-="
+	| "|="
+	| "^="
+	| "*="
+	| "/="
+	| "%="
+	| "<<="
+	| ">>="
+	| "&="
+	| "&^=" .
+binary_op = "||"
+	| "&&"
+	| rel_op
+	| add_op
+	| mul_op .
+body = "BODY" .
+eof = "EOF" .
+float_lit = "FLOAT" .
+identifier = "IDENT" .
+imaginary_lit = "IMAG" .
+int_lit = "INT" .
+lbrace = body | "{" .
+mul_op = "*"
+	| "/"
+	| "%"
+	| "<<"
+	| ">>"
+	| "&"
+	| "&^" .
+rel_op = "=="
+	| "!="
+	| "<"
+	| "<="
+	| ">"
+	| ">=" .
+rune_lit = "CHAR" .
+string_lit = "STRING" .
+unary_op = "+"
+	| "-"
+	| "!"
+	| "^"
+	| "*"
+	| "&"
+	| "<-" .
+
+AliasDecl = identifier "=" Type .
+Arguments = "(" ")"
+	| "(" ExpressionList [ "..." ] [ "," ] ")"
+	| "(" Type "," ExpressionList [ "..." ] [ "," ] ")"
+	| "(" Type [ "..." ] [ "," ] ")" .
+ArrayLength = Expression .
+ArrayType = "[" ArrayLength "]" ElementType .
+Assignment = ExpressionList assign_op ExpressionList .
+BaseType = Type .
+BasicLit = int_lit
+	| float_lit
+	| imaginary_lit
+	| rune_lit
+	| string_lit .
+Block = "{" StatementList "}" .
+BreakStmt = "break" [ Label ] .
+Channel = Expression .
+ChannelType = "<-" "chan" ElementType
+	| "chan" "<-" ElementType
+	| "chan" ElementType .
+CommCase = "case" SendStmt
+	| "case" RecvStmt
+	| "default" .
+CommClause = CommCase ":" StatementList .
+CompositeLit = LiteralType1 LiteralValue1
+	| LiteralType2 LiteralValue2 .
+Condition = Expression .
+ConstDecl = "const" "(" ")"
+	| "const" "(" ConstSpec { ";" ConstSpec } ";" ")"
+	| "const" "(" ConstSpec { ";" ConstSpec } ")"
+	| "const" ConstSpec .
+ConstSpec = IdentifierList "=" ExpressionList
+	| IdentifierList Type "=" ExpressionList
+	| IdentifierList .
+ContinueStmt = "continue" [ Label ] .
+Conversion = Type "(" Expression [ "," ] ")" .
+Declaration = ConstDecl
+	| TypeDecl
+	| VarDecl .
+DeferStmt = "defer" Expression .
+Element = Expression | LiteralValue1 .
+ElementList = KeyedElement { "," KeyedElement } .
+ElementType = Type .
+EmbeddedField = "*" TypeName
+	| TypeName .
+ExprCaseClause = ExprSwitchCase ":" StatementList .
+ExprSwitchCase = "case" ExpressionList
+	| "default" .
+ExprSwitchStmt = "switch" [ SimpleStmt ";" ] [ Expression ] body { ExprCaseClause } "}" .
+Expression = UnaryExpr { binary_op Expression } .
+ExpressionList = Expression { "," Expression } .
+ExpressionStmt = Expression .
+FallthroughStmt = "fallthrough" .
+FieldDecl = IdentifierList Type [ Tag ]
+	| EmbeddedField [ Tag ] .
+ForClause = [ InitStmt ] ";" [ Condition ] ";" [ PostStmt ] .
+ForStmt = "for" ForClause LoopBody
+	| "for" RangeClause LoopBody
+	| "for" Condition LoopBody
+	| "for" LoopBody .
+FunctionBody = Block .
+FunctionDecl = "func" FunctionName TypeParameters Signature [ FunctionBody ]
+	| "func" FunctionName Signature [ FunctionBody ] .
+FunctionLit = "func" Signature lbrace StatementList "#fixlbr" "}" .
+FunctionName = identifier .
+FunctionType = "func" Signature .
+GoStmt = "go" Expression .
+GotoStmt = "goto" Label .
+IdentifierList = identifier { "," identifier } .
+IfStmt = "if" [ SimpleStmt ";" ] Expression LoopBody [
+		 "else" ( IfStmt | Block )
+	  ] .
+ImportDecl = "import" ImportSpec
+	| "import" "(" { ImportSpec ";" } ")" .
+ImportPath = string_lit .
+ImportSpec = "." ImportPath
+	| PackageName ImportPath
+	| ImportPath .
+IncDecStmt = Expression "++"
+	| Expression "--" .
+Index = "[" Expression "]" .
+InitStmt = SimpleStmt .
+InterfaceElem = MethodElem | TypeElem .
+InterfaceType = "interface" lbrace "#fixlbr" "}"
+	| "interface" lbrace InterfaceElem { ";" InterfaceElem } [ ";" ] "#fixlbr" "}" .
+Key = Expression | LiteralValue1 .
+KeyType = Type .
+KeyedElement = Key ":" Element
+	| Element .
+Label = identifier .
+LabeledStmt = Label ":" [ Statement ] .
+Literal = BasicLit
+	| CompositeLit
+	| FunctionLit .
+LiteralType1 = TypeLit
+	| "[" "..." "]" ElementType .
+LiteralType2 = TypeName
+	| "(" Type ")" .
+LiteralValue1 = lbrace ElementList [ "," ] "#fixlbr" "}"
+	| lbrace "#fixlbr" "}" .
+LiteralValue2 = "{" "}"
+	| "{" ElementList [ "," ] "}" .
+LoopBody = body StatementList "}" .
+MapType = "map" "[" KeyType "]" ElementType .
+MethodDecl = "func" Receiver MethodName Signature [ FunctionBody ] .
+MethodElem = MethodName Signature .
+MethodExpr = ReceiverType "." MethodName .
+MethodName = identifier .
+Operand = Literal
+	| OperandName [ TypeArgs ]
+	| "(" Expression ")" .
+OperandName = QualifiedIdent | identifier .
+PackageClause = "package" PackageName .
+PackageName = identifier .
+ParameterDecl = identifier "..." Type
+	| identifier Type
+	| "..." Type
+	| Type .
+ParameterList = ParameterDecl { "," ParameterDecl } .
+Parameters = "(" [ ParameterList [ "," ] ] ")" .
+PointerType = "*" BaseType .
+PostStmt = SimpleStmt .
+PrimaryExpr = Operand {
+		  Arguments
+		| Index
+		| Selector
+		| Slice
+		| TypeAssertion
+	  }
+	| Conversion {
+		  Arguments
+		| Index
+		| Selector
+		| Slice
+		| TypeAssertion
+	  }
+	| MethodExpr {
+		  Arguments
+		| Index
+		| Selector
+		| Slice
+		| TypeAssertion
+	  } .
+QualifiedIdent = PackageName "." identifier .
+RangeClause = ExpressionList "=" "range" Expression
+	| IdentifierList ":=" "range" Expression
+	| "range" Expression .
+Receiver = Parameters .
+ReceiverType = Type .
+RecvExpr = Expression .
+RecvStmt = ExpressionList "=" RecvExpr
+	| IdentifierList ":=" RecvExpr
+	| RecvExpr .
+Result = Parameters | Type .
+ReturnStmt = "return" [ ExpressionList ] .
+SelectStmt = "select" "{" { CommClause } "}" .
+Selector = "." identifier .
+SendStmt = Channel "<-" Expression .
+ShortVarDecl = IdentifierList ":=" ExpressionList .
+Signature = Parameters [ Result ] .
+SimpleStmt = IncDecStmt
+	| ShortVarDecl
+	| Assignment
+	| SendStmt
+	| ExpressionStmt .
+Slice = "[" [ Expression ] ":" [ Expression ] "]"
+	| "[" [ Expression ] ":" Expression ":" Expression "]" .
+SliceType = "[" "]" ElementType .
+SourceFile = PackageClause ";" { ImportDecl ";" } { TopLevelDecl ";" } eof .
+Statement = Declaration
+	| LabeledStmt
+	| SimpleStmt
+	| GoStmt
+	| ReturnStmt
+	| BreakStmt
+	| ContinueStmt
+	| GotoStmt
+	| FallthroughStmt
+	| Block
+	| IfStmt
+	| SwitchStmt
+	| SelectStmt
+	| ForStmt
+	| DeferStmt .
+StatementList = { [ Statement ] ";" } [ Statement ] .
+StructType = "struct" lbrace "#fixlbr" "}"
+	| "struct" lbrace FieldDecl { ";" FieldDecl } [ ";" ] "#fixlbr" "}" .
+SwitchStmt = ExprSwitchStmt | TypeSwitchStmt .
+Tag = string_lit .
+TopLevelDecl = Declaration
+	| FunctionDecl
+	| MethodDecl .
+Type = TypeName
+	| TypeLit
+	| "(" Type ")" .
+TypeArgs = "[" TypeList [ "," ] "]" .
+TypeAssertion = "." "(" Type ")" .
+TypeCaseClause = TypeSwitchCase ":" StatementList .
+TypeConstraint = TypeElem .
+TypeDecl = "type" TypeSpec
+	| "type" "(" { TypeSpec ";" } ")" .
+TypeDef = identifier [ TypeParameters ] Type .
+TypeElem = TypeTerm { "|" TypeTerm } .
+TypeList = Type { "," Type } .
+TypeLit = ArrayType
+	| StructType
+	| PointerType
+	| FunctionType
+	| InterfaceType
+	| SliceType
+	| MapType
+	| ChannelType .
+TypeName = QualifiedIdent [ TypeArgs ]
+	| identifier [ TypeArgs ] .
+TypeParamDecl = IdentifierList TypeConstraint .
+TypeParamList = TypeParamDecl { "," TypeParamDecl } .
+TypeParameters = "[" TypeParamList [ "," ] "]" .
+TypeSpec = AliasDecl | TypeDef .
+TypeSwitchCase = "case" TypeList
+	| "default" .
+TypeSwitchGuard = [ identifier ":=" ] PrimaryExpr "." "(" "type" ")" .
+TypeSwitchStmt = "switch" [ SimpleStmt ";" ] TypeSwitchGuard body { TypeCaseClause } "}" .
+TypeTerm = Type | UnderlyingType .
+UnaryExpr = PrimaryExpr
+	| unary_op UnaryExpr .
+UnderlyingType = "~" Type .
+VarDecl = "var" VarSpec
+	| "var" "(" { VarSpec ";" } ")" .
+VarSpec = IdentifierList Type [ "=" ExpressionList ]
+	| IdentifierList "=" ExpressionList .
+
+
+// Follow sets
+//
+//        AliasDecl ["IDENT"]
+//        Arguments ["("]
+//      ArrayLength ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
+//        ArrayType ["["]
+//       Assignment ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
+//         BaseType ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
+//         BasicLit ["CHAR" "FLOAT" "IMAG" "INT" "STRING"]
+//            Block ["{"]
+//        BreakStmt ["break"]
+//          Channel ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
+//      ChannelType ["<-" "chan"]
+//         CommCase ["case" "default"]
+//       CommClause ["case" "default"]
+//     CompositeLit ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
+//        Condition ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
+//        ConstDecl ["const"]
+//        ConstSpec ["IDENT"]
+//     ContinueStmt ["continue"]
+//       Conversion ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
+//      Declaration ["const" "type" "var"]
+//        DeferStmt ["defer"]
+//          Element ["!" "&" "(" "*" "+" "-" "<-" "BODY" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct" "{"]
+//      ElementList ["!" "&" "(" "*" "+" "-" "<-" "BODY" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct" "{"]
+//      ElementType ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
+//    EmbeddedField ["*" "IDENT"]
+//   ExprCaseClause ["case" "default"]
+//   ExprSwitchCase ["case" "default"]
+//   ExprSwitchStmt ["switch"]
+//       Expression ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
+//   ExpressionList ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
+//   ExpressionStmt ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
+//  FallthroughStmt ["fallthrough"]
+//        FieldDecl ["*" "IDENT"]
+//        ForClause ["!" "&" "(" "*" "+" "-" ";" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
+//          ForStmt ["for"]
+//     FunctionBody ["{"]
+//     FunctionDecl ["func"]
+//      FunctionLit ["func"]
+//     FunctionName ["IDENT"]
+//     FunctionType ["func"]
+//           GoStmt ["go"]
+//         GotoStmt ["goto"]
+//   IdentifierList ["IDENT"]
+//           IfStmt ["if"]
+//       ImportDecl ["import"]
+//       ImportPath ["STRING"]
+//       ImportSpec ["." "IDENT" "STRING"]
+//       IncDecStmt ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
+//            Index ["["]
+//         InitStmt ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
+//    InterfaceElem ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct" "~"]
+//    InterfaceType ["interface"]
+//              Key ["!" "&" "(" "*" "+" "-" "<-" "BODY" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct" "{"]
+//          KeyType ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
+//     KeyedElement ["!" "&" "(" "*" "+" "-" "<-" "BODY" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct" "{"]
+//            Label ["IDENT"]
+//      LabeledStmt ["IDENT"]
+//          Literal ["(" "*" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "chan" "func" "interface" "map" "struct"]
+//     LiteralType1 ["*" "<-" "[" "chan" "func" "interface" "map" "struct"]
+//     LiteralType2 ["(" "IDENT"]
+//    LiteralValue1 ["BODY" "{"]
+//    LiteralValue2 ["{"]
+//         LoopBody ["BODY"]
+//          MapType ["map"]
+//       MethodDecl ["func"]
+//       MethodElem ["IDENT"]
+//       MethodExpr ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
+//       MethodName ["IDENT"]
+//          Operand ["(" "*" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "chan" "func" "interface" "map" "struct"]
+//      OperandName ["IDENT"]
+//    PackageClause ["package"]
+//      PackageName ["IDENT"]
+//    ParameterDecl ["(" "*" "..." "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
+//    ParameterList ["(" "*" "..." "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
+//       Parameters ["("]
+//      PointerType ["*"]
+//         PostStmt ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
+//      PrimaryExpr ["(" "*" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "chan" "func" "interface" "map" "struct"]
+//   QualifiedIdent ["IDENT"]
+//      RangeClause ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "range" "struct"]
+//         Receiver ["("]
+//     ReceiverType ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
+//         RecvExpr ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
+//         RecvStmt ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
+//           Result ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
+//       ReturnStmt ["return"]
+//       SelectStmt ["select"]
+//         Selector ["."]
+//         SendStmt ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
+//     ShortVarDecl ["IDENT"]
+//        Signature ["("]
+//       SimpleStmt ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
+//            Slice ["["]
+//        SliceType ["["]
+//       SourceFile ["package"]
+//        Statement ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "break" "chan" "const" "continue" "defer" "fallthrough" "for" "func" "go" "goto" "if" "interface" "map" "return" "select" "struct" "switch" "type" "var" "{"]
+//    StatementList ["" "!" "&" "(" "*" "+" "-" ";" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "break" "chan" "const" "continue" "defer" "fallthrough" "for" "func" "go" "goto" "if" "interface" "map" "return" "select" "struct" "switch" "type" "var" "{"]
+//       StructType ["struct"]
+//       SwitchStmt ["switch"]
+//              Tag ["STRING"]
+//     TopLevelDecl ["const" "func" "type" "var"]
+//             Type ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
+//         TypeArgs ["["]
+//    TypeAssertion ["."]
+//   TypeCaseClause ["case" "default"]
+//   TypeConstraint ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct" "~"]
+//         TypeDecl ["type"]
+//          TypeDef ["IDENT"]
+//         TypeElem ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct" "~"]
+//         TypeList ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
+//          TypeLit ["*" "<-" "[" "chan" "func" "interface" "map" "struct"]
+//         TypeName ["IDENT"]
+//    TypeParamDecl ["IDENT"]
+//    TypeParamList ["IDENT"]
+//   TypeParameters ["["]
+//         TypeSpec ["IDENT"]
+//   TypeSwitchCase ["case" "default"]
+//  TypeSwitchGuard ["(" "*" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "chan" "func" "interface" "map" "struct"]
+//   TypeSwitchStmt ["switch"]
+//         TypeTerm ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct" "~"]
+//        UnaryExpr ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
+//   UnderlyingType ["~"]
+//          VarDecl ["var"]
+//          VarSpec ["IDENT"]
+//           add_op ["+" "-" "^" "|"]
+//        assign_op ["%=" "&=" "&^=" "*=" "+=" "-=" "/=" "<<=" "=" ">>=" "^=" "|="]
+//        binary_op ["!=" "%" "&" "&&" "&^" "*" "+" "-" "/" "<" "<<" "<=" "==" ">" ">=" ">>" "^" "|" "||"]
+//             body ["BODY"]
+//              eof ["EOF"]
+//        float_lit ["FLOAT"]
+//       identifier ["IDENT"]
+//    imaginary_lit ["IMAG"]
+//          int_lit ["INT"]
+//           lbrace ["BODY" "{"]
+//           mul_op ["%" "&" "&^" "*" "/" "<<" ">>"]
+//           rel_op ["!=" "<" "<=" "==" ">" ">="]
+//         rune_lit ["CHAR"]
+//       string_lit ["STRING"]
+//         unary_op ["!" "&" "*" "+" "-" "<-" "^"]
+
