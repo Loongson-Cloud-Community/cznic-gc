@@ -51,10 +51,9 @@ type ParseSourceFileConfig struct {
 }
 
 type parser struct {
-	cfg *ParseSourceFileConfig
-	s   *Scanner
-
+	cfg       *ParseSourceFileConfig
 	loophacks []bool
+	s         *Scanner
 
 	loophack bool
 }
@@ -140,12 +139,11 @@ func ParseSourceFile(cfg *ParseSourceFileConfig, name string, buf []byte) (r *So
 	}
 
 	p := newParser(cfg, s)
-	r = &SourceFile{PackageClause: p.packageClause()}
+	r = &SourceFile{PackageClause: p.packageClause(), ImportDecls: p.importDecls()}
 	if err := p.s.errs.Err(); err != nil {
 		return nil, err
 	}
 
-	r.ImportDecls = p.importDecls()
 	if cfg.Accept != nil && !cfg.Accept(r) {
 		p.err(errorf("rejected"))
 		return nil, p.Err()
