@@ -204,7 +204,7 @@ RecvStmt = ExpressionList "=" RecvExpr
 	| RecvExpr .
 Result = Parameters | Type .
 ReturnStmt = "return" [ ExpressionList ] .
-SelectStmt = "select" "{" { CommClause } "}" .
+SelectStmt = "select" body { CommClause } "}" .
 Selector = "." identifier .
 SendStmt = Channel "<-" Expression .
 ShortVarDecl = IdentifierList ":=" ExpressionList .
@@ -283,143 +283,143 @@ VarSpec = IdentifierList Type [ "=" ExpressionList ]
 
 // Follow sets
 //
-//        AliasDecl ["IDENT"]
-//        Arguments ["("]
-//      ArrayLength ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
-//        ArrayType ["["]
-//       Assignment ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
-//         BaseType ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
-//         BasicLit ["CHAR" "FLOAT" "IMAG" "INT" "STRING"]
-//            Block ["{"]
-//        BreakStmt ["break"]
-//          Channel ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
-//      ChannelType ["<-" "chan"]
-//         CommCase ["case" "default"]
-//       CommClause ["case" "default"]
-//     CompositeLit ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
-//        Condition ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
-//        ConstDecl ["const"]
-//        ConstSpec ["IDENT"]
-//     ContinueStmt ["continue"]
-//       Conversion ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
-//      Declaration ["const" "type" "var"]
-//        DeferStmt ["defer"]
-//          Element ["!" "&" "(" "*" "+" "-" "<-" "BODY" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct" "{"]
-//      ElementList ["!" "&" "(" "*" "+" "-" "<-" "BODY" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct" "{"]
-//      ElementType ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
-//    EmbeddedField ["*" "IDENT"]
-//   ExprCaseClause ["case" "default"]
-//   ExprSwitchCase ["case" "default"]
-//   ExprSwitchStmt ["switch"]
-//       Expression ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
-//   ExpressionList ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
-//   ExpressionStmt ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
-//  FallthroughStmt ["fallthrough"]
-//        FieldDecl ["*" "IDENT"]
-//        ForClause ["!" "&" "(" "*" "+" "-" ";" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
-//          ForStmt ["for"]
-//     FunctionBody ["{"]
-//     FunctionDecl ["func"]
-//      FunctionLit ["func"]
-//     FunctionName ["IDENT"]
-//     FunctionType ["func"]
-//           GoStmt ["go"]
-//         GotoStmt ["goto"]
-//   IdentifierList ["IDENT"]
-//           IfStmt ["if"]
-//       ImportDecl ["import"]
-//       ImportPath ["STRING"]
-//       ImportSpec ["." "IDENT" "STRING"]
-//       IncDecStmt ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
-//            Index ["["]
-//         InitStmt ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
-//    InterfaceElem ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct" "~"]
-//    InterfaceType ["interface"]
-//              Key ["!" "&" "(" "*" "+" "-" "<-" "BODY" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct" "{"]
-//          KeyType ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
-//     KeyedElement ["!" "&" "(" "*" "+" "-" "<-" "BODY" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct" "{"]
-//            Label ["IDENT"]
-//      LabeledStmt ["IDENT"]
-//          Literal ["(" "*" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "chan" "func" "interface" "map" "struct"]
-//     LiteralType1 ["*" "<-" "[" "chan" "func" "interface" "map" "struct"]
-//     LiteralType2 ["(" "IDENT"]
-//    LiteralValue1 ["BODY" "{"]
-//    LiteralValue2 ["{"]
-//         LoopBody ["BODY"]
-//          MapType ["map"]
-//       MethodDecl ["func"]
-//       MethodElem ["IDENT"]
-//       MethodExpr ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
-//       MethodName ["IDENT"]
-//          Operand ["(" "*" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "chan" "func" "interface" "map" "struct"]
-//      OperandName ["IDENT"]
-//    PackageClause ["package"]
-//      PackageName ["IDENT"]
-//    ParameterDecl ["(" "*" "..." "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
-//    ParameterList ["(" "*" "..." "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
-//       Parameters ["("]
-//      PointerType ["*"]
-//         PostStmt ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
-//      PrimaryExpr ["(" "*" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "chan" "func" "interface" "map" "struct"]
-//   QualifiedIdent ["IDENT"]
-//      RangeClause ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "range" "struct"]
-//         Receiver ["("]
-//     ReceiverType ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
-//         RecvExpr ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
-//         RecvStmt ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
-//           Result ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
-//       ReturnStmt ["return"]
-//       SelectStmt ["select"]
-//         Selector ["."]
-//         SendStmt ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
-//     ShortVarDecl ["IDENT"]
-//        Signature ["("]
-//       SimpleStmt ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
-//            Slice ["["]
-//        SliceType ["["]
-//       SourceFile ["package"]
-//        Statement ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "break" "chan" "const" "continue" "defer" "fallthrough" "for" "func" "go" "goto" "if" "interface" "map" "return" "select" "struct" "switch" "type" "var" "{"]
-//    StatementList ["" "!" "&" "(" "*" "+" "-" ";" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "break" "chan" "const" "continue" "defer" "fallthrough" "for" "func" "go" "goto" "if" "interface" "map" "return" "select" "struct" "switch" "type" "var" "{"]
-//       StructType ["struct"]
-//       SwitchStmt ["switch"]
-//              Tag ["STRING"]
-//     TopLevelDecl ["const" "func" "type" "var"]
-//             Type ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
-//         TypeArgs ["["]
-//    TypeAssertion ["."]
-//   TypeCaseClause ["case" "default"]
-//   TypeConstraint ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct" "~"]
-//         TypeDecl ["type"]
-//          TypeDef ["IDENT"]
-//         TypeElem ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct" "~"]
-//         TypeList ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct"]
-//          TypeLit ["*" "<-" "[" "chan" "func" "interface" "map" "struct"]
-//         TypeName ["IDENT"]
-//    TypeParamDecl ["IDENT"]
-//    TypeParamList ["IDENT"]
-//   TypeParameters ["["]
-//         TypeSpec ["IDENT"]
-//   TypeSwitchCase ["case" "default"]
-//  TypeSwitchGuard ["(" "*" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "chan" "func" "interface" "map" "struct"]
-//   TypeSwitchStmt ["switch"]
-//         TypeTerm ["(" "*" "<-" "IDENT" "[" "chan" "func" "interface" "map" "struct" "~"]
-//        UnaryExpr ["!" "&" "(" "*" "+" "-" "<-" "CHAR" "FLOAT" "IDENT" "IMAG" "INT" "STRING" "[" "^" "chan" "func" "interface" "map" "struct"]
-//   UnderlyingType ["~"]
-//          VarDecl ["var"]
-//          VarSpec ["IDENT"]
-//           add_op ["+" "-" "^" "|"]
-//        assign_op ["%=" "&=" "&^=" "*=" "+=" "-=" "/=" "<<=" "=" ">>=" "^=" "|="]
-//        binary_op ["!=" "%" "&" "&&" "&^" "*" "+" "-" "/" "<" "<<" "<=" "==" ">" ">=" ">>" "^" "|" "||"]
-//             body ["BODY"]
-//              eof ["EOF"]
-//        float_lit ["FLOAT"]
-//       identifier ["IDENT"]
-//    imaginary_lit ["IMAG"]
-//          int_lit ["INT"]
-//           lbrace ["BODY" "{"]
-//           mul_op ["%" "&" "&^" "*" "/" "<<" ">>"]
-//           rel_op ["!=" "<" "<=" "==" ">" ">="]
-//         rune_lit ["CHAR"]
-//       string_lit ["STRING"]
-//         unary_op ["!" "&" "*" "+" "-" "<-" "^"]
+//        AliasDecl case IDENTIFIER:
+//        Arguments case '(':
+//      ArrayLength case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//        ArrayType case '[':
+//       Assignment case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//         BaseType case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+//         BasicLit case FLOAT_LIT, IMAG_LIT, INT_LIT, RUNE_LIT, STRING_LIT:
+//            Block case '{':
+//        BreakStmt case BREAK:
+//          Channel case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//      ChannelType case ARROW, CHAN:
+//         CommCase case CASE, DEFAULT:
+//       CommClause case CASE, DEFAULT:
+//     CompositeLit case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+//        Condition case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//        ConstDecl case CONST:
+//        ConstSpec case IDENTIFIER:
+//     ContinueStmt case CONTINUE:
+//       Conversion case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+//      Declaration case CONST, TYPE, VAR:
+//        DeferStmt case DEFER:
+//          Element case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT, body:
+//      ElementList case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT, body:
+//      ElementType case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+//    EmbeddedField case '*', IDENTIFIER:
+//   ExprCaseClause case CASE, DEFAULT:
+//   ExprSwitchCase case CASE, DEFAULT:
+//   ExprSwitchStmt case SWITCH:
+//       Expression case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//   ExpressionList case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//   ExpressionStmt case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//  FallthroughStmt case FALLTHROUGH:
+//        FieldDecl case '*', IDENTIFIER:
+//        ForClause case '!', '&', '(', '*', '+', '-', ';', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//          ForStmt case FOR:
+//     FunctionBody case '{':
+//     FunctionDecl case FUNC:
+//      FunctionLit case FUNC:
+//     FunctionName case IDENTIFIER:
+//     FunctionType case FUNC:
+//           GoStmt case GO:
+//         GotoStmt case GOTO:
+//   IdentifierList case IDENTIFIER:
+//           IfStmt case IF:
+//       ImportDecl case IMPORT:
+//       ImportPath case STRING_LIT:
+//       ImportSpec case '.', IDENTIFIER, STRING_LIT:
+//       IncDecStmt case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//            Index case '[':
+//         InitStmt case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//    InterfaceElem case '(', '*', '[', '~', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+//    InterfaceType case INTERFACE:
+//              Key case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT, body:
+//          KeyType case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+//     KeyedElement case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT, body:
+//            Label case IDENTIFIER:
+//      LabeledStmt case IDENTIFIER:
+//          Literal case '(', '*', '[', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//     LiteralType1 case '*', '[', ARROW, CHAN, FUNC, INTERFACE, MAP, STRUCT:
+//     LiteralType2 case '(', IDENTIFIER:
+//    LiteralValue1 case '{', body:
+//    LiteralValue2 case '{':
+//         LoopBody case body:
+//          MapType case MAP:
+//       MethodDecl case FUNC:
+//       MethodElem case IDENTIFIER:
+//       MethodExpr case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+//       MethodName case IDENTIFIER:
+//          Operand case '(', '*', '[', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//      OperandName case IDENTIFIER:
+//    PackageClause case PACKAGE:
+//      PackageName case IDENTIFIER:
+//    ParameterDecl case '(', '*', '[', ARROW, CHAN, ELLIPSIS, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+//    ParameterList case '(', '*', '[', ARROW, CHAN, ELLIPSIS, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+//       Parameters case '(':
+//      PointerType case '*':
+//         PostStmt case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//      PrimaryExpr case '(', '*', '[', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//   QualifiedIdent case IDENTIFIER:
+//      RangeClause case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RANGE, RUNE_LIT, STRING_LIT, STRUCT:
+//         Receiver case '(':
+//     ReceiverType case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+//         RecvExpr case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//         RecvStmt case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//           Result case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+//       ReturnStmt case RETURN:
+//       SelectStmt case SELECT:
+//         Selector case '.':
+//         SendStmt case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//     ShortVarDecl case IDENTIFIER:
+//        Signature case '(':
+//       SimpleStmt case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//            Slice case '[':
+//        SliceType case '[':
+//       SourceFile case PACKAGE:
+//        Statement case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, BREAK, CHAN, CONST, CONTINUE, DEFER, FALLTHROUGH, FLOAT_LIT, FOR, FUNC, GO, GOTO, IDENTIFIER, IF, IMAG_LIT, INTERFACE, INT_LIT, MAP, RETURN, RUNE_LIT, SELECT, STRING_LIT, STRUCT, SWITCH, TYPE, VAR:
+//    StatementList case '!', '&', '(', '*', '+', '-', ';', '[', '^', '{', -1, ARROW, BREAK, CHAN, CONST, CONTINUE, DEFER, FALLTHROUGH, FLOAT_LIT, FOR, FUNC, GO, GOTO, IDENTIFIER, IF, IMAG_LIT, INTERFACE, INT_LIT, MAP, RETURN, RUNE_LIT, SELECT, STRING_LIT, STRUCT, SWITCH, TYPE, VAR:
+//       StructType case STRUCT:
+//       SwitchStmt case SWITCH:
+//              Tag case STRING_LIT:
+//     TopLevelDecl case CONST, FUNC, TYPE, VAR:
+//             Type case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+//         TypeArgs case '[':
+//    TypeAssertion case '.':
+//   TypeCaseClause case CASE, DEFAULT:
+//   TypeConstraint case '(', '*', '[', '~', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+//         TypeDecl case TYPE:
+//          TypeDef case IDENTIFIER:
+//         TypeElem case '(', '*', '[', '~', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+//         TypeList case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+//          TypeLit case '*', '[', ARROW, CHAN, FUNC, INTERFACE, MAP, STRUCT:
+//         TypeName case IDENTIFIER:
+//    TypeParamDecl case IDENTIFIER:
+//    TypeParamList case IDENTIFIER:
+//   TypeParameters case '[':
+//         TypeSpec case IDENTIFIER:
+//   TypeSwitchCase case CASE, DEFAULT:
+//  TypeSwitchGuard case '(', '*', '[', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//   TypeSwitchStmt case SWITCH:
+//         TypeTerm case '(', '*', '[', '~', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+//        UnaryExpr case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+//   UnderlyingType case '~':
+//          VarDecl case VAR:
+//          VarSpec case IDENTIFIER:
+//           add_op case '+', '-', '^', '|':
+//        assign_op case '=', ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN:
+//        binary_op case '%', '&', '*', '+', '-', '/', '<', '>', '^', '|', AND_NOT, EQ, GE, LAND, LE, LOR, NE, SHL, SHR:
+//             body case body:
+//              eof case EOF:
+//        float_lit case FLOAT_LIT:
+//       identifier case IDENTIFIER:
+//    imaginary_lit case IMAG_LIT:
+//          int_lit case INT_LIT:
+//           lbrace case '{', body:
+//           mul_op case '%', '&', '*', '/', AND_NOT, SHL, SHR:
+//           rel_op case '<', '>', EQ, GE, LE, NE:
+//         rune_lit case RUNE_LIT:
+//       string_lit case STRING_LIT:
+//         unary_op case '!', '&', '*', '+', '-', '^', ARROW:
 

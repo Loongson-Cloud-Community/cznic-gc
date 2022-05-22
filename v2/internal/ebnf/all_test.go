@@ -162,10 +162,10 @@ func loadGrammar(fn, out, start string) (ebnf.Grammar, map[string]followset, err
 		for _, k := range a {
 			a2 = a2[:0]
 			for k2 := range fs[k] {
-				a2 = append(a2, k2)
+				a2 = append(a2, xlat3[k2])
 			}
 			sort.Strings(a2)
-			fmt.Fprintf(b, "// %*s %q\n", ml+1, k, a2)
+			fmt.Fprintf(b, "// %*s case %s:\n", ml+1, k, strings.Join(a2, ", "))
 		}
 		b.WriteString("\n")
 		if err := os.WriteFile(out, b.Bytes(), 0640); err != nil {
@@ -541,6 +541,93 @@ var (
 	}
 
 	xlat2 = map[string]gc.Ch{}
+
+	xlat3 = map[string]string{
+		"":     "-1",
+		"BODY": "body",
+
+		"!": "'!'",
+		"%": "'%'",
+		"&": "'&'",
+		"(": "'('",
+		")": "')'",
+		"*": "'*'",
+		"+": "'+'",
+		",": "','",
+		"-": "'-'",
+		".": "'.'",
+		"/": "'/'",
+		":": "':'",
+		";": "';'",
+		"<": "'<'",
+		"=": "'='",
+		">": "'>'",
+		"[": "'['",
+		"]": "']'",
+		"^": "'^'",
+		"{": "'{'",
+		"|": "'|'",
+		"}": "'}'",
+		"~": "'~'",
+
+		"+=":          "ADD_ASSIGN",
+		"&=":          "AND_ASSIGN",
+		"&^":          "AND_NOT",
+		"&^=":         "AND_NOT_ASSIGN",
+		"<-":          "ARROW",
+		"break":       "BREAK",
+		"case":        "CASE",
+		"chan":        "CHAN",
+		"const":       "CONST",
+		"continue":    "CONTINUE",
+		"dec":         "DEC",
+		"default":     "DEFAULT",
+		"defer":       "DEFER",
+		":=":          "DEFINE",
+		"...":         "ELLIPSIS",
+		"else":        "ELSE",
+		"EOF":         "EOF",
+		"==":          "EQ",
+		"fallthrough": "FALLTHROUGH",
+		"FLOAT":       "FLOAT_LIT",
+		"for":         "FOR",
+		"func":        "FUNC",
+		">=":          "GE",
+		"go":          "GO",
+		"goto":        "GOTO",
+		"IDENT":       "IDENTIFIER",
+		"if":          "IF",
+		"IMAG":        "IMAG_LIT",
+		"import":      "IMPORT",
+		"++":          "INC",
+		"interface":   "INTERFACE",
+		"INT":         "INT_LIT",
+		"&&":          "LAND",
+		"<=":          "LE",
+		"||":          "LOR",
+		"map":         "MAP",
+		"*=":          "MUL_ASSIGN",
+		"!=":          "NE",
+		"|=":          "OR_ASSIGN",
+		"package":     "PACKAGE",
+		"/=":          "QUO_ASSIGN",
+		"range":       "RANGE",
+		"%=":          "REM_ASSIGN",
+		"return":      "RETURN",
+		"CHAR":        "RUNE_LIT",
+		"select":      "SELECT",
+		"<<":          "SHL",
+		"<<=":         "SHL_ASSIGN",
+		">>":          "SHR",
+		">>=":         "SHR_ASSIGN",
+		"STRING":      "STRING_LIT",
+		"struct":      "STRUCT",
+		"-=":          "SUB_ASSIGN",
+		"switch":      "SWITCH",
+		"type":        "TYPE",
+		"var":         "VAR",
+		"^=":          "XOR_ASSIGN",
+	}
 )
 
 func init() {
@@ -631,7 +718,7 @@ func (p *parser) run(expr ebnf.Expression) (r bool) {
 		s := x.String
 		ch := p.in[ix].Ch
 		switch ch {
-		case gc.FOR, gc.IF, gc.SWITCH:
+		case gc.FOR, gc.IF, gc.SELECT, gc.SWITCH:
 			p.loophack = true
 			// trc("%v: p.loophack = %v", p.in[ix], p.loophack)
 		case '(', '[':

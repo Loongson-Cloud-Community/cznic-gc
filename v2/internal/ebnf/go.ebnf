@@ -178,7 +178,7 @@ Result =
 	  Parameters
 	| Type .
 ReturnStmt = "return" [ ExpressionList ] .
-SelectStmt = "select" "{" { CommClause } "}" .
+SelectStmt = "select" body { CommClause } "}" .
 Selector = "." identifier .
 SendStmt = Channel "<-" Expression .
 ShortVarDecl = IdentifierList ":=" ExpressionList .

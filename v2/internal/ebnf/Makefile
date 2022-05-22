@@ -11,4 +11,3 @@ edit:
 editor:
 	gofmt -l -s -w *.go
 	go test -run Test0
-	go install -v modernc.org/tmp/go/parser/ebnf 2>&1 | tee log-editor
