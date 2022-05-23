@@ -5,10 +5,13 @@
 package gc // import "modernc.org/gc/v2"
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -150,4 +153,71 @@ func (p *parallel) wait() error {
 		a = append(a, v.Error())
 	}
 	return fmt.Errorf("%s", strings.Join(a, "\n"))
+}
+
+func nodeSource(full bool, n ...Node) []byte {
+	var a []Token
+	for _, v := range n {
+		nodeSource0(&a, v)
+	}
+	sort.Slice(a, func(i, j int) bool { return a[i].off < a[j].off })
+	var b bytes.Buffer
+	for i, t := range a {
+		switch {
+		case full:
+			b.WriteString(t.Sep())
+		default:
+			if i != 0 && len(t.Sep()) != 0 {
+				b.WriteByte(' ')
+			}
+		}
+		b.WriteString(t.Src())
+	}
+	return b.Bytes()
+}
+
+func nodeSource0(a *[]Token, n interface{}) {
+	if n == nil {
+		return
+	}
+
+	if x, ok := n.(Token); ok && x.IsValid() {
+		*a = append(*a, x)
+		return
+	}
+
+	t := reflect.TypeOf(n)
+	v := reflect.ValueOf(n)
+	var zero reflect.Value
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+		v = v.Elem()
+		if v == zero {
+			return
+		}
+	}
+
+	switch t.Kind() {
+	case reflect.Struct:
+		nf := t.NumField()
+		for i := 0; i < nf; i++ {
+			f := t.Field(i)
+			if !f.IsExported() {
+				continue
+			}
+
+			if v == zero || v.IsZero() {
+				continue
+			}
+
+			nodeSource0(a, v.Field(i).Interface())
+		}
+	case reflect.Slice:
+		ne := v.Len()
+		for i := 0; i < ne; i++ {
+			nodeSource0(a, v.Index(i).Interface())
+		}
+	default:
+		panic(todo("", t.Kind()))
+	}
 }

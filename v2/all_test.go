@@ -4,8 +4,11 @@
 
 package gc // import "modernc.org/gc/v2"
 
+//TODO TestParserRoundtrip
+
 import (
 	"bytes"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	goparser "go/parser"
@@ -20,11 +23,14 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"unicode"
 
 	"github.com/dustin/go-humanize"
+	"github.com/pmezard/go-difflib/difflib"
 	"modernc.org/scannertest"
 )
 
@@ -67,10 +73,11 @@ func init() {
 var (
 	_ scannertest.Interface = (*testScanner)(nil)
 
+	oFailNow = flag.Bool("failnow", false, "")
 	oRE      = flag.String("re", "", "")
 	oTrc     = flag.Bool("trc", false, "")
-	oTrcOK   = flag.Bool("trcok", false, "")
 	oTrcFail = flag.Bool("trcfail", false, "")
+	oTrcOK   = flag.Bool("trcok", false, "")
 
 	digits  = expand(unicode.Nd)
 	letters = expand(unicode.L)
@@ -96,6 +103,70 @@ func expand(cat *unicode.RangeTable) (r []rune) {
 		r[i], r[j] = r[j], r[i]
 	}
 	return r
+}
+
+type golden struct {
+	a  []string
+	f  *os.File
+	mu sync.Mutex
+	t  *testing.T
+
+	discard bool
+}
+
+func newGolden(t *testing.T, fn string) *golden {
+	if re != nil || *oFailNow {
+		return &golden{discard: true}
+	}
+
+	f, err := os.Create(filepath.FromSlash(fn))
+	if err != nil { // Possibly R/O fs in a VM
+		base := filepath.Base(filepath.FromSlash(fn))
+		f, err = ioutil.TempFile("", base)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		t.Logf("writing results to %s\n", f.Name())
+	}
+
+	return &golden{t: t, f: f}
+}
+
+func (g *golden) w(s string, args ...interface{}) {
+	if g.discard {
+		return
+	}
+
+	g.mu.Lock()
+
+	defer g.mu.Unlock()
+
+	if s = strings.TrimRight(s, " \t\n\r"); !strings.HasSuffix(s, "\n") {
+		s += "\n"
+	}
+	g.a = append(g.a, fmt.Sprintf(s, args...))
+}
+
+func (g *golden) close() {
+	if g.discard || g.f == nil {
+		return
+	}
+
+	defer func() { g.f = nil }()
+
+	sort.Strings(g.a)
+	if _, err := g.f.WriteString(strings.Join(g.a, "")); err != nil {
+		g.t.Fatal(err)
+	}
+
+	if err := g.f.Sync(); err != nil {
+		g.t.Fatal(err)
+	}
+
+	if err := g.f.Close(); err != nil {
+		g.t.Fatal(err)
+	}
 }
 
 func TestMain(m *testing.M) {
@@ -536,9 +607,13 @@ func TestTokenSet(t *testing.T) {
 
 func TestParser(t *testing.T) {
 	return //TODO-
+	g := newGolden(t, fmt.Sprintf("testdata/test_parse.golden"))
+
+	defer g.close()
+
 	p := newParallel()
-	t.Run("cd", func(t *testing.T) { testParser(p, t, ".") })
-	t.Run("goroot", func(t *testing.T) { testParser(p, t, runtime.GOROOT()) })
+	t.Run("cd", func(t *testing.T) { testParser(p, t, g, ".") })
+	t.Run("goroot", func(t *testing.T) { testParser(p, t, g, runtime.GOROOT()) })
 	if err := p.wait(); err != nil {
 		t.Error(err)
 	}
@@ -568,7 +643,7 @@ func parserFails(fn string, src []byte) bool {
 	return err != nil
 }
 
-func testParser(p *parallel, t *testing.T, root string) {
+func testParser(p *parallel, t *testing.T, g *golden, root string) {
 	// blackList := map[string]struct{}{}
 	cfg := &ParseSourceFileConfig{}
 	err := filepath.Walk(root, func(path0 string, info os.FileInfo, err error) error {
@@ -582,13 +657,7 @@ func testParser(p *parallel, t *testing.T, root string) {
 
 		switch {
 		case re == nil:
-			if strings.Contains(filepath.ToSlash(path0), "/errchk/") {
-				return nil
-			}
-
-			if strings.Contains(filepath.ToSlash(path0), "/testdata/") {
-				return nil
-			}
+			// ok
 		default:
 			if !re.MatchString(path0) {
 				return nil
@@ -614,7 +683,8 @@ func testParser(p *parallel, t *testing.T, root string) {
 				return err
 			}
 
-			if _, err = ParseSourceFile(cfg, path, b); err != nil {
+			ast, err := ParseSourceFile(cfg, path, b)
+			if err != nil {
 				if parserFails(path, b) {
 					p.skip()
 					return nil
@@ -627,7 +697,31 @@ func testParser(p *parallel, t *testing.T, root string) {
 				return err
 			}
 
+			b2 := nodeSource(true, ast)
+			got := strings.TrimRight(string(b2), "\n\r \t")
+			exp := strings.TrimRight(string(b), "\n\r \t")
+			if got != exp {
+				p.fail()
+				if *oTrcFail {
+					fmt.Fprintf(os.Stderr, "FAIL: %v\n", path)
+				}
+				diff := difflib.UnifiedDiff{
+					A:        difflib.SplitLines(exp),
+					B:        difflib.SplitLines(got),
+					FromFile: path,
+					ToFile:   "<nodesource>",
+					Context:  0,
+				}
+				s, err := difflib.GetUnifiedDiffString(diff)
+				if err != nil {
+					return fmt.Errorf("%v: %v", path, err)
+				}
+
+				return fmt.Errorf("%v\ngot\n%s\nexp\n%s\ngot\n%s\nexp\n%s", s, got, exp, hex.Dump([]byte(got)), hex.Dump([]byte(exp)))
+			}
+
 			p.ok()
+			g.w("%s\n", path)
 			if *oTrcOK {
 				fmt.Fprintf(os.Stderr, "OK: %v\n", path)
 			}

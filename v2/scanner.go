@@ -1236,6 +1236,7 @@ func (s *Scanner) lineComment(off int32) (injectSemi bool) {
 				s.err(off+2, "illegal byte order mark")
 			}
 		case s.eof:
+			s.off++
 			if s.injectSemi() {
 				return true
 			}
