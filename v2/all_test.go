@@ -606,7 +606,7 @@ func TestTokenSet(t *testing.T) {
 }
 
 func TestParser(t *testing.T) {
-	return //TODO-
+	return //TODO
 	g := newGolden(t, fmt.Sprintf("testdata/test_parse.golden"))
 
 	defer g.close()

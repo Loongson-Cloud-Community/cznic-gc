@@ -55,6 +55,14 @@ func (e *errList) err(pos token.Position, msg string, args ...interface{}) {
 // non-zero.
 type Ch rune
 
+func (c Ch) str() string {
+	if c < beforeTokens || c > afterTokens { //TODO
+		return fmt.Sprintf("%#U", c)
+	}
+
+	return c.String()
+}
+
 // token translates, if possible, c to the lexeme value defined in go/token or
 // token.ILLEGAL otherwise.
 func (c Ch) token() token.Token {
@@ -1428,12 +1436,4 @@ var Keywords = map[string]Ch{
 	"switch":      SWITCH,
 	"type":        TYPE,
 	"var":         VAR,
-}
-
-func (c Ch) str() string {
-	if c < beforeTokens || c > afterTokens { //TODO
-		return fmt.Sprintf("%#U", c)
-	}
-
-	return c.String()
 }

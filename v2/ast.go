@@ -10,31 +10,39 @@ import (
 
 var (
 	_ = []Node{
+		(*AliasDecl)(nil),
 		(*Arguments)(nil),
+		(*ArrayType)(nil),
 		(*Assignment)(nil),
+		(*BinaryExpression)(nil),
 		(*Block)(nil),
 		(*ChannelType)(nil),
 		(*CompositeLit)(nil),
 		(*ConstDecl)(nil),
 		(*ConstSpec)(nil),
-		(*ConstSpecItem)(nil),
+		(*Conversion)(nil),
+		(*DeferStmt)(nil),
 		(*EmbeddedField)(nil),
 		(*ExpressionListItem)(nil),
 		(*FieldDecl)(nil),
+		(*ForClause)(nil),
 		(*ForStmt)(nil),
 		(*FunctionDecl)(nil),
 		(*FunctionLit)(nil),
 		(*FunctionType)(nil),
+		(*GoStmt)(nil),
 		(*IdentifierListItem)(nil),
 		(*IfStmt)(nil),
 		(*ImportDecl)(nil),
 		(*ImportSpec)(nil),
 		(*ImportSpecItem)(nil),
+		(*Index)(nil),
 		(*InterfaceType)(nil),
 		(*KeyedElement)(nil),
 		(*LiteralValue)(nil),
 		(*MapType)(nil),
 		(*MethodDecl)(nil),
+		(*MethodElem)(nil),
 		(*PackageClause)(nil),
 		(*ParameterDecl)(nil),
 		(*Parameters)(nil),
@@ -42,6 +50,7 @@ var (
 		(*QualifiedIdent)(nil),
 		(*RangeClause)(nil),
 		(*ReturnStmt)(nil),
+		(*Selector)(nil),
 		(*ShortVarDecl)(nil),
 		(*Signature)(nil),
 		(*SliceType)(nil),
@@ -50,9 +59,12 @@ var (
 		(*StructType)(nil),
 		(*TopLevelDecl)(nil),
 		(*Type)(nil),
+		(*TypeArgs)(nil),
+		(*TypeAssertion)(nil),
 		(*TypeDecl)(nil),
 		(*TypeDef)(nil),
 		(*TypeElem)(nil),
+		(*TypeListItem)(nil),
 		(*TypeName)(nil),
 		(*TypeParamDecl)(nil),
 		(*TypeParamListItem)(nil),
@@ -62,10 +74,31 @@ var (
 		(*UnaryExpr)(nil),
 		(*VarDecl)(nil),
 		(*VarSpec)(nil),
-		(*VarSpecItem)(nil),
 	}
 
 	notok Token
+
+	opPrecedence = map[Ch]int{
+		'%':     5,
+		'&':     5,
+		'*':     5,
+		'+':     4,
+		'-':     4,
+		'/':     5,
+		'<':     3,
+		'>':     3,
+		'^':     4,
+		'|':     4,
+		AND_NOT: 5,
+		EQ:      3,
+		GE:      3,
+		LAND:    2,
+		LE:      3,
+		LOR:     1,
+		NE:      3,
+		SHL:     5,
+		SHR:     5,
+	}
 )
 
 // ParseSourceFileConfig configures ParseSourceFile.
@@ -110,6 +143,13 @@ func (p *parser) must(c Ch) (r Token) {
 		p.err("expected %v, got %v", c.str(), r.Ch.str())
 	}
 	return p.shift()
+}
+
+func (p *parser) opt(c Ch) (r Token) {
+	if p.ch() == c {
+		r = p.shift()
+	}
+	return r
 }
 
 func (p *parser) shift() (r Token) {
@@ -209,7 +249,7 @@ func (p *parser) topLevelDecls() (r []*TopLevelDecl) {
 			case IDENTIFIER:
 				n = &TopLevelDecl{Decl: p.functionDecl(fn)}
 			default:
-				p.err(errorf("TODO %v", p.s.Tok.str()))
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
 			}
@@ -273,7 +313,7 @@ func (p *parser) functionDecl(fn Token) (r *FunctionDecl) {
 		r.TypeParameters = p.typeParameters(notok, notok)
 		r.Signature = p.signature()
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
@@ -317,41 +357,57 @@ func (p *parser) statementList() (r []*Statement) {
 	for {
 		var n *Statement
 		switch p.ch() {
-		case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, BREAK, CHAN, CONTINUE, DEFER, FALLTHROUGH, FLOAT_LIT, FUNC, GO, GOTO, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, SELECT, STRING_LIT, STRUCT, TYPE:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+		case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, BREAK, CHAN, CONTINUE, FALLTHROUGH, FLOAT_LIT, FUNC, GOTO, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, SELECT, STRING_LIT, STRUCT:
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		case CONST:
 			n = &Statement{Statement: p.constDecl()}
+		case DEFER:
+			n = &Statement{Statement: p.deferStmt()}
 		case FOR:
 			n = &Statement{Statement: p.forStmt()}
+		case GO:
+			n = &Statement{Statement: &GoStmt{Go: p.shift(), Expression: p.expression(notok)}}
 		case IDENTIFIER:
 			id := p.shift()
 			switch p.ch() {
 			case DEFINE:
 				// RecvStmt = IdentifierList ":=" RecvExpr
 				// ShortVarDecl = IdentifierList ":=" ExpressionList .
-				n = &Statement{Statement: &ShortVarDecl{IdentifierList: p.identifierList(id), Define: p.shift(), ExpressionList: p.expressionList()}}
+				n = &Statement{Statement: &ShortVarDecl{IdentifierList: p.identifierList(id), Define: p.shift(), ExpressionList: p.expressionList(notok)}}
 			case '.', '(':
 				// MethodExpr = ReceiverType "." MethodName .
 				// QualifiedIdent = PackageName "." identifier .
-				n = &Statement{Statement: p.expression(id)}
-			//        assign_op
+				expr := p.expression(id)
+				switch p.ch() {
+				case ';':
+					n = &Statement{Statement: expr}
+				case '=', ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN:
+					n = &Statement{Statement: &Assignment{LExpressionList: []*ExpressionListItem{{Expression: expr}}, AssOp: p.shift(), RExpressionList: p.expressionList(notok)}}
+				default:
+					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+					p.shift()
+					return r
+				}
 			case '=', ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN:
-				n = &Statement{Statement: &Assignment{IdentifierList: p.identifierList(id), AssOp: p.shift(), ExpressionList: p.expressionList()}}
-			case ',':
-				l := p.identifierList(id)
+				n = &Statement{Statement: &Assignment{LExpressionList: []*ExpressionListItem{{Expression: id}}, AssOp: p.shift(), RExpressionList: p.expressionList(notok)}}
+			case ',', '[':
+				el := p.expressionList(id)
 				switch p.ch() {
 				case DEFINE:
-					n = &Statement{Statement: &ShortVarDecl{IdentifierList: l, Define: p.shift(), ExpressionList: p.expressionList()}}
+					il := p.exprList2IdList(p.s.Tok, el)
+					n = &Statement{Statement: &ShortVarDecl{IdentifierList: il, Define: p.shift(), ExpressionList: p.expressionList(notok)}}
+				case '=', ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN:
+					n = &Statement{Statement: &Assignment{LExpressionList: el, AssOp: p.shift(), RExpressionList: p.expressionList(notok)}}
 				default:
-					_ = l
-					p.err(errorf("TODO %v", p.s.Tok.str()))
+					_ = el
+					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 					p.shift()
 					return r
 				}
 			default:
-				p.err(errorf("TODO %v", p.s.Tok.str()))
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
 			}
@@ -361,12 +417,14 @@ func (p *parser) statementList() (r []*Statement) {
 			n = &Statement{Statement: p.returnStmt()}
 		case SWITCH:
 			n = &Statement{Statement: p.switchStmt()}
+		case TYPE:
+			n = &Statement{Statement: p.typeDecl()}
 		case VAR:
 			n = &Statement{Statement: p.varDecl()}
 		case '}':
 			return r
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
@@ -377,24 +435,49 @@ func (p *parser) statementList() (r []*Statement) {
 		case '}':
 			return r
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
 	}
 }
 
+// GoStmt describes a go statement.
+//
+type GoStmt struct {
+	Go         Token
+	Expression Node
+}
+
+// Positions implements Node.
+func (n *GoStmt) Position() token.Position { return n.Go.Position() }
+
+// DeferStmt describes a defer statement.
+//
+//  DeferStmt = "defer" Expression .
+type DeferStmt struct {
+	Defer      Token
+	Expression Node
+}
+
+// Positions implements Node.
+func (n *DeferStmt) Position() token.Position { return n.Defer.Position() }
+
+func (p *parser) deferStmt() (r *DeferStmt) {
+	return &DeferStmt{Defer: p.must(DEFER), Expression: p.expression(notok)}
+}
+
 // Assignment describes a short variable declaration.
 //
 // Assignment = ExpressionList assign_op ExpressionList .
 type Assignment struct {
-	IdentifierList []*IdentifierListItem
-	AssOp          Token
-	ExpressionList []*ExpressionListItem
+	LExpressionList []*ExpressionListItem
+	AssOp           Token
+	RExpressionList []*ExpressionListItem
 }
 
 // Positions implements Node.
-func (n *Assignment) Position() token.Position { return n.IdentifierList[0].Position() }
+func (n *Assignment) Position() token.Position { return n.LExpressionList[0].Position() }
 
 // ShortVarDecl describes a short variable declaration.
 //
@@ -413,6 +496,7 @@ func (n *ShortVarDecl) Position() token.Position { return n.IdentifierList[0].Po
 //  ForStmt = "for" [ Condition | ForClause | RangeClause ] Block .
 type ForStmt struct {
 	For         Token
+	ForClause   *ForClause
 	RangeClause *RangeClause
 	Block       *Block
 }
@@ -431,33 +515,37 @@ func (p *parser) forStmt() (r *ForStmt) {
 	r = &ForStmt{For: p.must(FOR)}
 	switch p.ch() {
 	case ';':
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	case RANGE:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-		el := p.expressionList()
+		el := p.expressionList(notok)
 		switch p.ch() {
 		case DEFINE:
 			def := p.shift()
 			switch p.ch() {
 			case RANGE:
 				r.RangeClause = &RangeClause{ExpressionList: el, Assign: def, Range: p.shift(), Expression: p.expression(notok)}
+			//       Expression
+			case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+				ss := &ShortVarDecl{IdentifierList: p.exprList2IdList(def, el), Define: def, ExpressionList: p.expressionList(notok)}
+				r.ForClause = p.forClause(ss)
 			default:
-				p.err(errorf("TODO %v", p.s.Tok.str()))
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
 			}
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
@@ -471,7 +559,50 @@ func (p *parser) loopBody() (r *Block) {
 	return r
 }
 
-// RangeClause describes a return statement.
+// ForClause describes a for clause.
+//
+//  ForClause = [ InitStmt ] ";" [ Condition ] ";" [ PostStmt ] .
+type ForClause struct {
+	InitStmt   Node
+	Semicolon  Token
+	Condition  Node
+	Semicolon2 Token
+	PostStmt   Node
+}
+
+// Positions implements Node.
+func (n *ForClause) Position() token.Position {
+	if n.InitStmt != nil {
+		return n.InitStmt.Position()
+	}
+
+	return n.Semicolon.Position()
+}
+
+func (p *parser) forClause(initStmt Node) (r *ForClause) {
+	r = &ForClause{}
+	switch {
+	case initStmt != nil:
+		r.InitStmt = initStmt
+		r.Semicolon = p.must(';')
+		if p.ch() != ';' {
+			r.Condition = p.expression(notok)
+		}
+		r.Semicolon2 = p.must(';')
+		switch p.ch() {
+		//         PostStmt
+		case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+			r.PostStmt = p.simpleStmt()
+		}
+		return r
+	default:
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	}
+}
+
+// RangeClause describes a range clause.
 //
 type RangeClause struct {
 	ExpressionList []*ExpressionListItem
@@ -491,7 +622,7 @@ func (p *parser) switchStmt() (r Node) {
 	switch p.ch() {
 	default:
 		_ = sw
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
@@ -513,9 +644,11 @@ func (p *parser) returnStmt() (r *ReturnStmt) {
 	switch p.ch() {
 	//   ExpressionList
 	case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-		r.ExpressionList = p.expressionList()
+		r.ExpressionList = p.expressionList(notok)
+	case ';':
+		// ok
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 	}
 	return r
@@ -525,21 +658,116 @@ func (p *parser) returnStmt() (r *ReturnStmt) {
 //
 //  IfStmt = "if" [ SimpleStmt ";" ] Expression Block [ "else" ( IfStmt | Block ) ] .
 type IfStmt struct {
-	If Token
-	//TODO
+	If         Token
+	SimpleStmt Node
+	Semicolon  Token
+	Expression Node
+	Block      *Block
 }
 
 // Positions implements Node.
 func (n *IfStmt) Position() token.Position { return n.If.Position() }
 
+// IfStmt = "if" [ SimpleStmt ";" ] Expression LoopBody [
+// 		 "else" ( IfStmt | Block )
+// 	  ] .
 func (p *parser) ifStmt() (r *IfStmt) {
+	//       SimpleStmt case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+	//       Expression case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
 	r = &IfStmt{If: p.must(IF)}
 	switch p.ch() {
+	case IDENTIFIER:
+		ss := p.simpleStmt()
+		switch p.ch() {
+		case body:
+			r.Expression = ss
+		case ';':
+			r.SimpleStmt = ss
+			r.Semicolon = p.shift()
+			r.Expression = p.expression(notok)
+		default:
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		}
+	case '!', '&', '(', '*', '+', '-', '[', '^', CHAN, FLOAT_LIT, FUNC, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+		expr := p.expression(notok)
+		switch p.ch() {
+		case body:
+			r.Expression = expr
+		default:
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		}
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
+	r.Block = p.loopBody()
+	switch p.ch() {
+	case ';':
+		return r
+	default:
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	}
+}
+
+// SimpleStmt = IncDecStmt
+// 	| ShortVarDecl
+// 	| Assignment
+// 	| SendStmt
+// 	| ExpressionStmt .
+func (p *parser) simpleStmt() (r Node) {
+	switch p.ch() {
+	case IDENTIFIER:
+		el := p.expressionList(notok)
+		switch p.ch() {
+		case body:
+			if len(el) != 1 {
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.shift()
+				return r
+			}
+
+			return el[0]
+		case DEFINE:
+			return &ShortVarDecl{IdentifierList: p.exprList2IdList(p.s.Tok, el), Define: p.shift(), ExpressionList: p.expressionList(notok)}
+		default:
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		}
+	default:
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	}
+}
+
+func (p *parser) exprList2IdList(n Node, el []*ExpressionListItem) (r []*IdentifierListItem) {
+	if len(el) == 0 {
+		p.errNode(n, errorf("TODO %v", p.s.Tok.Ch.str()))
+		return r
+	}
+
+	for _, v := range el {
+		switch x := v.Expression.(type) {
+		case Token:
+			if x.Ch != IDENTIFIER {
+				p.errNode(x, errorf("TODO %v", p.s.Tok.Ch.str()))
+				return r
+			}
+			r = append(r, &IdentifierListItem{Ident: x, Comma: v.Comma})
+		default:
+			p.errNode(v, errorf("TODO %T", x))
+			return r
+		}
+	}
+	return r
 }
 
 // Signature describes a function signature.
@@ -570,9 +798,9 @@ func (p *parser) result() (r Node) {
 		r = par
 		if par != nil && len(par.ParameterList) == 1 {
 			pd := par.ParameterList[0]
-			if len(pd.IdentifierList) == 0 && !pd.DDD.IsValid() {
+			if len(pd.IdentifierList) == 0 && !pd.ELLIPSIS.IsValid() {
 				//TODO convert Parameters to (Type)
-				p.err(errorf("TODO %v", p.s.Tok.str()))
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
 			}
@@ -580,7 +808,7 @@ func (p *parser) result() (r Node) {
 	case '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 		return p.type1()
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 	}
 	return r
@@ -607,9 +835,7 @@ func (p *parser) parameters() (r *Parameters) {
 	case '(', '*', '[', ARROW, CHAN, ELLIPSIS, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 		r.ParameterList = p.parameterList()
 	}
-	if p.ch() == ',' {
-		r.Comma = p.shift()
-	}
+	r.Comma = p.opt(',')
 	r.RParen = p.must(')')
 	return r
 }
@@ -619,7 +845,7 @@ func (p *parser) parameters() (r *Parameters) {
 //  ParameterDecl = [ IdentifierList ] [ "..." ] Type .
 type ParameterDecl struct {
 	IdentifierList []*IdentifierListItem
-	DDD            Token
+	ELLIPSIS       Token
 	Type           *Type
 	Comma          Token
 }
@@ -629,8 +855,8 @@ func (n *ParameterDecl) Position() token.Position {
 	switch {
 	case len(n.IdentifierList) != 0:
 		return n.IdentifierList[0].Position()
-	case n.DDD.IsValid():
-		return n.DDD.Position()
+	case n.ELLIPSIS.IsValid():
+		return n.ELLIPSIS.Position()
 	default:
 		return n.Type.Position()
 	}
@@ -641,7 +867,7 @@ func (n *ParameterDecl) Position() token.Position {
 // 	| "..." Type
 // 	| Type .
 func (p *parser) parameterDecl() (r *ParameterDecl) {
-	p.err(errorf("TODO %v", p.s.Tok.str()))
+	p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 	p.shift()
 	return r
 }
@@ -654,32 +880,30 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 			id := p.shift()
 			switch p.ch() {
 			case ELLIPSIS:
-				p.err(errorf("TODO %v", p.s.Tok.str()))
-				p.shift()
-				return r
+				n = &ParameterDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, ELLIPSIS: p.shift(), Type: p.type1()}
 			case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 				n = &ParameterDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, Type: p.type1()}
 			case ',', ')':
 				n = &ParameterDecl{Type: &Type{Type: &QualifiedIdent{Ident: id}}}
+			case '.':
+				n = &ParameterDecl{Type: &Type{Type: &QualifiedIdent{PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}}}
 			default:
-				p.err(errorf("TODO %v", p.s.Tok.str()))
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
 			}
 		case ELLIPSIS:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		case '(', '*', '[', ARROW, CHAN, FUNC, INTERFACE, MAP, STRUCT:
 			n = &ParameterDecl{Type: p.type1()}
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
-		if p.ch() == ',' {
-			n.Comma = p.shift()
-		}
+		n.Comma = p.opt(',')
 		r = append(r, n)
 		if p.ch() == ')' {
 			return r
@@ -711,7 +935,7 @@ func (n *Type) Position() token.Position {
 func (p *parser) type1() (r *Type) {
 	switch p.ch() {
 	case '(':
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	case '*':
@@ -721,14 +945,18 @@ func (p *parser) type1() (r *Type) {
 		switch p.ch() {
 		case ']':
 			return &Type{Type: p.sliceType(lbracket)}
+		case ELLIPSIS:
+			return &Type{Type: &ArrayType{LBracket: lbracket, ArrayLength: p.shift(), RBracket: p.must(']'), ElementType: p.type1()}}
+		//       Expression
+		case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+			return &Type{Type: &ArrayType{LBracket: lbracket, ArrayLength: p.expression(notok), RBracket: p.must(']'), ElementType: p.type1()}}
 		default:
-			_ = lbracket
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
 	case ARROW:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	case CHAN:
@@ -744,11 +972,23 @@ func (p *parser) type1() (r *Type) {
 	case STRUCT:
 		return &Type{Type: p.structType()}
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
 }
+
+// ArrayType describes a channel type.
+//
+type ArrayType struct {
+	LBracket    Token
+	ArrayLength Node
+	RBracket    Token
+	ElementType *Type
+}
+
+// Positions implements Node.
+func (n *ArrayType) Position() token.Position { return n.LBracket.Position() }
 
 // ChannelType describes a channel type.
 //
@@ -772,7 +1012,7 @@ func (n *ChannelType) Position() token.Position {
 func (p *parser) channelType(arrowPre Token) (r *ChannelType) {
 	switch {
 	case arrowPre.IsValid():
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 	default:
 		switch p.ch() {
@@ -783,7 +1023,7 @@ func (p *parser) channelType(arrowPre Token) (r *ChannelType) {
 			}
 			r.ElementType = p.type1()
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 		}
 	}
@@ -792,7 +1032,7 @@ func (p *parser) channelType(arrowPre Token) (r *ChannelType) {
 
 // FunctionType describes a function type.
 //
-//  FunctionType   = "func" Signature .
+//  FunctionType = "func" Signature .
 type FunctionType struct {
 	Func      Token
 	Signature *Signature
@@ -807,7 +1047,7 @@ func (p *parser) functionType() (r *FunctionType) {
 
 // MapType describes a map type.
 //
-//  MapType     = "map" "[" KeyType "]" ElementType .
+//  MapType = "map" "[" KeyType "]" ElementType .
 type MapType struct {
 	Map         Token
 	LBracket    Token
@@ -843,10 +1083,10 @@ func (p *parser) sliceType(lbracket Token) (r *SliceType) {
 //
 //  InterfaceType = "interface" "{" { InterfaceElem ";" } "}" .
 type InterfaceType struct {
-	Interface Token
-	LBrace    Token
-	//TODO
-	RBrace Token
+	Interface      Token
+	LBrace         Token
+	InterfaceElems []Node
+	RBrace         Token
 }
 
 // Positions implements Node.
@@ -854,34 +1094,63 @@ func (n *InterfaceType) Position() token.Position { return n.Interface.Position(
 
 // InterfaceType = "interface" lbrace "#fixlbr" "}"
 // 	| "interface" lbrace InterfaceElem { ";" InterfaceElem } [ ";" ] "#fixlbr" "}" .
+//
+// InterfaceElem = MethodElem | TypeElem .
+// MethodElem = MethodName Signature .
+// MethodName = identifier .
+// TypeElem = TypeTerm { "|" TypeTerm } .
+// TypeTerm = Type | UnderlyingType .
 func (p *parser) interfaceType() (r *InterfaceType) {
+	//       MethodElem case IDENTIFIER:
+	//         TypeElem case '(', '*', '[', '~', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 	var lbr bool
 	r = &InterfaceType{Interface: p.must(INTERFACE), LBrace: p.lbrace(&lbr)}
 	for {
 		switch p.ch() {
-		//    InterfaceElem
-		case '(', '*', '[', '~', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+		case '(', '*', '[', '~', ARROW, CHAN, FUNC, INTERFACE, MAP, STRUCT:
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
+		case IDENTIFIER:
+			id := p.shift()
+			switch p.ch() {
+			case '(':
+				n := &MethodElem{MethodName: id, Signature: p.signature(), Semicolon: p.opt(';')}
+				r.InterfaceElems = append(r.InterfaceElems, n)
+			default:
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.shift()
+				return r
+			}
 		case '}':
 			p.fixlbr(lbr)
 			r.RBrace = p.shift()
 			return r
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
 	}
 }
 
+// MethodElem describes a method element.
+//
+type MethodElem struct {
+	MethodName Token
+	Signature  *Signature
+	Semicolon  Token
+}
+
+// Positions implements Node.
+func (n *MethodElem) Position() token.Position { return n.MethodName.Position() }
+
 func (p *parser) lbrace(lbr *bool) (r Token) {
 	switch p.ch() {
 	case '{':
 		return p.shift()
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
@@ -906,7 +1175,7 @@ func (n *EmbeddedField) Position() token.Position {
 
 // FieldDecl describes a field declaration.
 //
-// FieldDecl     = (IdentifierList Type | EmbeddedField) [ Tag ] .
+// FieldDecl = (IdentifierList Type | EmbeddedField) [ Tag ] .
 type FieldDecl struct {
 	IdentifierList []*IdentifierListItem
 	Type           *Type
@@ -949,7 +1218,7 @@ func (p *parser) structType() (r *StructType) {
 		var n *FieldDecl
 		switch p.ch() {
 		case '*':
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		case IDENTIFIER:
@@ -963,7 +1232,7 @@ func (p *parser) structType() (r *StructType) {
 			case ';':
 				n = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: &QualifiedIdent{Ident: id}}}
 			default:
-				p.err(errorf("TODO %v", p.s.Tok.str()))
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
 			}
@@ -972,24 +1241,32 @@ func (p *parser) structType() (r *StructType) {
 			r.RBrace = p.must('}')
 			return r
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
-		if p.ch() == ';' {
-			n.Semicolon = p.shift()
-		}
+		n.Semicolon = p.opt(';')
 		r.FieldDecls = append(r.FieldDecls, n)
 	}
 }
+
+// TypeListItem describes a type name.
+//
+type TypeListItem struct {
+	Type  *Type
+	Comma Token
+}
+
+// Positions implements Node.
+func (n *TypeListItem) Position() token.Position { return n.Type.Position() }
 
 // TypeName describes a type name.
 //
 //  TypeName = QualifiedIdent [ TypeArgs ]
 //  	| identifier [ TypeArgs ] .
 type TypeName struct {
-	Name *QualifiedIdent
-	// TypeArgs
+	Name     *QualifiedIdent
+	TypeArgs *TypeArgs
 }
 
 // Positions implements Node.
@@ -1002,16 +1279,49 @@ func (p *parser) typeName() (r *TypeName) {
 	case IDENTIFIER:
 		r = &TypeName{Name: p.qualifiedIdent()}
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
 	switch p.ch() {
 	case '[':
-		p.err(errorf("TODO %v", p.s.Tok.str()))
-		p.shift()
+		r.TypeArgs = p.typeArgs()
 	}
 	return r
+}
+
+// TypeArgs describes a type name.
+//
+//  TypeArgs = "[" TypeList [ "," ] "]" .
+type TypeArgs struct {
+	LBracket Token
+	TypeList []*TypeListItem
+	RBracket Token
+}
+
+// Positions implements Node.
+func (n *TypeArgs) Position() token.Position { return n.LBracket.Position() }
+
+// TypeArgs = "[" TypeList [ "," ] "]" .
+func (p *parser) typeArgs() (r *TypeArgs) {
+	r = &TypeArgs{LBracket: p.must('[')}
+	for {
+		var n *TypeListItem
+		switch p.ch() {
+		//         TypeList
+		case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+			n = &TypeListItem{Type: p.type1()}
+		case ']':
+			r.RBracket = p.shift()
+			return r
+		default:
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		}
+		n.Comma = p.opt(',')
+		r.TypeList = append(r.TypeList, n)
+	}
 }
 
 // QualifiedIdent describes an optionally qualified identifier.
@@ -1043,7 +1353,7 @@ func (p *parser) qualifiedIdent() (r *QualifiedIdent) {
 			return &QualifiedIdent{Ident: id}
 		}
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
@@ -1071,7 +1381,7 @@ func (p *parser) pointerType() (r *PointerType) {
 type VarDecl struct {
 	Var      Token
 	LParen   Token
-	VarSpecs []*VarSpecItem
+	VarSpecs []*VarSpec
 	RParen   Token
 }
 
@@ -1085,30 +1395,12 @@ func (p *parser) varDecl() (r *VarDecl) {
 	case '(':
 		return &VarDecl{Var: v, LParen: p.shift(), VarSpecs: p.varSpecs(), RParen: p.must(')')}
 	case IDENTIFIER:
-		return &VarDecl{Var: v, VarSpecs: []*VarSpecItem{{VarSpec: p.varSpec()}}}
+		return &VarDecl{Var: v, VarSpecs: []*VarSpec{p.varSpec()}}
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
-}
-
-// VarSpecItem describes an item of VarDecl.VarSpecs.
-type VarSpecItem struct {
-	VarSpec   *VarSpec
-	Semicolon Token
-}
-
-// Positions implements Node.
-func (n *VarSpecItem) Position() token.Position { return n.VarSpec.Position() }
-
-func (p *parser) varSpecs() (r []*VarSpecItem) {
-	for p.ch() == IDENTIFIER {
-		p.err(errorf("TODO %v", p.s.Tok.str()))
-		p.shift()
-		return r
-	}
-	return r
 }
 
 // VarSpec describes a variable specification.
@@ -1119,6 +1411,7 @@ type VarSpec struct {
 	Type           *Type
 	Eq             Token
 	ExpressionList []*ExpressionListItem
+	Semicolon      Token
 }
 
 // Positions implements Node.
@@ -1127,6 +1420,15 @@ func (n *VarSpec) Position() (r token.Position) {
 		return n.IdentifierList[0].Position()
 	}
 
+	return r
+}
+
+func (p *parser) varSpecs() (r []*VarSpec) {
+	for p.ch() == IDENTIFIER {
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	}
 	return r
 }
 
@@ -1144,10 +1446,10 @@ func (p *parser) varSpec() (r *VarSpec) {
 	switch p.ch() {
 	//   ExpressionList
 	case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-		r.ExpressionList = p.expressionList()
+		r.ExpressionList = p.expressionList(notok)
 		return r
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
@@ -1164,16 +1466,22 @@ type ExpressionListItem struct {
 // Positions implements Node.
 func (n *ExpressionListItem) Position() (r token.Position) { return n.Expression.Position() }
 
-func (p *parser) expressionList() (r []*ExpressionListItem) {
+func (p *parser) expressionList(id Token) (r []*ExpressionListItem) {
 	for {
 		var n *ExpressionListItem
-		switch p.ch() {
-		case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-			n = &ExpressionListItem{Expression: p.expression(notok)}
+		switch {
+		case id.IsValid():
+			n = &ExpressionListItem{Expression: p.expression(id)}
+			id = notok
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
-			p.shift()
-			return r
+			switch p.ch() {
+			case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+				n = &ExpressionListItem{Expression: p.expression(notok)}
+			default:
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.shift()
+				return r
+			}
 		}
 		r = append(r, n)
 		switch p.ch() {
@@ -1196,20 +1504,52 @@ func (p *parser) expression(id Token) (r Node) {
 		case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
 			r = p.unaryExpr()
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
 	}
-	switch p.ch() {
-	case ';', '}', ',', ':', DEFINE:
-		return r
-	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
-		p.shift()
-		return r
+	return p.expression2(r)
+}
+
+func (p *parser) expression2(lhs Node) (r Node) {
+	r = lhs
+	for {
+		switch p.ch() {
+		case '%', '&', '*', '+', '-', '/', '<', '>', '^', '|', AND_NOT, EQ, GE, LAND, LE, LOR, NE, SHL, SHR:
+			op := p.shift()
+			rhs := p.expression(notok)
+			rprec := 0
+			switch x := r.(type) {
+			case *BinaryExpression:
+				_ = x
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.shift()
+				return r
+			default:
+				_ = op
+				_ = rhs
+				_ = rprec
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.shift()
+				return r
+			}
+		default:
+			return r
+		}
 	}
 }
+
+// BinaryExpression describes a binary expression.
+//
+type BinaryExpression struct {
+	LExpression Node
+	Op          Token
+	RExpressio  Node
+}
+
+// Positions implements Node.
+func (n *BinaryExpression) Position() token.Position { return n.LExpression.Position() }
 
 // UnaryExpr describes an unary expression.
 //
@@ -1233,15 +1573,20 @@ func (p *parser) unaryExpr() (r Node) {
 	case '!', '&', '+', '-', '^':
 		return &UnaryExpr{UnaryOp: p.shift(), UnaryExpr: p.unaryExpr()}
 	case '*':
-		p.err(errorf("TODO %v", p.s.Tok.str()))
-		p.shift()
-		return r
+		star := p.shift()
+		switch p.ch() {
+		default:
+			_ = star
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		}
 	case ARROW:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
@@ -1268,21 +1613,19 @@ func (p *parser) unaryExpr() (r Node) {
 // 		| Slice
 // 		| TypeAssertion
 // 	  } .
+// Operand = Literal
+// 	| OperandName [ TypeArgs ]
+// 	| "(" Expression ")" .
+// CompositeLit = LiteralType1 LiteralValue1
+// 	| LiteralType2 LiteralValue2 .
 func (p *parser) primaryExpr(id Token) (r Node) {
 	switch {
 	case id.IsValid():
 		switch p.ch() {
-		//          Operand case '(', '*', '[', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-		//       Conversion case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
-		//       MethodExpr case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
-		case '*', '[', ARROW, CHAN, FLOAT_LIT, FUNC, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
-			p.shift()
-			return r
-		case '(', '.':
+		case '(', '.', ',', '[':
 			r = id
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
@@ -1299,8 +1642,10 @@ func (p *parser) primaryExpr(id Token) (r Node) {
 			switch p.ch() {
 			case '{':
 				r = &CompositeLit{LiteralType: t, LiteralValue: p.literalValue1()}
+			case '(':
+				r = &Conversion{Type: t, LParen: p.shift(), Expression: p.expression(notok), Comma: p.opt(','), RParen: p.must(')')}
 			default:
-				p.err(errorf("TODO %v", p.s.Tok.str()))
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
 			}
@@ -1309,12 +1654,12 @@ func (p *parser) primaryExpr(id Token) (r Node) {
 		case IDENTIFIER:
 			id := p.shift()
 			switch p.ch() {
-			case '(', '.', ';', ':', ',', DEFINE, '}':
+			case '(', '.', ';', ':', ',', DEFINE, '}', ')', ']', '<', '>', EQ, GE, LE, NE, body, '[', '=', ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN, '%', '&', '*', '+', '-', '/', '^', '|', AND_NOT, LAND, LOR, SHL, SHR:
 				r = id
 			case '{':
 				r = &CompositeLit{LiteralType: &Type{Type: &QualifiedIdent{Ident: id}}, LiteralValue: p.literalValue2()}
 			default:
-				p.err(errorf("TODO %v", p.s.Tok.str()))
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
 			}
@@ -1327,12 +1672,19 @@ func (p *parser) primaryExpr(id Token) (r Node) {
 			case '{':
 				r = p.functionLit(f, sig)
 			default:
-				p.err(errorf("TODO %v", p.s.Tok.str()))
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.shift()
+				return r
+			}
+		case '(':
+			switch x := p.parenExprOrType().(type) {
+			default:
+				p.err(errorf("TODO %T", x))
 				p.shift()
 				return r
 			}
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
@@ -1342,21 +1694,135 @@ func (p *parser) primaryExpr(id Token) (r Node) {
 		case '.':
 			dot := p.shift()
 			switch p.ch() {
+			case IDENTIFIER:
+				r = &Selector{PrimaryExpr: r, Dot: dot, Ident: p.shift()}
+			case '(':
+				r = &TypeAssertion{PrimaryExpr: r, Dot: dot, LParen: p.shift(), Type: p.type1(), RParen: p.must(')')}
 			default:
-				_ = dot
-				p.err(errorf("TODO %v", p.s.Tok.str()))
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
 			}
 		case '(':
 			r = p.arguments(r)
-		case ';', '}', ',', ':', DEFINE:
+		case ';', '}', ',', ':', ')', ']', DEFINE, '=', ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN, '<', '>', EQ, GE, LE, NE, body, '%', '&', '*', '+', '-', '/', '^', '|', AND_NOT, LAND, LOR, SHL, SHR:
 			return r
+		case '{':
+			r = &CompositeLit{LiteralType: &Type{Type: r}, LiteralValue: p.literalValue2()}
+		case '[':
+			r = &Index{PrimaryExpr: r, LBracket: p.shift(), Expression: p.expression(notok), RBracket: p.must(']')}
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
+	}
+}
+
+// Conversion describes a conversion.
+//
+//  Conversion = Type "(" Expression [ "," ] ")" .
+type Conversion struct {
+	Type       *Type
+	LParen     Token
+	Expression Node
+	Comma      Token
+	RParen     Token
+}
+
+// Positions implements Node.
+func (n *Conversion) Position() token.Position { return n.Type.Position() }
+
+// Index describes an index.
+//
+//  Index = "[" Expression "]" .
+type Index struct {
+	PrimaryExpr Node
+	LBracket    Token
+	Expression  Node
+	RBracket    Token
+}
+
+// Positions implements Node.
+func (n *Index) Position() token.Position { return n.PrimaryExpr.Position() }
+
+// TypeAssertion describes a type assertion.
+//
+//  TypeAssertion = PrimaryExpr "." "(" Type ")" .
+type TypeAssertion struct {
+	PrimaryExpr Node
+	Dot         Token
+	LParen      Token
+	Type        *Type
+	RParen      Token
+}
+
+// Positions implements Node.
+func (n *TypeAssertion) Position() token.Position { return n.PrimaryExpr.Position() }
+
+// Selector describes a selector.
+//
+//  Selector = PrimaryExpr "." identifier .
+type Selector struct {
+	PrimaryExpr Node
+	Dot         Token
+	Ident       Token
+}
+
+// Positions implements Node.
+func (n *Selector) Position() token.Position { return n.PrimaryExpr.Position() }
+
+// (expr) or (type)
+func (p *parser) parenExprOrType() (r Node) {
+	lparen := p.must('(')
+	switch p.ch() {
+	case '*':
+		switch x := p.exprOrType().(type) {
+		default:
+			p.err(errorf("TODO %T", x))
+			p.shift()
+			return r
+		}
+	default:
+		_ = lparen
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	}
+}
+
+func (p *parser) exprOrType() (r Node) {
+	//       Expression case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+	//             Type case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+	switch p.ch() {
+	case '!', '&', '+', '-', '^', FLOAT_LIT, IMAG_LIT, INT_LIT, RUNE_LIT, STRING_LIT:
+		// Expression
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	case '(', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+		// Expression or Type
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	case '*':
+		return p.exprOrPointerType()
+	default:
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	}
+}
+
+// p.ch() == '*'
+func (p *parser) exprOrPointerType() (r Node) {
+	star := p.must('*')
+	switch p.ch() {
+	default:
+		_ = star
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
 	}
 }
 
@@ -1386,12 +1852,13 @@ func (p *parser) functionLit(f Token, sig *Signature) (r *FunctionLit) {
 //
 //  Arguments = PrimaryExpr "(" [ ( ExpressionList | Type [ "," ExpressionList ] ) [ "..." ] [ "," ] ] ")" .
 type Arguments struct {
-	PrimaryExpr Node
-	LParen      Token
-	Type        *Type
-	Comma       Token
-	Comma2      Token
-	RParen      Token
+	PrimaryExpr    Node
+	LParen         Token
+	Type           *Type
+	ExpressionList []*ExpressionListItem
+	Comma          Token
+	Comma2         Token
+	RParen         Token
 }
 
 // Positions implements Node.
@@ -1408,12 +1875,26 @@ func (p *parser) arguments(primaryExpr Node) (r *Arguments) {
 	switch p.ch() {
 	case '!', '&', '+', '-', '^', FLOAT_LIT, IMAG_LIT, INT_LIT, RUNE_LIT, STRING_LIT:
 		// ExpressionList
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		r.ExpressionList = p.expressionList(notok)
+	case '*', ARROW:
+		// ExpressionList or Type
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
-	case '(', '*', ARROW, IDENTIFIER:
+	case IDENTIFIER:
 		// ExpressionList or Type
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		r.ExpressionList = p.expressionList(notok)
+		switch p.ch() {
+		case ')':
+			// ok
+		default:
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		}
+	case '(':
+		// ExpressionList or Type
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	case '[', CHAN, FUNC, INTERFACE, MAP, STRUCT:
@@ -1422,25 +1903,55 @@ func (p *parser) arguments(primaryExpr Node) (r *Arguments) {
 		switch p.ch() {
 		case ',':
 			r.Type = t
-			comma := p.shift()
+			r.Comma = p.shift()
 			switch p.ch() {
+			//   ExpressionList
+			case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+				r.ExpressionList = p.expressionList(notok)
 			default:
-				_ = comma
-				p.err(errorf("TODO %v", p.s.Tok.str()))
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
 			}
 		case ')':
 			// ok
+		case '{':
+			expr := &CompositeLit{LiteralType: t, LiteralValue: p.literalValue1()}
+			switch p.ch() {
+			default:
+				_ = expr
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.shift()
+				return r
+			}
+		case '(':
+			expr := &Conversion{Type: t, LParen: p.shift(), Expression: p.expression(notok), RParen: p.must(')')}
+			switch p.ch() {
+			default:
+				_ = expr
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.shift()
+				return r
+			}
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
 	case ')':
 		// ok
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	}
+	if p.ch() == ELLIPSIS {
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	}
+	if p.ch() == ',' {
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
@@ -1472,7 +1983,7 @@ func (p *parser) literalValue1() (r *LiteralValue) {
 	case '}':
 		// ok
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
@@ -1481,7 +1992,7 @@ func (p *parser) literalValue1() (r *LiteralValue) {
 		p.fixlbr(lbr)
 		r.RBrace = p.shift()
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 	}
 	return r
@@ -1498,7 +2009,7 @@ func (p *parser) literalValue2() (r *LiteralValue) {
 	case '}':
 		// ok
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
@@ -1506,7 +2017,7 @@ func (p *parser) literalValue2() (r *LiteralValue) {
 	case '}':
 		r.RBrace = p.shift()
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 	}
 	return r
@@ -1514,7 +2025,7 @@ func (p *parser) literalValue2() (r *LiteralValue) {
 
 // KeyedElement describes an optionally keyed element.
 //
-//  KeyedElement  = [ Key ":" ] Element .
+//  KeyedElement = [ Key ":" ] Element .
 type KeyedElement struct {
 	Key     Node
 	Colon   Token
@@ -1541,22 +2052,22 @@ func (p *parser) exprOrLiteralValue1() (r Node) {
 		case '}', ',', ':':
 			return expr
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
 	case '{':
 		lv := p.literalValue1()
 		switch p.ch() {
-		case '}':
+		case '}', ',':
 			return lv
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
@@ -1565,26 +2076,24 @@ func (p *parser) exprOrLiteralValue1() (r Node) {
 func (p *parser) keyedElements() (r []*KeyedElement) {
 	//              Key case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT, body:
 	//      ElementList case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT, body:
-	for {
-		n := &KeyedElement{Element: p.exprOrLiteralValue1()}
-		if p.ch() == ':' {
-			n.Key = n.Element
-			n.Colon = p.shift()
-			n.Element = p.exprOrLiteralValue1()
-		}
-		if p.ch() == ',' {
-			n.Comma = p.shift()
-		}
-		r = append(r, n)
+	for p.ch() != '}' {
 		switch p.ch() {
-		case '}':
-			return r
+		case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT, body:
+			n := &KeyedElement{Element: p.exprOrLiteralValue1()}
+			if p.ch() == ':' {
+				n.Key = n.Element
+				n.Colon = p.shift()
+				n.Element = p.exprOrLiteralValue1()
+			}
+			n.Comma = p.opt(',')
+			r = append(r, n)
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
 	}
+	return r
 }
 
 // CompositeLit describes a composite literal.
@@ -1604,7 +2113,7 @@ func (n *CompositeLit) Position() token.Position { return n.LiteralType.Position
 type ConstDecl struct {
 	Const      Token
 	LParen     Token
-	ConstSpecs []*ConstSpecItem
+	ConstSpecs []*ConstSpec
 	RParen     Token
 }
 
@@ -1618,28 +2127,10 @@ func (p *parser) constDecl() (r *ConstDecl) {
 	case '(':
 		return &ConstDecl{Const: c, LParen: p.shift(), ConstSpecs: p.constSpecs(), RParen: p.must(')')}
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
-}
-
-// ConstSpecItem describes an item of ConstDecl.ConstSpecs.
-type ConstSpecItem struct {
-	ConstSpec *ConstSpec
-	Semicolon Token
-}
-
-// Positions implements Node.
-func (n *ConstSpecItem) Position() token.Position { return n.ConstSpec.Position() }
-
-func (p *parser) constSpecs() (r []*ConstSpecItem) {
-	for p.ch() == IDENTIFIER {
-		p.err(errorf("TODO %v", p.s.Tok.str()))
-		p.shift()
-		return r
-	}
-	return r
 }
 
 // ConstSpec describes a constant specification.
@@ -1647,7 +2138,10 @@ func (p *parser) constSpecs() (r []*ConstSpecItem) {
 //  ConstSpec = IdentifierList [ [ Type ] "=" ExpressionList ] .
 type ConstSpec struct {
 	IdentifierList []*IdentifierListItem
-	//TODO
+	Type           *Type
+	Eq             Token
+	ExpressionList []*ExpressionListItem
+	Semicolon      Token
 }
 
 // Positions implements Node.
@@ -1656,6 +2150,28 @@ func (n *ConstSpec) Position() (r token.Position) {
 		return n.IdentifierList[0].Position()
 	}
 
+	return r
+}
+
+// ConstSpec = IdentifierList "=" ExpressionList
+// 	| IdentifierList Type "=" ExpressionList
+// 	| IdentifierList .
+func (p *parser) constSpecs() (r []*ConstSpec) {
+	//        ConstSpec case IDENTIFIER:
+	for p.ch() == IDENTIFIER {
+		n := &ConstSpec{IdentifierList: p.identifierList(notok)}
+		switch p.ch() {
+		case '=':
+			n.Eq = p.shift()
+			n.ExpressionList = p.expressionList(notok)
+		default:
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		}
+		n.Semicolon = p.opt(';')
+		r = append(r, n)
+	}
 	return r
 }
 
@@ -1678,13 +2194,24 @@ func (p *parser) typeDecl() (r *TypeDecl) {
 	typ := p.must(TYPE)
 	switch p.ch() {
 	case '(':
-		p.err(errorf("TODO %v", p.s.Tok.str()))
-		p.shift()
+		return &TypeDecl{Type: typ, LParen: p.shift(), TypeSpecs: p.typeSpecs(), RParen: p.must(')')}
 		return r
 	default:
 		return &TypeDecl{Type: typ, TypeSpecs: []*TypeSpecItem{{TypeSpec: p.typeSpec()}}}
 	}
 }
+
+// AliasDecl describes a type alias.
+//
+//  AliasDecl = identifier "=" Type .
+type AliasDecl struct {
+	Ident Token
+	Eq    Token
+	Type  *Type
+}
+
+// Positions implements Node.
+func (n *AliasDecl) Position() token.Position { return n.Ident.Position() }
 
 // TypeSpec = AliasDecl | TypeDef .
 // TypeDef = identifier [ TypeParameters ] Type .
@@ -1699,18 +2226,14 @@ func (p *parser) typeSpec() (r Node) {
 		case *TypeParameters:
 			return &TypeDef{Ident: id, TypeParameters: x, Type: p.type1()}
 		default:
-			p.err(errorf("TODO %T", x))
-			p.shift()
-			return r
+			return &TypeDef{Ident: id, Type: &Type{Type: x}}
 		}
 	case '=':
-		p.err(errorf("TODO %v", p.s.Tok.str()))
-		p.shift()
-		return r
+		return &AliasDecl{Ident: id, Eq: p.shift(), Type: p.type1()}
 	case '(', '*', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 		return &TypeDef{Ident: id, Type: p.type1()}
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
@@ -1737,23 +2260,23 @@ func (p *parser) typeOrTypeParamaters() (r Node) {
 				// '[' IDENTIFIER  . IDENTIFIER -> TypeParameters
 				return p.typeParameters(lbracket, id)
 			default:
-				_ = id
-				p.err(errorf("TODO %v", p.s.Tok.str()))
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
 			}
+		case ']':
+			return &SliceType{LBracket: lbracket, RBracket: p.shift(), ElementType: p.type1()}
 		default:
-			_ = lbracket
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
 	case '(', '*', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
@@ -1801,20 +2324,18 @@ func (p *parser) typeParamList(id Token) (r []*TypeParamListItem) {
 			case IDENTIFIER:
 				n = &TypeParamListItem{TypeParamDecl: p.typeParamDecl(notok)}
 			default:
-				p.err(errorf("TODO %v", p.s.Tok.str()))
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
 			}
 		}
-		if p.ch() == ',' {
-			n.Comma = p.shift()
-		}
+		n.Comma = p.opt(',')
 		r = append(r, n)
 		switch p.ch() {
 		case ']':
 			return r
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
@@ -1842,13 +2363,13 @@ func (n *TypeTerm) Position() (r token.Position) {
 func (p *parser) typeTerm() (r *TypeTerm) {
 	switch p.ch() {
 	case '~':
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 		return &TypeTerm{Type: p.type1()}
 	default:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
 	}
@@ -1875,7 +2396,7 @@ func (p *parser) typeConstraint() (r []*TypeElem) {
 		r = append(r, n)
 		switch p.ch() {
 		case '|':
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		default:
@@ -1910,7 +2431,7 @@ func (p *parser) identifierList(id Token) (r []*IdentifierListItem) {
 			n = &IdentifierListItem{Ident: p.shift()}
 			r = append(r, n)
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
@@ -1965,8 +2486,9 @@ type TypeSpecItem struct {
 func (n *TypeSpecItem) Position() token.Position { return n.TypeSpec.Position() }
 
 func (p *parser) typeSpecs() (r []*TypeSpecItem) {
-	p.err(errorf("TODO %v", p.s.Tok.str()))
-	p.shift()
+	for p.ch() == IDENTIFIER {
+		r = append(r, &TypeSpecItem{TypeSpec: p.typeSpec(), Semicolon: p.opt(';')})
+	}
 	return r
 }
 
@@ -1996,7 +2518,7 @@ func (p *parser) importDecls() (r []*ImportDecl) {
 		case '.', IDENTIFIER, STRING_LIT:
 			n = &ImportDecl{Import: im, LParen: p.shift(), ImportSpecs: []*ImportSpecItem{{ImportSpec: p.importSpec()}}}
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.str()))
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
@@ -2050,9 +2572,7 @@ func (p *parser) importSpec() (r *ImportSpec) {
 	case '.':
 		return &ImportSpec{Qualifier: p.shift(), ImportPath: p.must(STRING_LIT)}
 	case IDENTIFIER:
-		p.err(errorf("TODO %v", p.s.Tok.str()))
-		p.shift()
-		return r
+		return &ImportSpec{Qualifier: p.shift(), ImportPath: p.must(STRING_LIT)}
 	case STRING_LIT:
 		return &ImportSpec{ImportPath: p.shift()}
 	default:
