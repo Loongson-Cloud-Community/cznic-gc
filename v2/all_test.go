@@ -733,3 +733,24 @@ func testParser(p *parallel, t *testing.T, g *golden, root string) {
 		t.Fatal(err)
 	}
 }
+
+func dumpExpr(n Node) string {
+	var b strings.Builder
+	dumpExpr0(&b, n)
+	return b.String()
+}
+
+func dumpExpr0(b *strings.Builder, n Node) {
+	switch x := n.(type) {
+	case *BinaryExpression:
+		b.WriteByte('(')
+		dumpExpr0(b, x.A)
+		b.WriteString(x.Op.Src())
+		dumpExpr0(b, x.B)
+		b.WriteByte(')')
+	default:
+		b.WriteByte('(')
+		b.WriteString(string(nodeSource(false, x)))
+		b.WriteByte(')')
+	}
+}

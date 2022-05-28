@@ -10,38 +10,42 @@ import (
 
 var (
 	_ = []Node{
-		// (*AliasDecl)(nil),
+		(*AliasDecl)(nil),
 		(*Arguments)(nil),
-		// (*ArrayType)(nil),
+		(*ArrayType)(nil),
 		(*Assignment)(nil),
 		(*BinaryExpression)(nil),
 		(*Block)(nil),
-		// (*ChannelType)(nil),
+		(*ChannelType)(nil),
 		(*CompositeLit)(nil),
 		(*ConstDecl)(nil),
 		(*ConstSpec)(nil),
-		// (*Conversion)(nil),
+		(*ContinueStmt)(nil),
+		(*Conversion)(nil),
 		(*DeferStmt)(nil),
-		// (*EmbeddedField)(nil),
+		(*EmbeddedField)(nil),
+		(*ExprCaseClause)(nil),
+		(*ExprSwitchCase)(nil),
 		(*ExpressionListItem)(nil),
-		(*ExpressionStatement)(nil),
+		(*ExpressionStmt)(nil),
+		(*ExpressionSwitchStmt)(nil),
 		(*FieldDecl)(nil),
 		(*ForClause)(nil),
 		(*ForStmt)(nil),
 		(*FunctionDecl)(nil),
 		(*FunctionLit)(nil),
-		// (*FunctionType)(nil),
-		// (*GoStmt)(nil),
+		(*FunctionType)(nil),
+		(*GoStmt)(nil),
 		(*IdentifierListItem)(nil),
 		(*IfStmt)(nil),
 		(*ImportDecl)(nil),
 		(*ImportSpec)(nil),
-		// (*ImportSpecItem)(nil),
+		(*IncDecStmt)(nil),
 		(*Index)(nil),
 		(*InterfaceType)(nil),
 		(*KeyedElement)(nil),
 		(*LiteralValue)(nil),
-		// (*MapType)(nil),
+		(*MapType)(nil),
 		(*MethodDecl)(nil),
 		(*MethodElem)(nil),
 		(*PackageClause)(nil),
@@ -52,25 +56,22 @@ var (
 		(*RangeClause)(nil),
 		(*ReturnStmt)(nil),
 		(*Selector)(nil),
+		(*SendStmt)(nil),
 		(*ShortVarDecl)(nil),
 		(*Signature)(nil),
+		(*Slice)(nil),
 		(*SliceType)(nil),
 		(*SourceFile)(nil),
-		// (*Statement)(nil),
 		(*StructType)(nil),
-		// (*TopLevelDecl)(nil),
-		// (*Type)(nil),
-		// (*TypeArgs)(nil),
-		// (*TypeAssertion)(nil),
+		(*TypeArgs)(nil),
+		(*TypeAssertion)(nil),
 		(*TypeDecl)(nil),
 		(*TypeDef)(nil),
 		(*TypeElem)(nil),
-		// (*TypeListItem)(nil),
+		(*TypeListItem)(nil),
 		(*TypeName)(nil),
 		(*TypeParamDecl)(nil),
-		(*TypeParamListItem)(nil),
 		(*TypeParameters)(nil),
-		// (*TypeSpecItem)(nil),
 		(*TypeTerm)(nil),
 		(*UnaryExpr)(nil),
 		(*VarDecl)(nil),
@@ -322,8 +323,8 @@ func (n *PointerType) Position() (r token.Position) { return n.Star.Position() }
 //  TypeName = QualifiedIdent [ TypeArgs ]
 //  	| identifier [ TypeArgs ] .
 type TypeName struct {
-	Name *QualifiedIdent
-	//TODO TypeArgs *TypeArgs
+	Name     *QualifiedIdent
+	TypeArgs *TypeArgs
 }
 
 // Positions implements Node.
@@ -378,15 +379,15 @@ type ExpressionListItem struct {
 // Positions implements Node.
 func (n *ExpressionListItem) Position() (r token.Position) { return n.Expression.Position() }
 
-// ExpressionStatement describes an expression statement.
+// ExpressionStmt describes an expression statement.
 //
-type ExpressionStatement struct {
+type ExpressionStmt struct {
 	Expression Node
 	Semicolon  Token
 }
 
 // Positions implements Node.
-func (n *ExpressionStatement) Position() (r token.Position) { return n.Expression.Position() }
+func (n *ExpressionStmt) Position() (r token.Position) { return n.Expression.Position() }
 
 // FieldDecl describes a field declaration.
 //
@@ -394,6 +395,7 @@ func (n *ExpressionStatement) Position() (r token.Position) { return n.Expressio
 type FieldDecl struct {
 	IdentifierList []*IdentifierListItem
 	Type           Node
+	EmbeddedField  *EmbeddedField
 	Tag            Token
 	Semicolon      Token
 }
@@ -653,23 +655,12 @@ func (n *MethodElem) Position() (r token.Position) { return n.MethodName.Positio
 //  TypeParameters = "[" TypeParamList [ "," ] "]" .
 type TypeParameters struct {
 	LBracket      Token
-	TypeParamList []*TypeParamListItem
+	TypeParamList []*TypeParamDecl
 	RBracket      Token
 }
 
 // Positions implements Node.
 func (n *TypeParameters) Position() (r token.Position) { return n.LBracket.Position() }
-
-// TypeParamListItem describes an item of a type parameter list.
-//
-//  TypeParamList = TypeParamDecl { "," TypeParamDecl } .
-type TypeParamListItem struct {
-	TypeParamDecl *TypeParamDecl
-	Comma         Token
-}
-
-// Positions implements Node.
-func (n *TypeParamListItem) Position() (r token.Position) { return n.TypeParamDecl.Position() }
 
 // TypeParamDecl describes an item of a type parameter list.
 //
@@ -677,6 +668,7 @@ func (n *TypeParamListItem) Position() (r token.Position) { return n.TypeParamDe
 type TypeParamDecl struct {
 	IdentifierList []*IdentifierListItem
 	TypeConstraint []*TypeElem
+	Comma          Token
 }
 
 // Positions implements Node.
@@ -754,402 +746,242 @@ type FunctionLit struct {
 // Positions implements Node.
 func (n *FunctionLit) Position() (r token.Position) { return n.Func.Position() }
 
-// func (p *parser) typeElem(id Token) (r *TypeElem) {
-// 	panic(todo(""))
-// }
+// ExpressionSwitchStmt describes an expression switch statement.
+//
+//  ExprSwitchStmt = "switch" [ SimpleStmt ";" ] [ Expression ] "{" { ExprCaseClause } "}" .
+type ExpressionSwitchStmt struct {
+	Switch          Token
+	SimpleStmt      Node
+	Semicolon       Token
+	Expression      Node
+	LBrace          Token
+	ExprCaseClauses []*ExprCaseClause
+	RBrace          Token
+	Semicolon2      Token
+}
 
-// // TopLevelDecl describes a top level declaration.
-// type TopLevelDecl struct {
-// 	Decl      Node
-// 	Semicolon Token
-// }
+// Positions implements Node.
+func (n *ExpressionSwitchStmt) Position() (r token.Position) { return n.Switch.Position() }
+
+// TypeAssertion describes a type assertion.
 //
-// // Positions implements Node.
-// func (n *TopLevelDecl) Position() (r token.Position) { return n.Decl.Position() }
+//  TypeAssertion = PrimaryExpr "." "(" Type ")" .
+type TypeAssertion struct {
+	PrimaryExpr Node
+	Dot         Token
+	LParen      Token
+	Type        Node
+	RParen      Token
+}
+
+// Positions implements Node.
+func (n *TypeAssertion) Position() (r token.Position) { return n.PrimaryExpr.Position() }
+
+// ExprCaseClause describes an expression switch case clause.
 //
-// // Statement describes a statement list item.
-// //
-// //  StatementList = { Statement ";" } .
-// type Statement struct {
-// 	Statement Node
-// 	Semicolon Token
-// }
+//  ExprCaseClause = ExprSwitchCase ":" StatementList .
+type ExprCaseClause struct {
+	ExprSwitchCase *ExprSwitchCase
+	Colon          Token
+	StatementList  []Node
+}
+
+// Positions implements Node.
+func (n *ExprCaseClause) Position() (r token.Position) { return n.ExprSwitchCase.Position() }
+
+// ExprSwitchCase describes an expression switch case.
 //
-// // Positions implements Node.
-// func (n *Statement) Position() (r token.Position) { return n.Statement.Position() }
+//  ExprSwitchCase = "case" ExpressionList | "default" .
+type ExprSwitchCase struct {
+	CaseOrDefault  Token
+	ExpressionList []*ExpressionListItem
+}
+
+// Positions implements Node.
+func (n *ExprSwitchCase) Position() (r token.Position) { return n.CaseOrDefault.Position() }
+
+// Slice describes a slice expression.
 //
-// // GoStmt describes a go statement.
-// //
-// type GoStmt struct {
-// 	Go         Token
-// 	Expression Node
-// }
+//  Slice = "[" [ Expression ] ":" [ Expression ] "]" | "[" [ Expression ] ":" Expression ":" Expression "]" .
+type Slice struct {
+	PrimaryExpr Node
+	LBracket    Token
+	Expression  Node
+	Colon       Token
+	Expression2 Node
+	Colon2      Token
+	Expression3 Node
+	RBracket    Token
+}
+
+// Positions implements Node.
+func (n *Slice) Position() (r token.Position) { return n.LBracket.Position() }
+
+// SendStmt describes a send statement.
 //
-// // Positions implements Node.
-// func (n *GoStmt) Position() (r token.Position) { return n.Go.Position() }
+//  SendStmt = Channel "<-" Expression .
+type SendStmt struct {
+	Channel    Node
+	Arrow      Token
+	Expression Node
+	Semicolon  Token
+}
+
+// Positions implements Node.
+func (n *SendStmt) Position() (r token.Position) { return n.Channel.Position() }
+
+// ContinueStmt describes a continue statement.
 //
-// func (p *parser) deferStmt() (r *DeferStmt) {
-// 	return &DeferStmt{Defer: p.must(DEFER), Expression: p.expression(notok)}
-// }
+type ContinueStmt struct {
+	Continue Token
+	Label    Token
+}
+
+// Positions implements Node.
+func (n *ContinueStmt) Position() (r token.Position) { return n.Continue.Position() }
+
+// Conversion describes a conversion.
 //
-// func (p *parser) forClause(initStmt Node) (r *ForClause) {
-// 	r = &ForClause{}
-// 	switch {
-// 	case initStmt != nil:
-// 		r.InitStmt = initStmt
-// 		r.Semicolon = p.must(';')
-// 		if p.ch() != ';' {
-// 			r.Condition = p.expression(notok)
-// 		}
-// 		r.Semicolon2 = p.must(';')
-// 		switch p.ch() {
-// 		//         PostStmt
-// 		case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-// 			r.PostStmt = p.simpleStmt()
-// 		}
-// 		return r
-// 	default:
-// 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-// 		p.shift()
-// 		return r
-// 	}
-// }
+//  Conversion = Type "(" Expression [ "," ] ")" .
+type Conversion struct {
+	Type       Node
+	LParen     Token
+	Expression Node
+	Comma      Token
+	RParen     Token
+}
+
+// Positions implements Node.
+func (n *Conversion) Position() (r token.Position) { return n.Type.Position() }
+
+// AliasDecl describes a type alias.
 //
-// // ParameterDecl = identifier "..." Type
-// // 	| identifier Type
-// // 	| "..." Type
-// // 	| Type .
-// func (p *parser) parameterDecl() (r *ParameterDecl) {
-// 	p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-// 	p.shift()
-// 	return r
-// }
+//  AliasDecl = identifier "=" Type .
+type AliasDecl struct {
+	Ident Token
+	Eq    Token
+	Type  Node
+}
+
+// Positions implements Node.
+func (n *AliasDecl) Position() (r token.Position) { return n.Ident.Position() }
+
+// ArrayType describes a channel type.
 //
-// // ArrayType describes a channel type.
-// //
-// type ArrayType struct {
-// 	LBracket    Token
-// 	ArrayLength Node
-// 	RBracket    Token
-// 	ElementType *Type
-// }
+type ArrayType struct {
+	LBracket    Token
+	ArrayLength Node
+	RBracket    Token
+	ElementType Node
+}
+
+// Positions implements Node.
+func (n *ArrayType) Position() (r token.Position) { return n.LBracket.Position() }
+
+// ChannelType describes a channel type.
 //
-// // Positions implements Node.
-// func (n *ArrayType) Position() (r token.Position) { return n.LBracket.Position() }
+//  ChannelType = ( "chan" | "chan" "<-" | "<-" "chan" ) ElementType .
+type ChannelType struct {
+	ArrowPre    Token
+	Chan        Token
+	ArrayPost   Token
+	ElementType Node
+}
+
+// Positions implements Node.
+func (n *ChannelType) Position() (r token.Position) {
+	if n.ArrowPre.IsValid() {
+		return n.ArrowPre.Position()
+	}
+
+	return n.Chan.Position()
+}
+
+// FunctionType describes a function type.
 //
-// // ChannelType describes a channel type.
-// //
-// //  ChannelType = ( "chan" | "chan" "<-" | "<-" "chan" ) ElementType .
-// type ChannelType struct {
-// 	ArrowPre    Token
-// 	Chan        Token
-// 	ArrayPost   Token
-// 	ElementType *Type
-// }
+//  FunctionType = "func" Signature .
+type FunctionType struct {
+	Func      Token
+	Signature *Signature
+}
+
+// Positions implements Node.
+func (n *FunctionType) Position() (r token.Position) { return n.Func.Position() }
+
+func (p *parser) typeElem(id Token) (r *TypeElem) {
+	panic(todo(""))
+}
+
+// MapType describes a map type.
 //
-// // Positions implements Node.
-// func (n *ChannelType) Position() (r token.Position) {
-// 	if n.ArrowPre.IsValid() {
-// 		return n.ArrowPre.Position()
-// 	}
+//  MapType = "map" "[" KeyType "]" ElementType .
+type MapType struct {
+	Map         Token
+	LBracket    Token
+	KeyType     Node
+	RBracket    Token
+	ElementType Node
+}
+
+// Positions implements Node.
+func (n *MapType) Position() (r token.Position) { return n.Map.Position() }
+
+// EmbeddedField describes an embeded field.
 //
-// 	return n.Chan.Position()
-// }
+//  EmbeddedField = [ "*" ] TypeName .
+type EmbeddedField struct {
+	Star     Token
+	TypeName *QualifiedIdent
+}
+
+// Positions implements Node.
+func (n *EmbeddedField) Position() (r token.Position) {
+	if n.Star.IsValid() {
+		return n.Star.Position()
+	}
+
+	return n.TypeName.Position()
+}
+
+// GoStmt describes a go statement.
 //
-// func (p *parser) channelType(arrowPre Token) (r *ChannelType) {
-// 	switch {
-// 	case arrowPre.IsValid():
-// 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-// 		p.shift()
-// 	default:
-// 		switch p.ch() {
-// 		case CHAN:
-// 			r = &ChannelType{Chan: p.shift()}
-// 			if p.ch() == ARROW {
-// 				r.ArrayPost = p.shift()
-// 			}
-// 			r.ElementType = p.type1()
-// 		default:
-// 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-// 			p.shift()
-// 		}
-// 	}
-// 	return r
-// }
+// GoStmt = "go" Expression .
+type GoStmt struct {
+	Go         Token
+	Expression Node
+}
+
+// Positions implements Node.
+func (n *GoStmt) Position() (r token.Position) { return n.Go.Position() }
+
+// TypeArgs describes a type name.
 //
-// // FunctionType describes a function type.
-// //
-// //  FunctionType = "func" Signature .
-// type FunctionType struct {
-// 	Func      Token
-// 	Signature *Signature
-// }
+//  TypeArgs = "[" TypeList [ "," ] "]" .
+type TypeArgs struct {
+	LBracket Token
+	TypeList []*TypeListItem
+	RBracket Token
+}
+
+// Positions implements Node.
+func (n *TypeArgs) Position() (r token.Position) { return n.LBracket.Position() }
+
+// TypeListItem describes an item of a type list.
 //
-// // Positions implements Node.
-// func (n *FunctionType) Position() (r token.Position) { return n.Func.Position() }
+type TypeListItem struct {
+	Type  Node
+	Comma Token
+}
+
+// Positions implements Node.
+func (n *TypeListItem) Position() (r token.Position) { return n.Type.Position() }
+
+// IncDecStmt describes an increment or decrement statemen.
 //
-// func (p *parser) functionType() (r *FunctionType) {
-// 	return &FunctionType{Func: p.must(FUNC), Signature: p.signature()}
-// }
-//
-// // MapType describes a map type.
-// //
-// //  MapType = "map" "[" KeyType "]" ElementType .
-// type MapType struct {
-// 	Map         Token
-// 	LBracket    Token
-// 	KeyType     *Type
-// 	RBracket    Token
-// 	ElementType *Type
-// }
-//
-// // Positions implements Node.
-// func (n *MapType) Position() (r token.Position) { return n.Map.Position() }
-//
-// func (p *parser) mapType() (r *MapType) {
-// 	return &MapType{Map: p.must(MAP), LBracket: p.must('['), KeyType: p.type1(), RBracket: p.must(']'), ElementType: p.type1()}
-// }
-//
-// func (p *parser) sliceType(lbracket Token) (r *SliceType) {
-// 	return &SliceType{LBracket: lbracket, RBracket: p.must(']'), ElementType: p.type1()}
-// }
-//
-// // EmbeddedField describes an embeded field.
-// //
-// //  EmbeddedField = [ "*" ] TypeName .
-// type EmbeddedField struct {
-// 	Star     Token
-// 	TypeName *QualifiedIdent
-// }
-//
-// // Positions implements Node.
-// func (n *EmbeddedField) Position() (r token.Position) {
-// 	if n.Star.IsValid() {
-// 		return n.Star.Position()
-// 	}
-//
-// 	return n.TypeName.Position()
-// }
-//
-// // TypeListItem describes a type name.
-// //
-// type TypeListItem struct {
-// 	Type  *Type
-// 	Comma Token
-// }
-//
-// // Positions implements Node.
-// func (n *TypeListItem) Position() (r token.Position) { return n.Type.Position() }
-//
-// // TypeArgs describes a type name.
-// //
-// //  TypeArgs = "[" TypeList [ "," ] "]" .
-// type TypeArgs struct {
-// 	LBracket Token
-// 	TypeList []*TypeListItem
-// 	RBracket Token
-// }
-//
-// // Positions implements Node.
-// func (n *TypeArgs) Position() (r token.Position) { return n.LBracket.Position() }
-//
-// // TypeArgs = "[" TypeList [ "," ] "]" .
-// func (p *parser) typeArgs() (r *TypeArgs) {
-// 	r = &TypeArgs{LBracket: p.must('[')}
-// 	for {
-// 		var n *TypeListItem
-// 		switch p.ch() {
-// 		//         TypeList
-// 		case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
-// 			n = &TypeListItem{Type: p.type1()}
-// 		case ']':
-// 			r.RBracket = p.shift()
-// 			return r
-// 		default:
-// 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-// 			p.shift()
-// 			return r
-// 		}
-// 		n.Comma = p.opt(',')
-// 		r.TypeList = append(r.TypeList, n)
-// 	}
-// }
-//
-// // PointerType = "*" BaseType .
-// func (p *parser) pointerType() (r *PointerType) {
-// 	return &PointerType{Star: p.must('*'), BaseType: p.type1()}
-// }
-//
-// // Conversion describes a conversion.
-// //
-// //  Conversion = Type "(" Expression [ "," ] ")" .
-// type Conversion struct {
-// 	Type       *Type
-// 	LParen     Token
-// 	Expression Node
-// 	Comma      Token
-// 	RParen     Token
-// }
-//
-// // Positions implements Node.
-// func (n *Conversion) Position() (r token.Position) { return n.Type.Position() }
-//
-// // TypeAssertion describes a type assertion.
-// //
-// //  TypeAssertion = PrimaryExpr "." "(" Type ")" .
-// type TypeAssertion struct {
-// 	PrimaryExpr Node
-// 	Dot         Token
-// 	LParen      Token
-// 	Type        *Type
-// 	RParen      Token
-// }
-//
-// // Positions implements Node.
-// func (n *TypeAssertion) Position() (r token.Position) { return n.PrimaryExpr.Position() }
-//
-// func (p *parser) exprOrType() (r Node) {
-// 	//       Expression case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-// 	//             Type case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
-// 	switch p.ch() {
-// 	case '!', '&', '+', '-', '^', FLOAT_LIT, IMAG_LIT, INT_LIT, RUNE_LIT, STRING_LIT:
-// 		// Expression
-// 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-// 		p.shift()
-// 		return r
-// 	case '(', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
-// 		// Expression or Type
-// 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-// 		p.shift()
-// 		return r
-// 	case '*':
-// 		return p.exprOrPointerType()
-// 	default:
-// 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-// 		p.shift()
-// 		return r
-// 	}
-// }
-//
-// // p.ch() == '*'
-// func (p *parser) exprOrPointerType() (r Node) {
-// 	star := p.must('*')
-// 	switch p.ch() {
-// 	default:
-// 		_ = star
-// 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-// 		p.shift()
-// 		return r
-// 	}
-// }
-//
-// // AliasDecl describes a type alias.
-// //
-// //  AliasDecl = identifier "=" Type .
-// type AliasDecl struct {
-// 	Ident Token
-// 	Eq    Token
-// 	Type  *Type
-// }
-//
-// // Positions implements Node.
-// func (n *AliasDecl) Position() (r token.Position) { return n.Ident.Position() }
-//
-// func (p *parser) typeParameters(lbracket, id Token) (r *TypeParameters) {
-// 	if !lbracket.IsValid() {
-// 		lbracket = p.must('[')
-// 	}
-// 	return &TypeParameters{LBracket: lbracket, TypeParamList: p.typeParamList(id), RBracket: p.must(']')}
-// }
-//
-// func (p *parser) typeParamList(id Token) (r []*TypeParamListItem) {
-// 	for {
-// 		var n *TypeParamListItem
-// 		switch {
-// 		case id.IsValid():
-// 			n = &TypeParamListItem{TypeParamDecl: p.typeParamDecl(id)}
-// 			id = Token{}
-// 		default:
-// 			switch p.ch() {
-// 			case IDENTIFIER:
-// 				n = &TypeParamListItem{TypeParamDecl: p.typeParamDecl(notok)}
-// 			default:
-// 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-// 				p.shift()
-// 				return r
-// 			}
-// 		}
-// 		n.Comma = p.opt(',')
-// 		r = append(r, n)
-// 		switch p.ch() {
-// 		case ']':
-// 			return r
-// 		default:
-// 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-// 			p.shift()
-// 			return r
-// 		}
-// 	}
-// }
-//
-// func (p *parser) typeTerm() (r *TypeTerm) {
-// 	switch p.ch() {
-// 	case '~':
-// 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-// 		p.shift()
-// 		return r
-// 	case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
-// 		return &TypeTerm{Type: p.type1()}
-// 	default:
-// 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-// 		p.shift()
-// 		return r
-// 	}
-// }
-//
-// func (p *parser) typeConstraint() (r []*TypeElem) {
-// 	for {
-// 		n := &TypeElem{TypeTerm: p.typeTerm()}
-// 		r = append(r, n)
-// 		switch p.ch() {
-// 		case '|':
-// 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-// 			p.shift()
-// 			return r
-// 		default:
-// 			return r
-// 		}
-// 	}
-// }
-//
-// func (p *parser) typeParamDecl(id Token) (r *TypeParamDecl) {
-// 	return &TypeParamDecl{IdentifierList: p.identifierList(id), TypeConstraint: p.typeConstraint()}
-// }
-//
-// type TypeSpecItem struct {
-// 	TypeSpec  Node
-// 	Semicolon Token
-// }
-//
-// // Positions implements Node.
-// func (n *TypeSpecItem) Position() (r token.Position) { return n.TypeSpec.Position() }
-//
-// func (p *parser) typeSpecs() (r []*TypeSpecItem) {
-// 	for p.ch() == IDENTIFIER {
-// 		r = append(r, &TypeSpecItem{TypeSpec: p.typeSpec(), Semicolon: p.opt(';')})
-// 	}
-// 	return r
-// }
-//
-// type ImportSpecItem struct {
-// 	ImportSpec *ImportSpec
-// 	Semicolon  Token
-// }
-//
-// // Positions implements Node.
-// func (n *ImportSpecItem) Position() (r token.Position) { return n.ImportSpec.Position() }
-//
-// // PackageClause = "package" PackageName .
-// func (p *parser) packageClause() (r *PackageClause) {
-// 	return &PackageClause{Package: p.must(PACKAGE), PackageName: p.must(IDENTIFIER), Semicolon: p.must(';')}
-// }
+type IncDecStmt struct {
+	Expression Node
+	Op         Token
+}
+
+// Positions implements Node.
+func (n *IncDecStmt) Position() (r token.Position) { return n.Expression.Position() }

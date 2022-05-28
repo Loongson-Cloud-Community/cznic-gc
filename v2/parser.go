@@ -69,7 +69,7 @@ func (p *parser) errNode(n Node, msg string, args ...interface{}) {
 
 func (p *parser) must(c Ch) (r Token) {
 	if p.ch() != c {
-		p.err("expected %v, got %v", c.str(), r.Ch.str())
+		p.err(errorf("expected %v, got %v", c.str(), r.Ch.str()))
 	}
 	return p.shift()
 }
@@ -296,6 +296,10 @@ func (p *parser) constSpec(semi bool) (r *ConstSpec) {
 		case '=':
 			r.Eq = p.shift()
 			r.ExpressionList = p.expressionList(notok)
+		case IDENTIFIER:
+			r.Type = p.qualifiedIdent()
+			r.Eq = p.must('=')
+			r.ExpressionList = p.expressionList(notok)
 		default:
 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
@@ -348,40 +352,51 @@ func (p *parser) expressionList(id Token) (r []*ExpressionListItem) {
 
 // Expression = UnaryExpr { binary_op Expression } .
 func (p *parser) expression(id Token) (r Node) {
-	switch {
-	case id.IsValid():
-		r = p.primaryExpr(id)
-	default:
+	r = p.logicalAndExpr(id)
+	for p.ch() == LOR {
+		r = &BinaryExpression{A: r, Op: p.shift(), B: p.logicalAndExpr(notok)}
+	}
+	return r
+}
+
+func (p *parser) logicalAndExpr(id Token) (r Node) {
+	r = p.relationalExpr(id)
+	for p.ch() == LAND {
+		r = &BinaryExpression{A: r, Op: p.shift(), B: p.relationalExpr(notok)}
+	}
+	return r
+}
+
+func (p *parser) relationalExpr(id Token) (r Node) {
+	r = p.additiveExpr(id)
+	for {
 		switch p.ch() {
-		//        UnaryExpr
-		case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-			r = p.unaryExpr()
+		case EQ, NE, LE, GE, '<', '>':
+			r = &BinaryExpression{A: r, Op: p.shift(), B: p.additiveExpr(notok)}
 		default:
-			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-			p.shift()
 			return r
 		}
 	}
-	return p.expression2(r)
 }
 
-func (p *parser) expression2(in Node) (r Node) {
-	r = in
+func (p *parser) additiveExpr(id Token) (r Node) {
+	r = p.multiplicativeExpr(id)
 	for {
 		switch p.ch() {
-		case '%', '&', '*', '+', '-', '/', '<', '>', '^', '|', AND_NOT, EQ, GE, LAND, LE, LOR, NE, SHL, SHR:
-			op := p.shift()
-			rhs := p.expression(notok)
-			switch x := r.(type) {
-			case *BinaryExpression:
-				panic(todo(""))
-				use(x)
-				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-				p.shift()
-				return r
-			default:
-				r = &BinaryExpression{A: r, Op: op, B: rhs}
-			}
+		case '+', '-', '|', '^':
+			r = &BinaryExpression{A: r, Op: p.shift(), B: p.multiplicativeExpr(notok)}
+		default:
+			return r
+		}
+	}
+}
+
+func (p *parser) multiplicativeExpr(id Token) (r Node) {
+	r = p.unaryExpr(id)
+	for {
+		switch p.ch() {
+		case '*', '/', '%', '&', SHL, SHR, AND_NOT:
+			r = &BinaryExpression{A: r, Op: p.shift(), B: p.unaryExpr(notok)}
 		default:
 			return r
 		}
@@ -418,7 +433,7 @@ func (p *parser) primaryExpr(id Token) (r Node) {
 	switch {
 	case id.IsValid():
 		switch p.ch() {
-		case '(', '.', ',', '[':
+		case '(', '.', ',', '[', ')':
 			r = id
 		default:
 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
@@ -438,10 +453,9 @@ func (p *parser) primaryExpr(id Token) (r Node) {
 			switch p.ch() {
 			case '{':
 				r = &CompositeLit{LiteralType: t, LiteralValue: p.literalValue1()}
-			// case '(':
-			// 	r = &Conversion{Type: t, LParen: p.shift(), Expression: p.expression(notok), Comma: p.opt(','), RParen: p.must(')')}
+			case '(':
+				r = &Conversion{Type: t, LParen: p.shift(), Expression: p.expression(notok), Comma: p.opt(','), RParen: p.must(')')}
 			default:
-				use(t)
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
@@ -451,7 +465,7 @@ func (p *parser) primaryExpr(id Token) (r Node) {
 		case IDENTIFIER:
 			id := p.shift()
 			switch p.ch() {
-			case '(', '.', ';', ':', ',', DEFINE, '}', ')', ']', '<', '>', EQ, GE, LE, NE, body, '[', '=', ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN, '%', '&', '*', '+', '-', '/', '^', '|', AND_NOT, LAND, LOR, SHL, SHR:
+			case '(', '.', ';', ':', ',', DEFINE, '}', ')', ']', '<', '>', EQ, GE, LE, NE, body, '[', '=', ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN, '%', '&', '*', '+', '-', '/', '^', '|', AND_NOT, LAND, LOR, SHL, SHR, INC, DEC:
 				r = id
 			case '{':
 				r = &CompositeLit{LiteralType: &QualifiedIdent{Ident: id}, LiteralValue: p.literalValue2()}
@@ -460,8 +474,8 @@ func (p *parser) primaryExpr(id Token) (r Node) {
 				p.shift()
 				return r
 			}
-		// case MAP:
-		// 	r = &CompositeLit{LiteralType: p.type1(), LiteralValue: p.literalValue1()}
+		case MAP:
+			r = &CompositeLit{LiteralType: p.type1(), LiteralValue: p.literalValue1()}
 		case FUNC:
 			f := p.shift()
 			sig := p.signature()
@@ -469,7 +483,6 @@ func (p *parser) primaryExpr(id Token) (r Node) {
 			case '{':
 				r = p.functionLit(f, sig)
 			default:
-				use(f, sig)
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
@@ -494,8 +507,8 @@ func (p *parser) primaryExpr(id Token) (r Node) {
 			switch p.ch() {
 			case IDENTIFIER:
 				r = &Selector{PrimaryExpr: r, Dot: dot, Ident: p.shift()}
-			// case '(':
-			// 	r = &TypeAssertion{PrimaryExpr: r, Dot: dot, LParen: p.shift(), Type: p.type1(), RParen: p.must(')')}
+			case '(':
+				r = &TypeAssertion{PrimaryExpr: r, Dot: dot, LParen: p.shift(), Type: p.type1(), RParen: p.must(')')}
 			default:
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
@@ -503,18 +516,98 @@ func (p *parser) primaryExpr(id Token) (r Node) {
 			}
 		case '(':
 			r = p.arguments(r)
-		case ';', '}', ',', ':', ')', ']', DEFINE, '=', ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN, '<', '>', EQ, GE, LE, NE, body, '%', '&', '*', '+', '-', '/', '^', '|', AND_NOT, LAND, LOR, SHL, SHR:
+		case ';', '}', ',', ':', ')', ']', DEFINE, '=', ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN, '<', '>', EQ, GE, LE, NE, body, '%', '&', '*', '+', '-', '/', '^', '|', AND_NOT, LAND, LOR, SHL, SHR, INC, DEC:
 			return r
-		// case '{':
-		// 	r = &CompositeLit{LiteralType: &Type{Type: r}, LiteralValue: p.literalValue2()}
+		case '{':
+			r = &CompositeLit{LiteralType: r, LiteralValue: p.literalValue2()}
 		case '[':
-			r = &Index{PrimaryExpr: r, LBracket: p.shift(), Expression: p.expression(notok), RBracket: p.must(']')}
+			r = p.indexOrSlice(r)
 		default:
 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
 	}
+}
+
+func (p *parser) indexOrSlice(pe Node) (r Node) {
+	// Index = "[" Expression "]" .
+	// Slice = "[" [ Expression ] ":" [ Expression ] "]"
+	//	| "[" [ Expression ] ":" Expression ":" Expression "]" .
+	if p.ch() != '[' {
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return nil
+	}
+
+	// "[" .
+	lbracket := p.shift()
+	switch p.ch() {
+	//       Expression
+	case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+		// "[" . expr
+		expr := p.expression(notok)
+		switch p.ch() {
+		case ':':
+			// "[" expr . ":"
+			return p.slice(pe, lbracket, expr)
+		case ']':
+			// "[" expr . "]"
+			return &Index{PrimaryExpr: pe, LBracket: lbracket, Expression: expr, RBracket: p.shift()}
+		default:
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		}
+	case ':':
+		// "[" . ":"
+		return p.slice(pe, lbracket, nil)
+	default:
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	}
+}
+
+func (p *parser) slice(pe Node, lbracket Token, expr Node) (r *Slice) {
+	if p.ch() != ':' {
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return nil
+	}
+
+	// "[" [ Expression ] . ":"
+	// Slice = "[" [ Expression ] ":" [ Expression ] "]"
+	//	| "[" [ Expression ] ":" Expression ":" Expression "]" .
+	r = &Slice{PrimaryExpr: pe, LBracket: lbracket, Expression: expr, Colon: p.shift()}
+	switch p.ch() {
+	case ']':
+		// "[" [ expr ] ":" . "]"
+		r.RBracket = p.shift()
+	//       Expression
+	case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+		// "[" [ expr ] ":" . expr
+		r.Expression2 = p.expression(notok)
+		switch p.ch() {
+		case ']':
+			// "[" [ expr ] ":" expr . "]"
+			r.RBracket = p.shift()
+		case ':':
+			// "[" [ expr ] ":" expr . ":"
+			r.Colon2 = p.shift()
+			r.Expression3 = p.expression(notok)
+			r.RBracket = p.shift()
+		default:
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		}
+	default:
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	}
+	return r
 }
 
 // FunctionLit = "func" Signature lbrace StatementList "#fixlbr" "}" .
@@ -531,15 +624,80 @@ func (p *parser) functionLit(f Token, sig *Signature) (r *FunctionLit) {
 func (p *parser) parenExprOrType() (r Node) {
 	lparen := p.must('(')
 	switch p.ch() {
-	// case '*':
-	// 	switch x := p.exprOrType().(type) {
-	// 	default:
-	// 		p.err(errorf("TODO %T", x))
-	// 		p.shift()
-	// 		return r
-	// 	}
+	case '*', IDENTIFIER:
+		switch x := p.exprOrType().(type) {
+		default:
+			p.err(errorf("TODO %T", x))
+			p.shift()
+			return r
+		}
 	default:
-		use(lparen)
+		_ = lparen
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	}
+}
+
+// expr or type
+func (p *parser) exprOrType() (r Node) {
+	//       Expression case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+	//             Type case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+	switch p.ch() {
+	case IDENTIFIER:
+		// expr or type
+		id := p.shift()
+		switch p.ch() {
+		case ')', ',':
+			return id
+		case '.':
+			dot := p.shift()
+			switch p.ch() {
+			case IDENTIFIER:
+				id2 := p.shift()
+				switch p.ch() {
+				case '(':
+					return p.arguments(&QualifiedIdent{PackageName: id, Dot: dot, Ident: id2})
+				case ')', ',':
+					return &QualifiedIdent{PackageName: id, Dot: dot, Ident: id2}
+				default:
+					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+					p.shift()
+					return r
+				}
+			default:
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.shift()
+				return r
+			}
+		case '(':
+			return p.arguments(id)
+		case '[':
+			return p.expression(id)
+		default:
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		}
+	case '*':
+		star := p.shift()
+		switch p.ch() {
+		case IDENTIFIER:
+			id := p.shift()
+			switch p.ch() {
+			default:
+				_ = id
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.shift()
+				return r
+			}
+		default:
+			_ = star
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		}
+	default:
 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
@@ -554,8 +712,8 @@ func (p *parser) literalValue2() (r *LiteralValue) {
 	//      ElementList
 	case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT, body:
 		r.ElementList = p.keyedElements()
-	// case '}':
-	// 	// ok
+	case '}':
+		// ok
 	default:
 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
@@ -634,8 +792,8 @@ func (p *parser) literalValue1() (r *LiteralValue) {
 	//      ElementList
 	case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT, body:
 		r.ElementList = p.keyedElements()
-	// case '}':
-	// 	// ok
+	case '}':
+		// ok
 	default:
 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
@@ -667,65 +825,98 @@ func (p *parser) arguments(primaryExpr Node) (r *Arguments) {
 		case '!', '&', '+', '-', '^', FLOAT_LIT, IMAG_LIT, INT_LIT, RUNE_LIT, STRING_LIT:
 			// ExpressionList
 			r.ExpressionList = p.expressionList(notok)
-		// case '*', ARROW:
-		// 	// ExpressionList or Type
-		// 	p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-		// 	p.shift()
-		// 	return r
+		case '*', ARROW:
+			// ExpressionList or Type
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
 		case IDENTIFIER:
 			// ExpressionList or Type
-			r.ExpressionList = p.expressionList(notok)
-			switch p.ch() {
-			case ')':
-				// ok
+			switch x := p.exprOrType().(type) {
+			case Token:
+				switch p.ch() {
+				case ')', ',':
+					r.ExpressionList = p.expressionList(x)
+				default:
+					trc("", p.s.Tok)
+					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+					p.shift()
+					return r
+				}
+			case *Slice:
+				switch p.ch() {
+				default:
+					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+					p.shift()
+					return r
+				}
+			case *Arguments, *QualifiedIdent:
+				switch p.ch() {
+				case ')':
+					r.ExpressionList = []*ExpressionListItem{{Expression: x}}
+				case ',':
+					comma := p.shift()
+					switch p.ch() {
+					case ')':
+						p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+						p.shift()
+						return r
+					default:
+						el := p.expressionList(notok)
+						r.ExpressionList = append([]*ExpressionListItem{{Expression: x, Comma: comma}}, el...)
+					}
+				default:
+					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+					p.shift()
+					return r
+				}
 			default:
-				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.err(errorf("TODO %T", x))
 				p.shift()
 				return r
 			}
-		// case '(':
-		// 	// ExpressionList or Type
-		// 	p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-		// 	p.shift()
-		// 	return r
+		case '(':
+			// ExpressionList or Type
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
 		case '[', CHAN, FUNC, INTERFACE, MAP, STRUCT:
 			// Type or a Literal
 			t := p.type1()
 			switch p.ch() {
-			// case ',':
-			// 	r.Type = t
-			// 	r.Comma = p.shift()
-			// 	switch p.ch() {
-			// 	//   ExpressionList
-			// 	case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-			// 		r.ExpressionList = p.expressionList(notok)
-			// 	default:
-			// 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-			// 		p.shift()
-			// 		return r
-			// 	}
-			// case ')':
-			// 	// ok
-			// case '{':
-			// 	expr := &CompositeLit{LiteralType: t, LiteralValue: p.literalValue1()}
-			// 	switch p.ch() {
-			// 	default:
-			// 		use(expr)
-			// 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-			// 		p.shift()
-			// 		return r
-			// 	}
-			// case '(':
-			// 	expr := &Conversion{Type: t, LParen: p.shift(), Expression: p.expression(notok), RParen: p.must(')')}
-			// 	switch p.ch() {
-			// 	default:
-			// 		use(expr)
-			// 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-			// 		p.shift()
-			// 		return r
-			// 	}
+			case ',':
+				r.Type = t
+				r.Comma = p.shift()
+				switch p.ch() {
+				//   ExpressionList
+				case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+					r.ExpressionList = p.expressionList(notok)
+				default:
+					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+					p.shift()
+					return r
+				}
+			case ')':
+			// ok
+			case '{':
+				expr := &CompositeLit{LiteralType: t, LiteralValue: p.literalValue1()}
+				switch p.ch() {
+				default:
+					_ = expr
+					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+					p.shift()
+					return r
+				}
+			case '(':
+				expr := &Conversion{Type: t, LParen: p.shift(), Expression: p.expression(notok), RParen: p.must(')')}
+				switch p.ch() {
+				default:
+					_ = expr
+					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+					p.shift()
+					return r
+				}
 			default:
-				use(t)
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
@@ -758,27 +949,27 @@ func (p *parser) arguments(primaryExpr Node) (r *Arguments) {
 
 // UnaryExpr = PrimaryExpr
 // 	| unary_op UnaryExpr .
-func (p *parser) unaryExpr() (r Node) {
+func (p *parser) unaryExpr(id Token) (r Node) {
+	if id.IsValid() {
+		return p.primaryExpr(id)
+	}
+
 	//      PrimaryExpr case '(', '*', '[', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
 	//         unary_op case '!', '&', '*', '+', '-', '^', ARROW:
 	switch p.ch() {
 	case '(', '[', CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
 		return p.primaryExpr(notok)
-	case '!', '&', '+', '-', '^':
-		return &UnaryExpr{UnaryOp: p.shift(), UnaryExpr: p.unaryExpr()}
-	// case '*':
-	// 	star := p.shift()
-	// 	switch p.ch() {
-	// 	default:
-	// 		use(star)
-	// 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-	// 		p.shift()
-	// 		return r
-	// 	}
-	// case ARROW:
-	// 	p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-	// 	p.shift()
-	// 	return r
+	case '!', '&', '+', '-', '^', ARROW:
+		return &UnaryExpr{UnaryOp: p.shift(), UnaryExpr: p.unaryExpr(notok)}
+	case '*':
+		star := p.shift()
+		switch p.ch() {
+		default:
+			_ = star
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		}
 	default:
 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
@@ -791,7 +982,7 @@ func (p *parser) semi(enabled bool) (r Token) {
 		switch p.ch() {
 		case ';':
 			r = p.shift()
-		case ')', '}':
+		case ')', '}', ELSE:
 			// ok
 		default:
 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
@@ -905,8 +1096,8 @@ func (p *parser) typeDecl(semi bool) (r *TypeDecl) {
 	case TYPE:
 		typ := p.shift()
 		switch p.ch() {
-		// case '(':
-		// 	r = &TypeDecl{Type: typ, LParen: p.shift(), TypeSpecs: p.typeSpecs(), RParen: p.must(')')}
+		case '(':
+			r = &TypeDecl{Type: typ, LParen: p.shift(), TypeSpecs: p.typeSpecs(), RParen: p.must(')')}
 		//         TypeSpec
 		case IDENTIFIER:
 			r = &TypeDecl{Type: typ, TypeSpecs: []Node{p.typeSpec(false)}}
@@ -921,6 +1112,13 @@ func (p *parser) typeDecl(semi bool) (r *TypeDecl) {
 		return r
 	}
 	r.Semicolon = p.semi(semi)
+	return r
+}
+
+func (p *parser) typeSpecs() (r []Node) {
+	for p.ch() == IDENTIFIER {
+		r = append(r, p.typeSpec(true))
+	}
 	return r
 }
 
@@ -942,8 +1140,8 @@ func (p *parser) typeSpec(semi bool) (r Node) {
 			default:
 				return &TypeDef{Ident: id, Type: x}
 			}
-		// case '=':
-		// 	return &AliasDecl{Ident: id, Eq: p.shift(), Type: p.type1()}
+		case '=':
+			return &AliasDecl{Ident: id, Eq: p.shift(), Type: p.type1()}
 		case '(', '*', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 			n := &TypeDef{Ident: id, Type: p.type1()}
 			n.Semicolon = p.semi(semi)
@@ -969,34 +1167,104 @@ func (p *parser) typeOrTypeParamaters() (r Node) {
 		lbracket := p.shift()
 		// '[' .
 		switch p.ch() {
-		// case IDENTIFIER:
-		// 	id := p.shift()
-		// 	// '[' IDENTIFIER  .
-		// 	// TypeParameters = "[" . TypeParamList [ "," ] "]" .
-		// 	// TypeParamList = . TypeParamDecl { "," TypeParamDecl } .
-		// 	// TypeParamDecl = . IdentifierList TypeConstraint .
-		// 	// ArrayType = "[" . ArrayLength "]" ElementType .
-		// 	switch p.ch() {
-		// 	case IDENTIFIER:
-		// 		// '[' IDENTIFIER  . IDENTIFIER -> TypeParameters
-		// 		return p.typeParameters(lbracket, id)
-		// 	default:
-		// 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-		// 		p.shift()
-		// 		return r
-		// 	}
-		// case ']':
-		// 	return &SliceType{LBracket: lbracket, RBracket: p.shift(), ElementType: p.type1()}
+		case IDENTIFIER:
+			id := p.shift()
+			// '[' IDENTIFIER  .
+			// TypeParameters = "[" . TypeParamList [ "," ] "]" .
+			// TypeParamList = . TypeParamDecl { "," TypeParamDecl } .
+			// TypeParamDecl = . IdentifierList TypeConstraint .
+			// ArrayType = "[" . ArrayLength "]" ElementType .
+			switch p.ch() {
+			case IDENTIFIER:
+				// '[' IDENTIFIER  . IDENTIFIER -> TypeParameters
+				return p.typeParameters(lbracket, id)
+			default:
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.shift()
+				return r
+			}
+		case ']':
+			return &SliceType{LBracket: lbracket, RBracket: p.shift(), ElementType: p.type1()}
 		default:
-			use(lbracket)
 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
-	// case '(', '*', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
-	// 	p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-	// 	p.shift()
-	// 	return r
+	case '(', '*', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	default:
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	}
+}
+
+func (p *parser) typeParameters(lbracket, id Token) (r *TypeParameters) {
+	if !lbracket.IsValid() {
+		lbracket = p.must('[')
+	}
+	return &TypeParameters{LBracket: lbracket, TypeParamList: p.typeParamList(id), RBracket: p.must(']')}
+}
+
+func (p *parser) typeParamList(id Token) (r []*TypeParamDecl) {
+	for {
+		var n *TypeParamDecl
+		switch {
+		case id.IsValid():
+			n = p.typeParamDecl(id)
+			id = Token{}
+		default:
+			switch p.ch() {
+			case IDENTIFIER:
+				n = p.typeParamDecl(notok)
+			default:
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.shift()
+				return r
+			}
+		}
+		n.Comma = p.opt(',')
+		r = append(r, n)
+		switch p.ch() {
+		case ']':
+			return r
+		default:
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		}
+	}
+}
+
+func (p *parser) typeParamDecl(id Token) (r *TypeParamDecl) {
+	return &TypeParamDecl{IdentifierList: p.identifierList(id), TypeConstraint: p.typeConstraint()}
+}
+
+func (p *parser) typeConstraint() (r []*TypeElem) {
+	for {
+		n := &TypeElem{TypeTerm: p.typeTerm()}
+		r = append(r, n)
+		switch p.ch() {
+		case '|':
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		default:
+			return r
+		}
+	}
+}
+
+func (p *parser) typeTerm() (r *TypeTerm) {
+	switch p.ch() {
+	case '~':
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+		return &TypeTerm{Type: p.type1()}
 	default:
 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
@@ -1011,9 +1279,9 @@ func (p *parser) functionDecl(fn Token) (r *FunctionDecl) {
 	switch p.ch() {
 	case '(':
 		r.Signature = p.signature()
-	// case '[':
-	// 	r.TypeParameters = p.typeParameters(notok, notok)
-	// 	r.Signature = p.signature()
+	case '[':
+		r.TypeParameters = p.typeParameters(notok, notok)
+		r.Signature = p.signature()
 	default:
 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
@@ -1031,18 +1299,20 @@ func (p *parser) statementList() (r []Node) {
 	//        Statement case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, BREAK, CHAN, CONST, CONTINUE, DEFER, FALLTHROUGH, FLOAT_LIT, FOR, FUNC, GO, GOTO, IDENTIFIER, IF, IMAG_LIT, INTERFACE, INT_LIT, MAP, RETURN, RUNE_LIT, SELECT, STRING_LIT, STRUCT, SWITCH, TYPE, VAR:
 	for {
 		switch p.ch() {
-		case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, BREAK, CHAN, CONTINUE, FALLTHROUGH, FLOAT_LIT, FUNC, GOTO, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, SELECT, STRING_LIT, STRUCT:
+		case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, BREAK, CHAN, FALLTHROUGH, FLOAT_LIT, FUNC, GOTO, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, SELECT, STRING_LIT, STRUCT:
 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
-		// case CONST:
-		// 	n = &Statement{Statement: p.constDecl()}
+		case CONST:
+			r = append(r, p.constDecl(true))
+		case CONTINUE:
+			r = append(r, &ContinueStmt{Continue: p.shift(), Label: p.opt(IDENTIFIER)})
 		case DEFER:
 			r = append(r, &DeferStmt{Defer: p.must(DEFER), Expression: p.expression(notok), Semicolon: p.semi(true)})
 		case FOR:
 			r = append(r, p.forStmt())
-			// case GO:
-			// 	n = &Statement{Statement: &GoStmt{Go: p.shift(), Expression: p.expression(notok)}}
+		case GO:
+			r = append(r, &GoStmt{Go: p.shift(), Expression: p.expression(notok)})
 		case IDENTIFIER:
 			id := p.shift()
 			switch p.ch() {
@@ -1056,7 +1326,7 @@ func (p *parser) statementList() (r []Node) {
 				expr := p.expression(id)
 				switch p.ch() {
 				case ';':
-					r = append(r, &ExpressionStatement{Expression: expr, Semicolon: p.shift()})
+					r = append(r, &ExpressionStmt{Expression: expr, Semicolon: p.shift()})
 				case '=', ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN:
 					r = append(r, &Assignment{LExpressionList: []*ExpressionListItem{{Expression: expr}}, AssOp: p.shift(), RExpressionList: p.expressionList(notok), Semicolon: p.semi(true)})
 				default:
@@ -1072,13 +1342,15 @@ func (p *parser) statementList() (r []Node) {
 				case DEFINE:
 					il := p.exprList2IdList(p.s.Tok, el)
 					r = append(r, &ShortVarDecl{IdentifierList: il, Define: p.shift(), ExpressionList: p.expressionList(notok), Semicolon: p.semi(true)})
-				// case '=', ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN:
-				// 	n = &Statement{Statement: &Assignment{LExpressionList: el, AssOp: p.shift(), RExpressionList: p.expressionList(notok)}}
+				case '=', ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN:
+					r = append(r, &Assignment{LExpressionList: el, AssOp: p.shift(), RExpressionList: p.expressionList(notok), Semicolon: p.semi(true)})
 				default:
 					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 					p.shift()
 					return r
 				}
+			case ARROW:
+				r = append(r, &SendStmt{Channel: id, Arrow: p.shift(), Expression: p.expression(notok), Semicolon: p.semi(true)})
 			default:
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
@@ -1090,8 +1362,8 @@ func (p *parser) statementList() (r []Node) {
 			r = append(r, p.returnStmt())
 		case SWITCH:
 			r = append(r, p.switchStmt())
-		// case TYPE:
-		// 	n = &Statement{Statement: p.typeDecl()}
+		case TYPE:
+			r = append(r, p.typeDecl(true))
 		case VAR:
 			r = append(r, p.varDecl(true))
 		case '}':
@@ -1114,14 +1386,14 @@ func (p *parser) forStmt() (r *ForStmt) {
 	//      RangeClause case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RANGE, RUNE_LIT, STRING_LIT, STRUCT:
 	r = &ForStmt{For: p.must(FOR)}
 	switch p.ch() {
-	// case ';':
-	// 	p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-	// 	p.shift()
-	// 	return r
-	// case RANGE:
-	// 	p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-	// 	p.shift()
-	// 	return r
+	case ';':
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	case RANGE:
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
 	case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
 		el := p.expressionList(notok)
 		switch p.ch() {
@@ -1130,18 +1402,16 @@ func (p *parser) forStmt() (r *ForStmt) {
 			switch p.ch() {
 			case RANGE:
 				r.RangeClause = &RangeClause{ExpressionList: el, Assign: def, Range: p.shift(), Expression: p.expression(notok)}
-			// //       Expression
-			// case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-			// 	ss := &ShortVarDecl{IdentifierList: p.exprList2IdList(def, el), Define: def, ExpressionList: p.expressionList(notok)}
-			// 	r.ForClause = p.forClause(ss)
+			//       Expression
+			case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+				ss := &ShortVarDecl{IdentifierList: p.exprList2IdList(def, el), Define: def, ExpressionList: p.expressionList(notok)}
+				r.ForClause = p.forClause(ss)
 			default:
-				use(def)
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
 			}
 		default:
-			use(el)
 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
@@ -1153,6 +1423,29 @@ func (p *parser) forStmt() (r *ForStmt) {
 	}
 	r.Block = p.loopBody()
 	return r
+}
+
+func (p *parser) forClause(initStmt Node) (r *ForClause) {
+	r = &ForClause{}
+	switch {
+	case initStmt != nil:
+		r.InitStmt = initStmt
+		r.Semicolon = p.must(';')
+		if p.ch() != ';' {
+			r.Condition = p.expression(notok)
+		}
+		r.Semicolon2 = p.must(';')
+		switch p.ch() {
+		//         PostStmt
+		case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+			r.PostStmt = p.simpleStmt()
+		}
+		return r
+	default:
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	}
 }
 
 func (p *parser) exprList2IdList(n Node, el []*ExpressionListItem) (r []*IdentifierListItem) {
@@ -1186,14 +1479,80 @@ func (p *parser) switchStmt() (r Node) {
 	case IDENTIFIER:
 		ss := p.simpleStmt()
 		switch p.ch() {
+		case body:
+			lbr := p.lbrace(nil)
+			r := &ExpressionSwitchStmt{Switch: sw, Expression: ss, LBrace: lbr}
+			switch p.ch() {
+			//   ExprSwitchCase
+			case CASE, DEFAULT:
+				r.ExprCaseClauses = append(r.ExprCaseClauses, p.exprCaseClause())
+			default:
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.shift()
+				return r
+			}
+			r.RBrace = p.must('}')
+			r.Semicolon2 = p.semi(true)
+			return r
 		default:
-			use(ss)
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		}
+	//       Expression - IDENTIFIER
+	case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+		ss := p.simpleStmt()
+		switch p.ch() {
+		case body:
+			lbr := p.lbrace(nil)
+			r := &ExpressionSwitchStmt{Switch: sw, Expression: ss, LBrace: lbr}
+			switch p.ch() {
+			//   ExprSwitchCase
+			case CASE, DEFAULT:
+				r.ExprCaseClauses = append(r.ExprCaseClauses, p.exprCaseClause())
+			default:
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.shift()
+				return r
+			}
+			r.RBrace = p.must('}')
+			r.Semicolon2 = p.semi(true)
+			return r
+		default:
 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
 	default:
-		use(sw)
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	}
+}
+
+// ExprCaseClause = ExprSwitchCase ":" StatementList .
+func (p *parser) exprCaseClause() (r *ExprCaseClause) {
+	switch p.ch() {
+	//   ExprSwitchCase
+	case CASE, DEFAULT:
+		return &ExprCaseClause{ExprSwitchCase: p.exprSwitchCase(), Colon: p.must(':'), StatementList: p.statementList()}
+	default:
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	}
+}
+
+// ExprSwitchCase = "case" ExpressionList
+// 	| "default" .
+func (p *parser) exprSwitchCase() (r *ExprSwitchCase) {
+	//   ExprSwitchCase case CASE, DEFAULT:
+	switch p.ch() {
+	case CASE:
+		return &ExprSwitchCase{CaseOrDefault: p.shift(), ExpressionList: p.expressionList(notok)}
+	case DEFAULT:
+		return &ExprSwitchCase{CaseOrDefault: p.shift()}
+	default:
 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
 		return r
@@ -1222,16 +1581,16 @@ func (p *parser) ifStmt() (r *IfStmt) {
 			p.shift()
 			return r
 		}
-	// case '!', '&', '(', '*', '+', '-', '[', '^', CHAN, FLOAT_LIT, FUNC, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-	// 	expr := p.expression(notok)
-	// 	switch p.ch() {
-	// 	case body:
-	// 		r.Expression = expr
-	// 	default:
-	// 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-	// 		p.shift()
-	// 		return r
-	// 	}
+	case '!', '&', '(', '*', '+', '-', '[', '^', CHAN, FLOAT_LIT, FUNC, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+		expr := p.expression(notok)
+		switch p.ch() {
+		case body:
+			r.Expression = expr
+		default:
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		}
 	default:
 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
@@ -1254,8 +1613,14 @@ func (p *parser) loopBody() (r *Block) {
 // 	| SendStmt
 // 	| ExpressionStmt .
 func (p *parser) simpleStmt() (r Node) {
+	// IncDecStmt = Expression "++"
+	// 	| Expression "--" .
+	// ShortVarDecl = IdentifierList ":=" ExpressionList .
+	// SendStmt = Channel "<-" Expression .
+	// ExpressionStmt = Expression .
 	switch p.ch() {
-	case IDENTIFIER:
+	//       Expression
+	case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
 		el := p.expressionList(notok)
 		switch p.ch() {
 		case body:
@@ -1268,8 +1633,15 @@ func (p *parser) simpleStmt() (r Node) {
 			return el[0]
 		case DEFINE:
 			return &ShortVarDecl{IdentifierList: p.exprList2IdList(p.s.Tok, el), Define: p.shift(), ExpressionList: p.expressionList(notok)}
+		case INC, DEC:
+			if len(el) != 1 {
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.shift()
+				return r
+			}
+
+			return &IncDecStmt{Expression: el[0], Op: p.shift()}
 		default:
-			use(el)
 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
@@ -1375,25 +1747,25 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 		case IDENTIFIER:
 			id := p.shift()
 			switch p.ch() {
-			// case ELLIPSIS:
-			// 	n = &ParameterDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, ELLIPSIS: p.shift(), Type: p.type1()}
+			case ELLIPSIS:
+				n = &ParameterDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, ELLIPSIS: p.shift(), Type: p.type1()}
 			case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 				n = &ParameterDecl{IdentifierList: p.identifierList(id), Type: p.type1()}
 			case ',', ')':
 				n = &ParameterDecl{Type: &QualifiedIdent{Ident: id}}
-			// case '.':
-			// 	n = &ParameterDecl{Type: &Type{Type: &QualifiedIdent{PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}}}
+			case '.':
+				n = &ParameterDecl{Type: &QualifiedIdent{PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}}
 			default:
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
 			}
-		// case ELLIPSIS:
-		// 	p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-		// 	p.shift()
-		// 	return r
-		// case '(', '*', '[', ARROW, CHAN, FUNC, INTERFACE, MAP, STRUCT:
-		// 	n = &ParameterDecl{Type: p.type1()}
+		case ELLIPSIS:
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		case '(', '*', '[', ARROW, CHAN, FUNC, INTERFACE, MAP, STRUCT:
+			n = &ParameterDecl{Type: p.type1()}
 		default:
 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
@@ -1413,10 +1785,10 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 func (p *parser) type1() (r Node) {
 	//             Type case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 	switch p.ch() {
-	// case '(':
-	// 	p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-	// 	p.shift()
-	// 	return r
+	case '(':
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
 	case '*':
 		return &PointerType{Star: p.shift(), BaseType: p.type1()}
 	case '[':
@@ -1424,31 +1796,30 @@ func (p *parser) type1() (r Node) {
 		switch p.ch() {
 		case ']':
 			return &SliceType{LBracket: lbracket, RBracket: p.shift(), ElementType: p.type1()}
-		// case ELLIPSIS:
-		// 	return &Type{Type: &ArrayType{LBracket: lbracket, ArrayLength: p.shift(), RBracket: p.must(']'), ElementType: p.type1()}}
-		// //       Expression
-		// case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-		// 	return &Type{Type: &ArrayType{LBracket: lbracket, ArrayLength: p.expression(notok), RBracket: p.must(']'), ElementType: p.type1()}}
+		case ELLIPSIS:
+			return &ArrayType{LBracket: lbracket, ArrayLength: p.shift(), RBracket: p.must(']'), ElementType: p.type1()}
+		//       Expression
+		case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
+			return &ArrayType{LBracket: lbracket, ArrayLength: p.expression(notok), RBracket: p.must(']'), ElementType: p.type1()}
 		default:
-			use(lbracket)
 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
 			return r
 		}
-	// case ARROW:
-	// 	p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-	// 	p.shift()
-	// 	return r
-	// case CHAN:
-	// 	return &Type{Type: p.channelType(notok)}
-	// case FUNC:
-	// 	return &Type{Type: p.functionType()}
+	case ARROW:
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+		return r
+	case CHAN:
+		return p.channelType(notok)
+	case FUNC:
+		return &FunctionType{Func: p.shift(), Signature: p.signature()}
 	case IDENTIFIER:
 		return p.typeName()
 	case INTERFACE:
 		return p.interfaceType()
-	// case MAP:
-	// 	return &Type{Type: p.mapType()}
+	case MAP:
+		return &MapType{Map: p.shift(), LBracket: p.must('['), KeyType: p.type1(), RBracket: p.must(']'), ElementType: p.type1()}
 	case STRUCT:
 		return p.structType()
 	default:
@@ -1456,6 +1827,27 @@ func (p *parser) type1() (r Node) {
 		p.shift()
 		return r
 	}
+}
+
+func (p *parser) channelType(arrowPre Token) (r *ChannelType) {
+	switch {
+	case arrowPre.IsValid():
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+	default:
+		switch p.ch() {
+		case CHAN:
+			r = &ChannelType{Chan: p.shift()}
+			if p.ch() == ARROW {
+				r.ArrayPost = p.shift()
+			}
+			r.ElementType = p.type1()
+		default:
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+		}
+	}
+	return r
 }
 
 // InterfaceType = "interface" lbrace "#fixlbr" "}"
@@ -1473,10 +1865,10 @@ func (p *parser) interfaceType() (r *InterfaceType) {
 	r = &InterfaceType{Interface: p.must(INTERFACE), LBrace: p.lbrace(&lbr)}
 	for {
 		switch p.ch() {
-		// case '(', '*', '[', '~', ARROW, CHAN, FUNC, INTERFACE, MAP, STRUCT:
-		// 	p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-		// 	p.shift()
-		// 	return r
+		case '(', '*', '[', '~', ARROW, CHAN, FUNC, INTERFACE, MAP, STRUCT:
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
 		case IDENTIFIER:
 			id := p.shift()
 			switch p.ch() {
@@ -1484,7 +1876,6 @@ func (p *parser) interfaceType() (r *InterfaceType) {
 				n := &MethodElem{MethodName: id, Signature: p.signature(), Semicolon: p.opt(';')}
 				r.InterfaceElems = append(r.InterfaceElems, n)
 			default:
-				use(id)
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
 				return r
@@ -1514,12 +1905,31 @@ func (p *parser) typeName() (r *TypeName) {
 	}
 	switch p.ch() {
 	case '[':
-		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-		p.shift()
-		return r
-		//TODO r.TypeArgs = p.typeArgs()
+		r.TypeArgs = p.typeArgs()
 	}
 	return r
+}
+
+// TypeArgs = "[" TypeList [ "," ] "]" .
+func (p *parser) typeArgs() (r *TypeArgs) {
+	r = &TypeArgs{LBracket: p.must('[')}
+	for {
+		var n *TypeListItem
+		switch p.ch() {
+		//         TypeList
+		case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
+			n = &TypeListItem{Type: p.type1()}
+		case ']':
+			r.RBracket = p.shift()
+			return r
+		default:
+			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+			p.shift()
+			return r
+		}
+		n.Comma = p.opt(',')
+		r.TypeList = append(r.TypeList, n)
+	}
 }
 
 func (p *parser) qualifiedIdent() (r *QualifiedIdent) {
@@ -1553,10 +1963,10 @@ func (p *parser) structType() (r *StructType) {
 		for {
 			var n *FieldDecl
 			switch p.ch() {
-			// case '*':
-			// 	p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-			// 	p.shift()
-			// 	return r
+			case '*':
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.shift()
+				return r
 			case IDENTIFIER:
 				id := p.shift()
 				switch p.ch() {
@@ -1565,8 +1975,8 @@ func (p *parser) structType() (r *StructType) {
 					n = &FieldDecl{IdentifierList: p.identifierList(id), Type: p.type1()}
 				case ',':
 					n = &FieldDecl{IdentifierList: p.identifierList(id), Type: p.type1()}
-				// case ';':
-				// 	n = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: &QualifiedIdent{Ident: id}}}
+				case ';':
+					n = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: &QualifiedIdent{Ident: id}}}
 				default:
 					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 					p.shift()
@@ -1598,7 +2008,9 @@ func (p *parser) lbrace(lbr *bool) (r Token) {
 	case body:
 		r = p.shift()
 		r.Ch = '{'
-		*lbr = true
+		if lbr != nil {
+			*lbr = true
+		}
 		return r
 	default:
 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
