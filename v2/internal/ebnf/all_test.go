@@ -171,6 +171,27 @@ func loadGrammar(fn, out, start string) (ebnf.Grammar, map[string]followset, err
 		if err := os.WriteFile(out, b.Bytes(), 0640); err != nil {
 			return nil, nil, err
 		}
+
+		g, _, err := g.BNF(startProduction, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		b.Reset()
+		b.WriteString(g.String())
+		b.WriteString("\n\n// Follow sets\n//\n")
+		for _, k := range a {
+			a2 = a2[:0]
+			for k2 := range fs[k] {
+				a2 = append(a2, xlat3[k2])
+			}
+			sort.Strings(a2)
+			fmt.Fprintf(b, "// %*s case %s:\n", ml+1, k, strings.Join(a2, ", "))
+		}
+		b.WriteString("\n")
+		if err := os.WriteFile("go.bnf", b.Bytes(), 0640); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	return ebnf.Grammar(g), fs, nil

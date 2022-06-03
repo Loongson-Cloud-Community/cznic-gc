@@ -66,7 +66,11 @@ ExprSwitchCase =
 	  "case" ExpressionList
 	| "default" .
 ExprSwitchStmt = "switch" [ SimpleStmt ";" ] [ Expression ] body { ExprCaseClause } "}" .
-Expression = UnaryExpr { binary_op Expression } .
+Expression = LogicalAndExpression { "||" LogicalAndExpression } .
+LogicalAndExpression = RelationalExpression { "&&" RelationalExpression } .
+RelationalExpression = AdditiveExpression { rel_op AdditiveExpression } .
+AdditiveExpression = MultiplicativeExpression { add_op MultiplicativeExpression } .
+MultiplicativeExpression = UnaryExpr { mul_op UnaryExpr } .
 ExpressionList = Expression { "," Expression } .
 ExpressionStmt = Expression .
 FallthroughStmt = "fallthrough" .
@@ -274,7 +278,6 @@ VarSpec =
 	| IdentifierList "=" ExpressionList .
 add_op = "+" | "-" | "|" | "^" .
 assign_op = "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" .
-binary_op = "||" | "&&" | rel_op | add_op | mul_op .
 mul_op = "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" .
 rel_op = "==" | "!=" | "<" | "<=" | ">" | ">=" .
 unary_op = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
