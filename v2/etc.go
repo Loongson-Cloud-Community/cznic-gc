@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -85,7 +84,7 @@ func errorf(s string, args ...interface{}) string {
 	}
 	switch {
 	case extendedErrors:
-		return fmt.Sprintf("%s (%v: %v)", s, origin(3), origin(2))
+		return fmt.Sprintf("%s (%v: %v: %v:)", s, origin(4), origin(3), origin(2))
 	default:
 		return fmt.Sprintf("%s", s)
 	}
@@ -120,8 +119,10 @@ func (p *parallel) err(err error) {
 	}
 
 	s := err.Error()
-	if x := strings.Index(s, "TODO"); x >= 0 {
-		fmt.Println(s[x:])
+	for _, v := range strings.Split(s, "\n") {
+		if x := strings.Index(v, "TODO"); x >= 0 {
+			fmt.Println(v[x:])
+		}
 	}
 	p.Lock()
 	p.errors = append(p.errors, err)
@@ -155,34 +156,21 @@ func (p *parallel) wait() error {
 	return fmt.Errorf("%s", strings.Join(a, "\n"))
 }
 
-func nodeSource(full bool, n ...Node) []byte {
-	var a []Token
-	for _, v := range n {
-		nodeSource0(&a, v)
-	}
-	sort.Slice(a, func(i, j int) bool { return a[i].off < a[j].off })
-	var b bytes.Buffer
-	for i, t := range a {
-		switch {
-		case full:
-			b.WriteString(t.Sep())
-		default:
-			if i != 0 && len(t.Sep()) != 0 {
-				b.WriteByte(' ')
-			}
-		}
-		b.WriteString(t.Src())
-	}
-	return b.Bytes()
-}
-
-func nodeSource0(a *[]Token, n interface{}) {
+func nodeSource0(b *bytes.Buffer, n interface{}, full bool) {
 	if n == nil {
 		return
 	}
 
 	if x, ok := n.(Token); ok && x.IsValid() {
-		*a = append(*a, x)
+		switch s := x.sep(); {
+		case full:
+			b.Write(s)
+		default:
+			if b.Len() != 0 && len(s) != 0 {
+				b.WriteByte(' ')
+			}
+		}
+		b.Write(x.src())
 		return
 	}
 
@@ -210,12 +198,12 @@ func nodeSource0(a *[]Token, n interface{}) {
 				continue
 			}
 
-			nodeSource0(a, v.Field(i).Interface())
+			nodeSource0(b, v.Field(i).Interface(), full)
 		}
 	case reflect.Slice:
 		ne := v.Len()
 		for i := 0; i < ne; i++ {
-			nodeSource0(a, v.Index(i).Interface())
+			nodeSource0(b, v.Index(i).Interface(), full)
 		}
 	default:
 		panic(todo("", t.Kind()))

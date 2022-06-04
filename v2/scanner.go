@@ -48,7 +48,12 @@ func (e errList) Err() error {
 }
 
 func (e *errList) err(pos token.Position, msg string, args ...interface{}) {
-	*e = append(*e, errWithPosition{pos, fmt.Errorf("%s", fmt.Sprintf(msg, args...))})
+	switch {
+	case len(args) == 0:
+		*e = append(*e, errWithPosition{pos, fmt.Errorf("%s", msg)})
+	default:
+		*e = append(*e, errWithPosition{pos, fmt.Errorf(msg, args...)})
+	}
 }
 
 // Ch represents the lexical value of a Token. Valid values of type Ch are
@@ -128,11 +133,12 @@ func (n Token) str() string {
 func (n Token) IsValid() bool { return n.source != nil }
 
 // Sep returns the whitespace preceding n, if any.
-func (n Token) Sep() string { return string(n.source.buf[n.sepOff:n.off]) }
+func (n Token) Sep() string { return string(n.sep()) }
 
 // Src returns the textual form of n.
-func (n Token) Src() string { return string(n.source.buf[n.off:n.next]) }
+func (n Token) Src() string { return string(n.src()) }
 
+func (n Token) sep() []byte { return n.source.buf[n.sepOff:n.off] }
 func (n Token) src() []byte { return n.source.buf[n.off:n.next] }
 
 // Set sets the result of n.Sep to be sep and n.Src() to be src.

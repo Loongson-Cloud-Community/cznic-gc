@@ -171,6 +171,7 @@ func (g *golden) close() {
 
 func TestMain(m *testing.M) {
 	extendedErrors = true
+	flag.BoolVar(&trcError, "trcerror", false, "")
 	flag.Parse()
 	if s := *oRE; s != "" {
 		re = regexp.MustCompile(s)
@@ -606,7 +607,6 @@ func TestTokenSet(t *testing.T) {
 }
 
 func TestParser(t *testing.T) {
-	return //TODO-
 	g := newGolden(t, fmt.Sprintf("testdata/test_parse.golden"))
 
 	defer g.close()
@@ -615,7 +615,12 @@ func TestParser(t *testing.T) {
 	t.Run("cd", func(t *testing.T) { testParser(p, t, g, ".") })
 	t.Run("goroot", func(t *testing.T) { testParser(p, t, g, runtime.GOROOT()) })
 	if err := p.wait(); err != nil {
-		t.Error(err)
+		switch s := err.Error(); {
+		case strings.ContainsRune(s, '\n'):
+			t.Errorf("\n%s", s)
+		default:
+			t.Error(s)
+		}
 	}
 	t.Logf("TOTAL files %v, skip %v, ok %v, fails %v", h(p.files), h(p.skips), h(p.oks), h(p.fails))
 }
@@ -639,6 +644,14 @@ func h(v interface{}) string {
 }
 
 func parserFails(fn string, src []byte) bool {
+	switch s := filepath.ToSlash(fn); { // Files go/parser parses w/o error but contain syntax errors
+	case
+		strings.HasSuffix(s, "test/fixedbugs/bug299.go"),
+		strings.HasSuffix(s, "test/fixedbugs/issue15055.go"):
+
+		return true
+	}
+
 	_, err := goparser.ParseFile(token.NewFileSet(), fn, src, 0)
 	return err != nil
 }
