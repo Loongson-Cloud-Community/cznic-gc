@@ -9,10 +9,10 @@ package gc // import "modernc.org/gc/v2"
 // ParseSourceFileConfig configures ParseSourceFile.
 type ParseSourceFileConfig struct {
 	// Accept, if non nil, is called once the package clause and imports are
-	// parsed. If Accept return false the parsing stops and an error is returned.
-	// Passing nil Accept is the same as passing a function that always returns
-	// true.
-	Accept func(*SourceFile) bool
+	// parsed. If Accept return a non-nil error the parsing stops and the error is
+	// returned.  Passing nil Accept is the same as passing a function that always
+	// returns nil
+	Accept func(*SourceFile) error
 
 	AllErrors bool
 }
@@ -40,9 +40,10 @@ func ParseSourceFile(cfg *ParseSourceFileConfig, name string, buf []byte) (r *So
 		return nil, err
 	}
 
-	if cfg.Accept != nil && !cfg.Accept(r) {
-		p.err(errorf("rejected"))
-		return nil, p.Err()
+	if cfg.Accept != nil {
+		if err = cfg.Accept(r); err != nil {
+			return nil, err
+		}
 	}
 
 	r.TopLevelDecls = p.topLevelDecls()
