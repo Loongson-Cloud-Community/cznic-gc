@@ -195,9 +195,9 @@ func (n *SourceFile) Source(full bool) []byte { return nodeSource(&bytes.Buffer{
 type FunctionDecl struct {
 	Func           Token
 	FunctionName   Token
-	TypeParameters Node //TODO *TypeParameters
+	TypeParameters *TypeParameters
 	Signature      *Signature
-	FunctionBody   Node //TODO *Block
+	FunctionBody   *Block
 	Semicolon      Token
 }
 
@@ -213,7 +213,7 @@ func (n *FunctionDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffe
 //
 //  Signature = Parameters [ Result ] .
 type Signature struct {
-	Parameters Node //TODO *Parameters
+	Parameters *Parameters
 	Result     Node
 }
 
