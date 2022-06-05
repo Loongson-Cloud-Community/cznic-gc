@@ -5,6 +5,7 @@
 package gc // import "modernc.org/gc/v2"
 
 import (
+	"bytes"
 	"go/token"
 )
 
@@ -76,6 +77,7 @@ var (
 		(*StructType)(nil),
 		(*TypeArgs)(nil),
 		(*TypeAssertion)(nil),
+		(*TypeAssertion)(nil),
 		(*TypeCaseClause)(nil),
 		(*TypeDecl)(nil),
 		(*TypeDef)(nil),
@@ -121,6 +123,14 @@ type PackageClause struct {
 	Semicolon   Token
 }
 
+// Positions implements Node.
+func (n *PackageClause) Position() (r token.Position) {
+	return n.Package.Position()
+}
+
+// Source implements Node.
+func (n *PackageClause) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
 // ImportSpec describes an import specification.
 //
 //  ImportSpec = [ "." | PackageName ] ImportPath .
@@ -139,8 +149,8 @@ func (n *ImportSpec) Position() (r token.Position) {
 	return n.ImportPath.Position()
 }
 
-// Positions implements Node.
-func (n *PackageClause) Position() (r token.Position) { return n.Package.Position() }
+// Source implements Node.
+func (n *ImportSpec) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // ImportDecl describes an import declaration.
 //
@@ -154,7 +164,12 @@ type ImportDecl struct {
 }
 
 // Positions implements Node.
-func (n *ImportDecl) Position() (r token.Position) { return n.Import.Position() }
+func (n *ImportDecl) Position() (r token.Position) {
+	return n.Import.Position()
+}
+
+// Source implements Node.
+func (n *ImportDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // SourceFile describes a source file.
 //
@@ -167,7 +182,12 @@ type SourceFile struct {
 }
 
 // Positions implements Node.
-func (n *SourceFile) Position() (r token.Position) { return n.PackageClause.Position() }
+func (n *SourceFile) Position() (r token.Position) {
+	return n.PackageClause.Position()
+}
+
+// Source implements Node.
+func (n *SourceFile) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // FunctionDecl describes a function declaration.
 //
@@ -182,7 +202,12 @@ type FunctionDecl struct {
 }
 
 // Positions implements Node.
-func (n *FunctionDecl) Position() (r token.Position) { return n.Func.Position() }
+func (n *FunctionDecl) Position() (r token.Position) {
+	return n.Func.Position()
+}
+
+// Source implements Node.
+func (n *FunctionDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // Signature describes a function signature.
 //
@@ -193,7 +218,12 @@ type Signature struct {
 }
 
 // Positions implements Node.
-func (n *Signature) Position() (r token.Position) { return n.Parameters.Position() }
+func (n *Signature) Position() (r token.Position) {
+	return n.Parameters.Position()
+}
+
+// Source implements Node.
+func (n *Signature) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // Parameters describes function parameters or a function result.
 //
@@ -207,7 +237,12 @@ type Parameters struct {
 }
 
 // Positions implements Node.
-func (n *Parameters) Position() (r token.Position) { return n.LParen.Position() }
+func (n *Parameters) Position() (r token.Position) {
+	return n.LParen.Position()
+}
+
+// Source implements Node.
+func (n *Parameters) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // TypeDecl describes a type declaration.
 //
@@ -221,7 +256,12 @@ type TypeDecl struct {
 }
 
 // Positions implements Node.
-func (n *TypeDecl) Position() (r token.Position) { return n.Type.Position() }
+func (n *TypeDecl) Position() (r token.Position) {
+	return n.Type.Position()
+}
+
+// Source implements Node.
+func (n *TypeDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // TypeDef describes a type definition.
 //
@@ -234,7 +274,12 @@ type TypeDef struct {
 }
 
 // Positions implements Node.
-func (n *TypeDef) Position() (r token.Position) { return n.Ident.Position() }
+func (n *TypeDef) Position() (r token.Position) {
+	return n.Ident.Position()
+}
+
+// Source implements Node.
+func (n *TypeDef) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // ParameterDecl describes a parameter declaration.
 //
@@ -258,6 +303,9 @@ func (n *ParameterDecl) Position() (r token.Position) {
 	}
 }
 
+// Source implements Node.
+func (n *ParameterDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
 // IdentifierListItem describes an item of an identifier list.
 type IdentifierListItem struct {
 	Ident Token
@@ -265,7 +313,14 @@ type IdentifierListItem struct {
 }
 
 // Positions implements Node.
-func (n *IdentifierListItem) Position() (r token.Position) { return n.Ident.Position() }
+func (n *IdentifierListItem) Position() (r token.Position) {
+	return n.Ident.Position()
+}
+
+// Source implements Node.
+func (n *IdentifierListItem) Source(full bool) []byte {
+	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
+}
 
 // VarDecl describes a variable declaration.
 //
@@ -279,7 +334,12 @@ type VarDecl struct {
 }
 
 // Positions implements Node.
-func (n *VarDecl) Position() (r token.Position) { return n.Var.Position() }
+func (n *VarDecl) Position() (r token.Position) {
+	return n.Var.Position()
+}
+
+// Source implements Node.
+func (n *VarDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // ConstDecl describes a constant declaration.
 //
@@ -293,7 +353,12 @@ type ConstDecl struct {
 }
 
 // Positions implements Node.
-func (n *ConstDecl) Position() (r token.Position) { return n.Const.Position() }
+func (n *ConstDecl) Position() (r token.Position) {
+	return n.Const.Position()
+}
+
+// Source implements Node.
+func (n *ConstDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // Block describes a compound statement.
 //
@@ -306,7 +371,12 @@ type Block struct {
 }
 
 // Positions implements Node.
-func (n *Block) Position() (r token.Position) { return n.LBrace.Position() }
+func (n *Block) Position() (r token.Position) {
+	return n.LBrace.Position()
+}
+
+// Source implements Node.
+func (n *Block) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // StructType describes a struct type.
 //
@@ -320,7 +390,12 @@ type StructType struct {
 }
 
 // Positions implements Node.
-func (n *StructType) Position() (r token.Position) { return n.Struct.Position() }
+func (n *StructType) Position() (r token.Position) {
+	return n.Struct.Position()
+}
+
+// Source implements Node.
+func (n *StructType) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // FieldDecl describes a field declaration.
 //
@@ -342,6 +417,9 @@ func (n *FieldDecl) Position() (r token.Position) {
 	return r
 }
 
+// Source implements Node.
+func (n *FieldDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
 // EmbeddedField describes an embeded field.
 //
 //  EmbeddedField = [ "*" ] TypeName .
@@ -358,6 +436,9 @@ func (n *EmbeddedField) Position() (r token.Position) {
 
 	return n.TypeName.Position()
 }
+
+// Source implements Node.
+func (n *EmbeddedField) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // VarSpec describes a variable specification.
 //
@@ -379,6 +460,9 @@ func (n *VarSpec) Position() (r token.Position) {
 	return r
 }
 
+// Source implements Node.
+func (n *VarSpec) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
 // PointerType describes a pointer type.
 //
 //  PointerType = "*" BaseType .
@@ -389,7 +473,12 @@ type PointerType struct {
 }
 
 // Positions implements Node.
-func (n *PointerType) Position() (r token.Position) { return n.Star.Position() }
+func (n *PointerType) Position() (r token.Position) {
+	return n.Star.Position()
+}
+
+// Source implements Node.
+func (n *PointerType) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // TypeName describes a type name.
 //
@@ -402,7 +491,12 @@ type TypeName struct {
 }
 
 // Positions implements Node.
-func (n *TypeName) Position() (r token.Position) { return n.Name.Position() }
+func (n *TypeName) Position() (r token.Position) {
+	return n.Name.Position()
+}
+
+// Source implements Node.
+func (n *TypeName) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // QualifiedIdent describes an optionally qualified identifier.
 //
@@ -420,6 +514,11 @@ func (n *QualifiedIdent) Position() (r token.Position) {
 	}
 
 	return n.Ident.Position()
+}
+
+// Source implements Node.
+func (n *QualifiedIdent) Source(full bool) []byte {
+	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
 
 // ConstSpec describes a constant specification.
@@ -442,6 +541,9 @@ func (n *ConstSpec) Position() (r token.Position) {
 	return r
 }
 
+// Source implements Node.
+func (n *ConstSpec) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
 // ExpressionListItem describes an item of an expression list.
 //
 // ExpressionList = Expression { "," Expression } .
@@ -451,7 +553,14 @@ type ExpressionListItem struct {
 }
 
 // Positions implements Node.
-func (n *ExpressionListItem) Position() (r token.Position) { return n.Expression.Position() }
+func (n *ExpressionListItem) Position() (r token.Position) {
+	return n.Expression.Position()
+}
+
+// Source implements Node.
+func (n *ExpressionListItem) Source(full bool) []byte {
+	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
+}
 
 // ExpressionStmt describes an expression statement.
 //
@@ -461,7 +570,14 @@ type ExpressionStmt struct {
 }
 
 // Positions implements Node.
-func (n *ExpressionStmt) Position() (r token.Position) { return n.Expression.Position() }
+func (n *ExpressionStmt) Position() (r token.Position) {
+	return n.Expression.Position()
+}
+
+// Source implements Node.
+func (n *ExpressionStmt) Source(full bool) []byte {
+	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
+}
 
 // BinaryExpression describes a binary expression.
 //
@@ -472,7 +588,14 @@ type BinaryExpression struct {
 }
 
 // Positions implements Node.
-func (n *BinaryExpression) Position() (r token.Position) { return n.A.Position() }
+func (n *BinaryExpression) Position() (r token.Position) {
+	return n.A.Position()
+}
+
+// Source implements Node.
+func (n *BinaryExpression) Source(full bool) []byte {
+	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
+}
 
 // ShortVarDecl describes a short variable declaration.
 //
@@ -486,7 +609,12 @@ type ShortVarDecl struct {
 }
 
 // Positions implements Node.
-func (n *ShortVarDecl) Position() (r token.Position) { return n.IdentifierList[0].Position() }
+func (n *ShortVarDecl) Position() (r token.Position) {
+	return n.IdentifierList[0].Position()
+}
+
+// Source implements Node.
+func (n *ShortVarDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 func (n *ShortVarDecl) semi(p *parser) { n.Semicolon = p.semi(true) }
 
@@ -503,7 +631,12 @@ type MethodDecl struct {
 }
 
 // Positions implements Node.
-func (n *MethodDecl) Position() (r token.Position) { return n.Func.Position() }
+func (n *MethodDecl) Position() (r token.Position) {
+	return n.Func.Position()
+}
+
+// Source implements Node.
+func (n *MethodDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // ReturnStmt describes a return statement.
 //
@@ -515,7 +648,12 @@ type ReturnStmt struct {
 }
 
 // Positions implements Node.
-func (n *ReturnStmt) Position() (r token.Position) { return n.Return.Position() }
+func (n *ReturnStmt) Position() (r token.Position) {
+	return n.Return.Position()
+}
+
+// Source implements Node.
+func (n *ReturnStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // Selector describes a selector.
 //
@@ -527,7 +665,12 @@ type Selector struct {
 }
 
 // Positions implements Node.
-func (n *Selector) Position() (r token.Position) { return n.PrimaryExpr.Position() }
+func (n *Selector) Position() (r token.Position) {
+	return n.PrimaryExpr.Position()
+}
+
+// Source implements Node.
+func (n *Selector) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // Arguments describes a call or conversion.
 //
@@ -544,7 +687,12 @@ type Arguments struct {
 }
 
 // Positions implements Node.
-func (n *Arguments) Position() (r token.Position) { return n.PrimaryExpr.Position() }
+func (n *Arguments) Position() (r token.Position) {
+	return n.PrimaryExpr.Position()
+}
+
+// Source implements Node.
+func (n *Arguments) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // IfStmt describes an if statement.
 //
@@ -561,7 +709,12 @@ type IfStmt struct {
 }
 
 // Positions implements Node.
-func (n *IfStmt) Position() (r token.Position) { return n.If.Position() }
+func (n *IfStmt) Position() (r token.Position) {
+	return n.If.Position()
+}
+
+// Source implements Node.
+func (n *IfStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // SliceType describes a slice type.
 //
@@ -574,7 +727,12 @@ type SliceType struct {
 }
 
 // Positions implements Node.
-func (n *SliceType) Position() (r token.Position) { return n.LBracket.Position() }
+func (n *SliceType) Position() (r token.Position) {
+	return n.LBracket.Position()
+}
+
+// Source implements Node.
+func (n *SliceType) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // Assignment describes a short variable declaration.
 //
@@ -588,7 +746,12 @@ type Assignment struct {
 }
 
 // Positions implements Node.
-func (n *Assignment) Position() (r token.Position) { return n.LExpressionList[0].Position() }
+func (n *Assignment) Position() (r token.Position) {
+	return n.LExpressionList[0].Position()
+}
+
+// Source implements Node.
+func (n *Assignment) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 func (n *Assignment) semi(p *parser) { n.Semicolon = p.semi(true) }
 
@@ -601,7 +764,12 @@ type UnaryExpr struct {
 }
 
 // Positions implements Node.
-func (n *UnaryExpr) Position() (r token.Position) { return n.UnaryOp.Position() }
+func (n *UnaryExpr) Position() (r token.Position) {
+	return n.UnaryOp.Position()
+}
+
+// Source implements Node.
+func (n *UnaryExpr) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // CompositeLit describes a composite literal.
 //
@@ -612,7 +780,12 @@ type CompositeLit struct {
 }
 
 // Positions implements Node.
-func (n *CompositeLit) Position() (r token.Position) { return n.LiteralType.Position() }
+func (n *CompositeLit) Position() (r token.Position) {
+	return n.LiteralType.Position()
+}
+
+// Source implements Node.
+func (n *CompositeLit) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // LiteralValue describes a composite literal value.
 //
@@ -624,7 +797,12 @@ type LiteralValue struct {
 }
 
 // Positions implements Node.
-func (n *LiteralValue) Position() (r token.Position) { return n.LBrace.Position() }
+func (n *LiteralValue) Position() (r token.Position) {
+	return n.LBrace.Position()
+}
+
+// Source implements Node.
+func (n *LiteralValue) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // KeyedElement describes an optionally keyed element.
 //
@@ -645,6 +823,9 @@ func (n *KeyedElement) Position() (r token.Position) {
 	return n.Element.Position()
 }
 
+// Source implements Node.
+func (n *KeyedElement) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
 // InterfaceType describes an interface type.
 //
 //  InterfaceType = "interface" "{" { InterfaceElem ";" } "}" .
@@ -657,7 +838,12 @@ type InterfaceType struct {
 }
 
 // Positions implements Node.
-func (n *InterfaceType) Position() (r token.Position) { return n.Interface.Position() }
+func (n *InterfaceType) Position() (r token.Position) {
+	return n.Interface.Position()
+}
+
+// Source implements Node.
+func (n *InterfaceType) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // ForStmt describes a for statement.
 //
@@ -671,7 +857,12 @@ type ForStmt struct {
 }
 
 // Positions implements Node.
-func (n *ForStmt) Position() (r token.Position) { return n.For.Position() }
+func (n *ForStmt) Position() (r token.Position) {
+	return n.For.Position()
+}
+
+// Source implements Node.
+func (n *ForStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // ForClause describes a for clause.
 //
@@ -693,6 +884,9 @@ func (n *ForClause) Position() (r token.Position) {
 	return n.Semicolon.Position()
 }
 
+// Source implements Node.
+func (n *ForClause) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
 // RangeClause describes a range clause.
 //
 type RangeClause struct {
@@ -703,7 +897,12 @@ type RangeClause struct {
 }
 
 // Positions implements Node.
-func (n *RangeClause) Position() (r token.Position) { return n.ExpressionList[0].Position() }
+func (n *RangeClause) Position() (r token.Position) {
+	return n.ExpressionList[0].Position()
+}
+
+// Source implements Node.
+func (n *RangeClause) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // MethodElem describes a method element.
 //
@@ -714,7 +913,12 @@ type MethodElem struct {
 }
 
 // Positions implements Node.
-func (n *MethodElem) Position() (r token.Position) { return n.MethodName.Position() }
+func (n *MethodElem) Position() (r token.Position) {
+	return n.MethodName.Position()
+}
+
+// Source implements Node.
+func (n *MethodElem) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // TypeParameters describes type parameters.
 //
@@ -726,7 +930,14 @@ type TypeParameters struct {
 }
 
 // Positions implements Node.
-func (n *TypeParameters) Position() (r token.Position) { return n.LBracket.Position() }
+func (n *TypeParameters) Position() (r token.Position) {
+	return n.LBracket.Position()
+}
+
+// Source implements Node.
+func (n *TypeParameters) Source(full bool) []byte {
+	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
+}
 
 // TypeParamDecl describes an item of a type parameter list.
 //
@@ -746,6 +957,9 @@ func (n *TypeParamDecl) Position() (r token.Position) {
 	return r
 }
 
+// Source implements Node.
+func (n *TypeParamDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
 // TypeElem describes a type element.
 //
 //  TypeElem = TypeTerm { "|" TypeTerm } .
@@ -762,6 +976,9 @@ func (n *TypeElem) Position() (r token.Position) {
 
 	return r
 }
+
+// Source implements Node.
+func (n *TypeElem) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // TypeTerm describes a type term.
 //
@@ -782,6 +999,9 @@ func (n *TypeTerm) Position() (r token.Position) {
 	return n.Type.Position()
 }
 
+// Source implements Node.
+func (n *TypeTerm) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
 // Index describes an index.
 //
 //  Index = "[" Expression "]" .
@@ -793,7 +1013,12 @@ type Index struct {
 }
 
 // Positions implements Node.
-func (n *Index) Position() (r token.Position) { return n.PrimaryExpr.Position() }
+func (n *Index) Position() (r token.Position) {
+	return n.PrimaryExpr.Position()
+}
+
+// Source implements Node.
+func (n *Index) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // DeferStmt describes a defer statement.
 //
@@ -805,7 +1030,12 @@ type DeferStmt struct {
 }
 
 // Positions implements Node.
-func (n *DeferStmt) Position() (r token.Position) { return n.Defer.Position() }
+func (n *DeferStmt) Position() (r token.Position) {
+	return n.Defer.Position()
+}
+
+// Source implements Node.
+func (n *DeferStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // EmptyStmt describes an empty statement.
 //
@@ -815,7 +1045,12 @@ type EmptyStmt struct {
 }
 
 // Positions implements Node.
-func (n *EmptyStmt) Position() (r token.Position) { return n.Semicolon.Position() }
+func (n *EmptyStmt) Position() (r token.Position) {
+	return n.Semicolon.Position()
+}
+
+// Source implements Node.
+func (n *EmptyStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // FunctionLit describes a function literal.
 //
@@ -827,7 +1062,12 @@ type FunctionLit struct {
 }
 
 // Positions implements Node.
-func (n *FunctionLit) Position() (r token.Position) { return n.Func.Position() }
+func (n *FunctionLit) Position() (r token.Position) {
+	return n.Func.Position()
+}
+
+// Source implements Node.
+func (n *FunctionLit) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // ExpressionSwitchStmt describes an expression switch statement.
 //
@@ -844,7 +1084,14 @@ type ExpressionSwitchStmt struct {
 }
 
 // Positions implements Node.
-func (n *ExpressionSwitchStmt) Position() (r token.Position) { return n.Switch.Position() }
+func (n *ExpressionSwitchStmt) Position() (r token.Position) {
+	return n.Switch.Position()
+}
+
+// Source implements Node.
+func (n *ExpressionSwitchStmt) Source(full bool) []byte {
+	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
+}
 
 // TypeSwitchStmt describes a type switch statement.
 //
@@ -861,7 +1108,14 @@ type TypeSwitchStmt struct {
 }
 
 // Positions implements Node.
-func (n *TypeSwitchStmt) Position() (r token.Position) { return n.Switch.Position() }
+func (n *TypeSwitchStmt) Position() (r token.Position) {
+	return n.Switch.Position()
+}
+
+// Source implements Node.
+func (n *TypeSwitchStmt) Source(full bool) []byte {
+	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
+}
 
 // TypeSwitchGuard describes a type switch guard.
 //
@@ -885,6 +1139,11 @@ func (n *TypeSwitchGuard) Position() (r token.Position) {
 	return n.PrimaryExpr.Position()
 }
 
+// Source implements Node.
+func (n *TypeSwitchGuard) Source(full bool) []byte {
+	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
+}
+
 // TypeCaseClause describes a type switch case clause.
 //
 //  TypeCaseClause  = TypeSwitchCase ":" StatementList .
@@ -895,7 +1154,14 @@ type TypeCaseClause struct {
 }
 
 // Positions implements Node.
-func (n *TypeCaseClause) Position() (r token.Position) { return n.TypeSwitchCase.Position() }
+func (n *TypeCaseClause) Position() (r token.Position) {
+	return n.TypeSwitchCase.Position()
+}
+
+// Source implements Node.
+func (n *TypeCaseClause) Source(full bool) []byte {
+	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
+}
 
 // TypeSwitchCase describes an expression switch case.
 //
@@ -906,7 +1172,14 @@ type TypeSwitchCase struct {
 }
 
 // Positions implements Node.
-func (n *TypeSwitchCase) Position() (r token.Position) { return n.CaseOrDefault.Position() }
+func (n *TypeSwitchCase) Position() (r token.Position) {
+	return n.CaseOrDefault.Position()
+}
+
+// Source implements Node.
+func (n *TypeSwitchCase) Source(full bool) []byte {
+	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
+}
 
 // TypeAssertion describes a type assertion.
 //
@@ -920,7 +1193,12 @@ type TypeAssertion struct {
 }
 
 // Positions implements Node.
-func (n *TypeAssertion) Position() (r token.Position) { return n.PrimaryExpr.Position() }
+func (n *TypeAssertion) Position() (r token.Position) {
+	return n.PrimaryExpr.Position()
+}
+
+// Source implements Node.
+func (n *TypeAssertion) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // CommClause describes an select statement communication clause.
 //
@@ -931,6 +1209,14 @@ type CommClause struct {
 	StatementList []Node
 }
 
+// Positions implements Node.
+func (n *CommClause) Position() (r token.Position) {
+	return n.CommCase.Position()
+}
+
+// Source implements Node.
+func (n *CommClause) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
 // CommCase describes an communication clause case.
 //
 //  CommCase   = "case" ( SendStmt | RecvStmt ) | "default" .
@@ -940,10 +1226,12 @@ type CommCase struct {
 }
 
 // Positions implements Node.
-func (n *CommCase) Position() (r token.Position) { return n.CaseOrDefault.Position() }
+func (n *CommCase) Position() (r token.Position) {
+	return n.CaseOrDefault.Position()
+}
 
-// Positions implements Node.
-func (n *CommClause) Position() (r token.Position) { return n.CommCase.Position() }
+// Source implements Node.
+func (n *CommCase) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // ExprCaseClause describes an expression switch case clause.
 //
@@ -955,7 +1243,14 @@ type ExprCaseClause struct {
 }
 
 // Positions implements Node.
-func (n *ExprCaseClause) Position() (r token.Position) { return n.ExprSwitchCase.Position() }
+func (n *ExprCaseClause) Position() (r token.Position) {
+	return n.ExprSwitchCase.Position()
+}
+
+// Source implements Node.
+func (n *ExprCaseClause) Source(full bool) []byte {
+	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
+}
 
 // ExprSwitchCase describes an expression switch case.
 //
@@ -966,7 +1261,14 @@ type ExprSwitchCase struct {
 }
 
 // Positions implements Node.
-func (n *ExprSwitchCase) Position() (r token.Position) { return n.CaseOrDefault.Position() }
+func (n *ExprSwitchCase) Position() (r token.Position) {
+	return n.CaseOrDefault.Position()
+}
+
+// Source implements Node.
+func (n *ExprSwitchCase) Source(full bool) []byte {
+	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
+}
 
 // Slice describes a slice expression.
 //
@@ -983,7 +1285,12 @@ type Slice struct {
 }
 
 // Positions implements Node.
-func (n *Slice) Position() (r token.Position) { return n.LBracket.Position() }
+func (n *Slice) Position() (r token.Position) {
+	return n.LBracket.Position()
+}
+
+// Source implements Node.
+func (n *Slice) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // SelectStmt describes a select statement.
 //
@@ -997,7 +1304,12 @@ type SelectStmt struct {
 }
 
 // Positions implements Node.
-func (n *SelectStmt) Position() (r token.Position) { return n.Select.Position() }
+func (n *SelectStmt) Position() (r token.Position) {
+	return n.Select.Position()
+}
+
+// Source implements Node.
+func (n *SelectStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // SendStmt describes a send statement.
 //
@@ -1011,7 +1323,12 @@ type SendStmt struct {
 }
 
 // Positions implements Node.
-func (n *SendStmt) Position() (r token.Position) { return n.Channel.Position() }
+func (n *SendStmt) Position() (r token.Position) {
+	return n.Channel.Position()
+}
+
+// Source implements Node.
+func (n *SendStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 func (n *SendStmt) semi(p *parser) { n.Semicolon = p.semi(true) }
 
@@ -1025,7 +1342,12 @@ type BreakStmt struct {
 }
 
 // Positions implements Node.
-func (n *BreakStmt) Position() (r token.Position) { return n.Break.Position() }
+func (n *BreakStmt) Position() (r token.Position) {
+	return n.Break.Position()
+}
+
+// Source implements Node.
+func (n *BreakStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // ContinueStmt describes a continue statement.
 //
@@ -1037,7 +1359,12 @@ type ContinueStmt struct {
 }
 
 // Positions implements Node.
-func (n *ContinueStmt) Position() (r token.Position) { return n.Continue.Position() }
+func (n *ContinueStmt) Position() (r token.Position) {
+	return n.Continue.Position()
+}
+
+// Source implements Node.
+func (n *ContinueStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // FallthroughStmt describes a fallthrough statement.
 //
@@ -1048,7 +1375,14 @@ type FallthroughStmt struct {
 }
 
 // Positions implements Node.
-func (n *FallthroughStmt) Position() (r token.Position) { return n.Fallthrough.Position() }
+func (n *FallthroughStmt) Position() (r token.Position) {
+	return n.Fallthrough.Position()
+}
+
+// Source implements Node.
+func (n *FallthroughStmt) Source(full bool) []byte {
+	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
+}
 
 // Conversion describes a conversion.
 //
@@ -1062,7 +1396,12 @@ type Conversion struct {
 }
 
 // Positions implements Node.
-func (n *Conversion) Position() (r token.Position) { return n.Type.Position() }
+func (n *Conversion) Position() (r token.Position) {
+	return n.Type.Position()
+}
+
+// Source implements Node.
+func (n *Conversion) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // AliasDecl describes a type alias.
 //
@@ -1075,7 +1414,12 @@ type AliasDecl struct {
 }
 
 // Positions implements Node.
-func (n *AliasDecl) Position() (r token.Position) { return n.Ident.Position() }
+func (n *AliasDecl) Position() (r token.Position) {
+	return n.Ident.Position()
+}
+
+// Source implements Node.
+func (n *AliasDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // ArrayType describes a channel type.
 //
@@ -1088,7 +1432,12 @@ type ArrayType struct {
 }
 
 // Positions implements Node.
-func (n *ArrayType) Position() (r token.Position) { return n.LBracket.Position() }
+func (n *ArrayType) Position() (r token.Position) {
+	return n.LBracket.Position()
+}
+
+// Source implements Node.
+func (n *ArrayType) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // ChannelType describes a channel type.
 //
@@ -1110,6 +1459,9 @@ func (n *ChannelType) Position() (r token.Position) {
 	return n.Chan.Position()
 }
 
+// Source implements Node.
+func (n *ChannelType) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
 // FunctionType describes a function type.
 //
 //  FunctionType = "func" Signature .
@@ -1120,7 +1472,12 @@ type FunctionType struct {
 }
 
 // Positions implements Node.
-func (n *FunctionType) Position() (r token.Position) { return n.Func.Position() }
+func (n *FunctionType) Position() (r token.Position) {
+	return n.Func.Position()
+}
+
+// Source implements Node.
+func (n *FunctionType) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // MapType describes a map type.
 //
@@ -1135,7 +1492,12 @@ type MapType struct {
 }
 
 // Positions implements Node.
-func (n *MapType) Position() (r token.Position) { return n.Map.Position() }
+func (n *MapType) Position() (r token.Position) {
+	return n.Map.Position()
+}
+
+// Source implements Node.
+func (n *MapType) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // GoStmt describes a go statement.
 //
@@ -1147,7 +1509,12 @@ type GoStmt struct {
 }
 
 // Positions implements Node.
-func (n *GoStmt) Position() (r token.Position) { return n.Go.Position() }
+func (n *GoStmt) Position() (r token.Position) {
+	return n.Go.Position()
+}
+
+// Source implements Node.
+func (n *GoStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // GenericOperand describes an operand name and type arguments.
 //
@@ -1158,7 +1525,14 @@ type GenericOperand struct {
 }
 
 // Positions implements Node.
-func (n *GenericOperand) Position() (r token.Position) { return n.OperandName.Position() }
+func (n *GenericOperand) Position() (r token.Position) {
+	return n.OperandName.Position()
+}
+
+// Source implements Node.
+func (n *GenericOperand) Source(full bool) []byte {
+	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
+}
 
 // GotoStmt describes a goto statement.
 //
@@ -1170,7 +1544,12 @@ type GotoStmt struct {
 }
 
 // Positions implements Node.
-func (n *GotoStmt) Position() (r token.Position) { return n.Goto.Position() }
+func (n *GotoStmt) Position() (r token.Position) {
+	return n.Goto.Position()
+}
+
+// Source implements Node.
+func (n *GotoStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // LabeledStmt describes a labeled statement.
 //
@@ -1182,7 +1561,12 @@ type LabeledStmt struct {
 }
 
 // Positions implements Node.
-func (n *LabeledStmt) Position() (r token.Position) { return n.Label.Position() }
+func (n *LabeledStmt) Position() (r token.Position) {
+	return n.Label.Position()
+}
+
+// Source implements Node.
+func (n *LabeledStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // TypeArgs describes a type name.
 //
@@ -1195,7 +1579,12 @@ type TypeArgs struct {
 }
 
 // Positions implements Node.
-func (n *TypeArgs) Position() (r token.Position) { return n.LBracket.Position() }
+func (n *TypeArgs) Position() (r token.Position) {
+	return n.LBracket.Position()
+}
+
+// Source implements Node.
+func (n *TypeArgs) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // TypeListItem describes an item of a type list.
 //
@@ -1205,7 +1594,12 @@ type TypeListItem struct {
 }
 
 // Positions implements Node.
-func (n *TypeListItem) Position() (r token.Position) { return n.Type.Position() }
+func (n *TypeListItem) Position() (r token.Position) {
+	return n.Type.Position()
+}
+
+// Source implements Node.
+func (n *TypeListItem) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // IncDecStmt describes an increment or decrement statemen.
 //
@@ -1218,7 +1612,12 @@ type IncDecStmt struct {
 }
 
 // Positions implements Node.
-func (n *IncDecStmt) Position() (r token.Position) { return n.Expression.Position() }
+func (n *IncDecStmt) Position() (r token.Position) {
+	return n.Expression.Position()
+}
+
+// Source implements Node.
+func (n *IncDecStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 func (n *IncDecStmt) semi(p *parser) { n.Semicolon = p.semi(true) }
 
@@ -1232,7 +1631,12 @@ type ParenExpr struct {
 }
 
 // Positions implements Node.
-func (n *ParenExpr) Position() (r token.Position) { return n.LParen.Position() }
+func (n *ParenExpr) Position() (r token.Position) {
+	return n.LParen.Position()
+}
+
+// Source implements Node.
+func (n *ParenExpr) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // ParenType describes a parenthesized type.
 //
@@ -1245,4 +1649,9 @@ type ParenType struct {
 }
 
 // Positions implements Node.
-func (n *ParenType) Position() (r token.Position) { return n.LParen.Position() }
+func (n *ParenType) Position() (r token.Position) {
+	return n.LParen.Position()
+}
+
+// Source implements Node.
+func (n *ParenType) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }

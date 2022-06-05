@@ -5,6 +5,7 @@
 package gc // import "modernc.org/gc/v2"
 
 import (
+	"bytes"
 	"fmt"
 	"go/token"
 	"strings"
@@ -81,6 +82,10 @@ func (c Ch) token() token.Token {
 // Node is an item of the CST tree.
 type Node interface {
 	Position() token.Position
+	// Source returns the source form of n. Setting full to false will replace
+	// every non-empty token separator by a single space character and drop the
+	// first token separator entirely, if any.
+	Source(full bool) []byte
 }
 
 // Token is the product of Scanner.Scan and a terminal node of the complete
@@ -110,6 +115,9 @@ func (n Token) Position() (r token.Position) {
 
 	return r
 }
+
+// Source implements Node.
+func (n Token) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // String pretty formats n.
 func (n Token) String() string {

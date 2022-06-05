@@ -2,7 +2,9 @@
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 
-.PHONY:	clean edit editor tmp tmp2
+.PHONY:	all clean edit editor tmp tmp2
+
+all:
 
 clean:
 	rm -f log-* cpu.test mem.test *.out

@@ -156,9 +156,9 @@ func (p *parallel) wait() error {
 	return fmt.Errorf("%s", strings.Join(a, "\n"))
 }
 
-func nodeSource0(b *bytes.Buffer, n interface{}, full bool) {
+func nodeSource(b *bytes.Buffer, n interface{}, full bool) *bytes.Buffer {
 	if n == nil {
-		return
+		return b
 	}
 
 	if x, ok := n.(Token); ok && x.IsValid() {
@@ -171,7 +171,7 @@ func nodeSource0(b *bytes.Buffer, n interface{}, full bool) {
 			}
 		}
 		b.Write(x.src())
-		return
+		return b
 	}
 
 	t := reflect.TypeOf(n)
@@ -181,7 +181,7 @@ func nodeSource0(b *bytes.Buffer, n interface{}, full bool) {
 		t = t.Elem()
 		v = v.Elem()
 		if v == zero {
-			return
+			return b
 		}
 	}
 
@@ -198,14 +198,15 @@ func nodeSource0(b *bytes.Buffer, n interface{}, full bool) {
 				continue
 			}
 
-			nodeSource0(b, v.Field(i).Interface(), full)
+			nodeSource(b, v.Field(i).Interface(), full)
 		}
 	case reflect.Slice:
 		ne := v.Len()
 		for i := 0; i < ne; i++ {
-			nodeSource0(b, v.Index(i).Interface(), full)
+			nodeSource(b, v.Index(i).Interface(), full)
 		}
 	default:
 		panic(todo("", t.Kind()))
 	}
+	return b
 }

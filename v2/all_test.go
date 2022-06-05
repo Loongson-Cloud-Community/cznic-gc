@@ -710,7 +710,7 @@ func testParser(p *parallel, t *testing.T, g *golden, root string) {
 				return err
 			}
 
-			b2 := nodeSource(true, ast)
+			b2 := ast.Source(true)
 			got := strings.TrimRight(string(b2), "\n\r \t")
 			exp := strings.TrimRight(string(b), "\n\r \t")
 			if got != exp {
@@ -763,7 +763,116 @@ func dumpExpr0(b *strings.Builder, n Node) {
 		b.WriteByte(')')
 	default:
 		b.WriteByte('(')
-		b.WriteString(string(nodeSource(false, x)))
+		b.Write(x.Source(false))
 		b.WriteByte(')')
 	}
+}
+
+func BenchmarkParser(b *testing.B) {
+	var (
+		names []string
+		files = map[string][]byte{}
+		bytes int64
+	)
+	if err := filepath.Walk(runtime.GOROOT(), func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		if filepath.Ext(path) != ".go" {
+			return nil
+		}
+
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		names = append(names, path)
+		files[path] = b
+		bytes += info.Size()
+		return nil
+	}); err != nil {
+		b.Fatal(err)
+	}
+	b.Run("gc/v2/serial", func(b *testing.B) { benchmarkParserSerial(b, names, files, bytes) })
+	b.Run("go/parser/serial", func(b *testing.B) { benchmarkGoParserSerial(b, names, files, bytes) })
+	b.Run("gc/v2/paralel", func(b *testing.B) { benchmarkParserParalel(b, names, files, bytes) })
+	b.Run("go/parser/paralel", func(b *testing.B) { benchmarkGoParserParalel(b, names, files, bytes) })
+}
+
+var sink []interface{}
+
+func benchmarkParserSerial(b *testing.B, names []string, files map[string][]byte, bytes int64) {
+	for i := 0; i < b.N; i++ {
+		sink = make([]interface{}, 0, len(names))
+		cfg := &ParseSourceFileConfig{}
+		b.ReportAllocs()
+		debug.FreeOSMemory()
+		b.ResetTimer()
+		for _, nm := range names {
+			ast, _ := ParseSourceFile(cfg, nm, files[nm])
+			sink = append(sink, ast)
+		}
+	}
+	b.SetBytes(bytes)
+}
+
+func benchmarkGoParserSerial(b *testing.B, names []string, files map[string][]byte, bytes int64) {
+	for i := 0; i < b.N; i++ {
+		sink = make([]interface{}, 0, len(names))
+		b.ReportAllocs()
+		fs := token.NewFileSet()
+		debug.FreeOSMemory()
+		b.ResetTimer()
+		for _, nm := range names {
+			ast, _ := goparser.ParseFile(fs, nm, files[nm], goparser.ParseComments|goparser.SkipObjectResolution)
+			sink = append(sink, ast)
+		}
+	}
+	b.SetBytes(bytes)
+}
+
+func benchmarkParserParalel(b *testing.B, names []string, files map[string][]byte, bytes int64) {
+	p := newParallel()
+	sink = make([]interface{}, 0, len(names)*b.N)
+	cfg := &ParseSourceFileConfig{}
+	b.ReportAllocs()
+	debug.FreeOSMemory()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, nm := range names {
+			p.exec(func() error {
+				ast, _ := ParseSourceFile(cfg, nm, files[nm])
+				sink = append(sink, ast)
+				return nil
+			})
+		}
+	}
+	p.wait()
+	b.SetBytes(bytes)
+}
+
+func benchmarkGoParserParalel(b *testing.B, names []string, files map[string][]byte, bytes int64) {
+	p := newParallel()
+	sink = make([]interface{}, 0, len(names)*b.N)
+	b.ReportAllocs()
+	fs := token.NewFileSet()
+	debug.FreeOSMemory()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, nm := range names {
+			p.exec(func() error {
+				ast, _ := goparser.ParseFile(fs, nm, files[nm], goparser.ParseComments|goparser.SkipObjectResolution)
+				sink = append(sink, ast)
+				return nil
+			})
+		}
+	}
+	p.wait()
+	b.SetBytes(bytes)
 }

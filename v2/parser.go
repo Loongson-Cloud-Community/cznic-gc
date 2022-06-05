@@ -12,17 +12,6 @@ var (
 	trcError bool // testing
 )
 
-// ParseSourceFileConfig configures ParseSourceFile.
-type ParseSourceFileConfig struct {
-	// Accept, if non nil, is called once the package clause and imports are
-	// parsed. If Accept return false the parsing stops and an error is returned.
-	// Passing nil Accept is the same as passing a function that always returns
-	// true.
-	Accept func(*SourceFile) bool
-
-	AllErrors bool
-}
-
 type parser struct {
 	cfg       *ParseSourceFileConfig
 	loophacks []bool
@@ -129,51 +118,6 @@ func (p *parser) semi(enabled bool) (r Token) {
 		}
 	}
 	return r
-}
-
-// ParseSourceFile parses buf and returns a *SourceFile or an error, if any.
-// Positions are reported as if buf is coming from a file named name. The
-// buffer becomes owned by the *SourceFile and must not be modified after
-// calling ParseSourceFile.
-func ParseSourceFile(cfg *ParseSourceFileConfig, name string, buf []byte) (r *SourceFile, err error) {
-	s, err := NewScanner(name, buf)
-	if err != nil {
-		return nil, err
-	}
-
-	p := newParser(cfg, s)
-	switch p.ch() {
-	//       SourceFile
-	case PACKAGE:
-		r = &SourceFile{PackageClause: &PackageClause{Package: p.must(PACKAGE), PackageName: p.must(IDENTIFIER), Semicolon: p.must(';')}, ImportDecls: p.importDecls()}
-	default:
-		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-		p.shift()
-	}
-	if err := p.s.errs.Err(); err != nil {
-		return nil, err
-	}
-
-	if cfg.Accept != nil && !cfg.Accept(r) {
-		p.err(errorf("rejected"))
-		return nil, p.Err()
-	}
-
-	r.TopLevelDecls = p.topLevelDecls()
-	if err := p.Err(); err != nil {
-		return nil, err
-	}
-
-	switch p.ch() {
-	//              eof
-	case EOF:
-		r.EOF = p.shift()
-	default:
-		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-		return nil, p.Err()
-	}
-
-	return r, nil
 }
 
 // TopLevelDecl = Declaration
