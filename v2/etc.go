@@ -86,7 +86,7 @@ func errorf(s string, args ...interface{}) string {
 	case extendedErrors:
 		return fmt.Sprintf("%s (%v: %v: %v:)", s, origin(4), origin(3), origin(2))
 	default:
-		return fmt.Sprintf("%s", s)
+		return s
 	}
 }
 
@@ -205,8 +205,6 @@ func nodeSource(b *bytes.Buffer, n interface{}, full bool) *bytes.Buffer {
 		for i := 0; i < ne; i++ {
 			nodeSource(b, v.Index(i).Interface(), full)
 		}
-	default:
-		panic(todo("", t.Kind()))
 	}
 	return b
 }

@@ -57,6 +57,7 @@ var (
 		(*MapType)(nil),
 		(*MethodDecl)(nil),
 		(*MethodElem)(nil),
+		(*Package)(nil),
 		(*PackageClause)(nil),
 		(*ParameterDecl)(nil),
 		(*Parameters)(nil),
@@ -71,7 +72,7 @@ var (
 		(*SendStmt)(nil),
 		(*ShortVarDecl)(nil),
 		(*Signature)(nil),
-		(*Slice)(nil),
+		(*SliceExpr)(nil),
 		(*SliceType)(nil),
 		(*SourceFile)(nil),
 		(*StructType)(nil),
@@ -97,12 +98,8 @@ var (
 
 type typ interface {
 	Node
-	isType()
+	Type() Type
 }
-
-type typer struct{}
-
-func (typer) isType() {}
 
 type simpleStmt interface {
 	Node
@@ -123,7 +120,7 @@ type PackageClause struct {
 	Semicolon   Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *PackageClause) Position() (r token.Position) {
 	return n.Package.Position()
 }
@@ -140,7 +137,7 @@ type ImportSpec struct {
 	Semicolon  Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ImportSpec) Position() (r token.Position) {
 	if n.Qualifier.IsValid() {
 		return n.Qualifier.Position()
@@ -163,7 +160,7 @@ type ImportDecl struct {
 	Semicolon   Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ImportDecl) Position() (r token.Position) {
 	return n.Import.Position()
 }
@@ -179,9 +176,10 @@ type SourceFile struct {
 	ImportDecls   []*ImportDecl
 	TopLevelDecls []Node
 	EOF           Token
+	Scope         Scope
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *SourceFile) Position() (r token.Position) {
 	return n.PackageClause.Position()
 }
@@ -201,7 +199,7 @@ type FunctionDecl struct {
 	Semicolon      Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *FunctionDecl) Position() (r token.Position) {
 	return n.Func.Position()
 }
@@ -217,7 +215,7 @@ type Signature struct {
 	Result     Node
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *Signature) Position() (r token.Position) {
 	return n.Parameters.Position()
 }
@@ -236,7 +234,7 @@ type Parameters struct {
 	RParen        Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *Parameters) Position() (r token.Position) {
 	return n.LParen.Position()
 }
@@ -255,7 +253,7 @@ type TypeDecl struct {
 	Semicolon Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *TypeDecl) Position() (r token.Position) {
 	return n.Type.Position()
 }
@@ -273,7 +271,7 @@ type TypeDef struct {
 	Semicolon      Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *TypeDef) Position() (r token.Position) {
 	return n.Ident.Position()
 }
@@ -291,7 +289,7 @@ type ParameterDecl struct {
 	Comma          Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ParameterDecl) Position() (r token.Position) {
 	switch {
 	case len(n.IdentifierList) != 0:
@@ -312,7 +310,7 @@ type IdentifierListItem struct {
 	Comma Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *IdentifierListItem) Position() (r token.Position) {
 	return n.Ident.Position()
 }
@@ -333,7 +331,7 @@ type VarDecl struct {
 	Semicolon Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *VarDecl) Position() (r token.Position) {
 	return n.Var.Position()
 }
@@ -352,7 +350,7 @@ type ConstDecl struct {
 	Semicolon  Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ConstDecl) Position() (r token.Position) {
 	return n.Const.Position()
 }
@@ -370,7 +368,7 @@ type Block struct {
 	Semicolon     Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *Block) Position() (r token.Position) {
 	return n.LBrace.Position()
 }
@@ -389,7 +387,7 @@ type StructType struct {
 	RBrace     Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *StructType) Position() (r token.Position) {
 	return n.Struct.Position()
 }
@@ -408,7 +406,7 @@ type FieldDecl struct {
 	Semicolon      Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *FieldDecl) Position() (r token.Position) {
 	if len(n.IdentifierList) != 0 {
 		return n.IdentifierList[0].Position()
@@ -428,7 +426,7 @@ type EmbeddedField struct {
 	TypeName *TypeName
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *EmbeddedField) Position() (r token.Position) {
 	if n.Star.IsValid() {
 		return n.Star.Position()
@@ -451,7 +449,7 @@ type VarSpec struct {
 	Semicolon      Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *VarSpec) Position() (r token.Position) {
 	if len(n.IdentifierList) != 0 {
 		return n.IdentifierList[0].Position()
@@ -472,7 +470,7 @@ type PointerType struct {
 	BaseType Node
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *PointerType) Position() (r token.Position) {
 	return n.Star.Position()
 }
@@ -490,7 +488,7 @@ type TypeName struct {
 	TypeArgs *TypeArgs
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *TypeName) Position() (r token.Position) {
 	return n.Name.Position()
 }
@@ -507,7 +505,7 @@ type QualifiedIdent struct {
 	Ident       Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *QualifiedIdent) Position() (r token.Position) {
 	if n.PackageName.IsValid() {
 		return n.PackageName.Position()
@@ -532,7 +530,7 @@ type ConstSpec struct {
 	Semicolon      Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ConstSpec) Position() (r token.Position) {
 	if len(n.IdentifierList) != 0 {
 		return n.IdentifierList[0].Position()
@@ -552,7 +550,7 @@ type ExpressionListItem struct {
 	Comma      Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ExpressionListItem) Position() (r token.Position) {
 	return n.Expression.Position()
 }
@@ -569,7 +567,7 @@ type ExpressionStmt struct {
 	Semicolon  Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ExpressionStmt) Position() (r token.Position) {
 	return n.Expression.Position()
 }
@@ -587,7 +585,7 @@ type BinaryExpression struct {
 	B  Node
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *BinaryExpression) Position() (r token.Position) {
 	return n.A.Position()
 }
@@ -608,7 +606,7 @@ type ShortVarDecl struct {
 	Semicolon      Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ShortVarDecl) Position() (r token.Position) {
 	return n.IdentifierList[0].Position()
 }
@@ -630,7 +628,7 @@ type MethodDecl struct {
 	Semicolon    Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *MethodDecl) Position() (r token.Position) {
 	return n.Func.Position()
 }
@@ -647,7 +645,7 @@ type ReturnStmt struct {
 	Semicolon      Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ReturnStmt) Position() (r token.Position) {
 	return n.Return.Position()
 }
@@ -664,7 +662,7 @@ type Selector struct {
 	Ident       Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *Selector) Position() (r token.Position) {
 	return n.PrimaryExpr.Position()
 }
@@ -686,7 +684,7 @@ type Arguments struct {
 	RParen         Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *Arguments) Position() (r token.Position) {
 	return n.PrimaryExpr.Position()
 }
@@ -708,7 +706,7 @@ type IfStmt struct {
 	Semicolon2 Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *IfStmt) Position() (r token.Position) {
 	return n.If.Position()
 }
@@ -726,7 +724,7 @@ type SliceType struct {
 	ElementType Node
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *SliceType) Position() (r token.Position) {
 	return n.LBracket.Position()
 }
@@ -745,7 +743,7 @@ type Assignment struct {
 	Semicolon       Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *Assignment) Position() (r token.Position) {
 	return n.LExpressionList[0].Position()
 }
@@ -763,7 +761,7 @@ type UnaryExpr struct {
 	UnaryExpr Node
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *UnaryExpr) Position() (r token.Position) {
 	return n.UnaryOp.Position()
 }
@@ -779,7 +777,7 @@ type CompositeLit struct {
 	LiteralValue *LiteralValue
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *CompositeLit) Position() (r token.Position) {
 	return n.LiteralType.Position()
 }
@@ -796,7 +794,7 @@ type LiteralValue struct {
 	RBrace      Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *LiteralValue) Position() (r token.Position) {
 	return n.LBrace.Position()
 }
@@ -814,7 +812,7 @@ type KeyedElement struct {
 	Comma   Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *KeyedElement) Position() (r token.Position) {
 	if n.Key != nil {
 		return n.Key.Position()
@@ -837,7 +835,7 @@ type InterfaceType struct {
 	RBrace         Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *InterfaceType) Position() (r token.Position) {
 	return n.Interface.Position()
 }
@@ -856,7 +854,7 @@ type ForStmt struct {
 	Semicolon   Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ForStmt) Position() (r token.Position) {
 	return n.For.Position()
 }
@@ -875,7 +873,7 @@ type ForClause struct {
 	PostStmt   Node
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ForClause) Position() (r token.Position) {
 	if n.InitStmt != nil {
 		return n.InitStmt.Position()
@@ -896,7 +894,7 @@ type RangeClause struct {
 	Expression     Node
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *RangeClause) Position() (r token.Position) {
 	return n.ExpressionList[0].Position()
 }
@@ -912,7 +910,7 @@ type MethodElem struct {
 	Semicolon  Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *MethodElem) Position() (r token.Position) {
 	return n.MethodName.Position()
 }
@@ -929,7 +927,7 @@ type TypeParameters struct {
 	RBracket      Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *TypeParameters) Position() (r token.Position) {
 	return n.LBracket.Position()
 }
@@ -948,7 +946,7 @@ type TypeParamDecl struct {
 	Comma          Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *TypeParamDecl) Position() (r token.Position) {
 	if len(n.IdentifierList) != 0 {
 		return n.IdentifierList[0].Position()
@@ -968,7 +966,7 @@ type TypeElem struct {
 	Semicolon Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *TypeElem) Position() (r token.Position) {
 	if len(n.TypeTerms) != 0 {
 		return n.TypeTerms[0].Position()
@@ -990,7 +988,7 @@ type TypeTerm struct {
 	Pipe  Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *TypeTerm) Position() (r token.Position) {
 	if n.Tilde.IsValid() {
 		return n.Tilde.Position()
@@ -1012,7 +1010,7 @@ type Index struct {
 	RBracket    Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *Index) Position() (r token.Position) {
 	return n.PrimaryExpr.Position()
 }
@@ -1029,7 +1027,7 @@ type DeferStmt struct {
 	Semicolon  Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *DeferStmt) Position() (r token.Position) {
 	return n.Defer.Position()
 }
@@ -1044,7 +1042,7 @@ type EmptyStmt struct {
 	Semicolon Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *EmptyStmt) Position() (r token.Position) {
 	return n.Semicolon.Position()
 }
@@ -1061,7 +1059,7 @@ type FunctionLit struct {
 	FunctionBody *Block
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *FunctionLit) Position() (r token.Position) {
 	return n.Func.Position()
 }
@@ -1083,7 +1081,7 @@ type ExpressionSwitchStmt struct {
 	Semicolon2      Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ExpressionSwitchStmt) Position() (r token.Position) {
 	return n.Switch.Position()
 }
@@ -1107,7 +1105,7 @@ type TypeSwitchStmt struct {
 	Semicolon2      Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *TypeSwitchStmt) Position() (r token.Position) {
 	return n.Switch.Position()
 }
@@ -1130,7 +1128,7 @@ type TypeSwitchGuard struct {
 	RParen      Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *TypeSwitchGuard) Position() (r token.Position) {
 	if n.Ident.IsValid() {
 		return n.Ident.Position()
@@ -1153,7 +1151,7 @@ type TypeCaseClause struct {
 	StatementList  []Node
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *TypeCaseClause) Position() (r token.Position) {
 	return n.TypeSwitchCase.Position()
 }
@@ -1171,7 +1169,7 @@ type TypeSwitchCase struct {
 	TypeList      []*TypeListItem
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *TypeSwitchCase) Position() (r token.Position) {
 	return n.CaseOrDefault.Position()
 }
@@ -1192,7 +1190,7 @@ type TypeAssertion struct {
 	RParen      Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *TypeAssertion) Position() (r token.Position) {
 	return n.PrimaryExpr.Position()
 }
@@ -1209,7 +1207,7 @@ type CommClause struct {
 	StatementList []Node
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *CommClause) Position() (r token.Position) {
 	return n.CommCase.Position()
 }
@@ -1225,7 +1223,7 @@ type CommCase struct {
 	Statement     Node
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *CommCase) Position() (r token.Position) {
 	return n.CaseOrDefault.Position()
 }
@@ -1242,7 +1240,7 @@ type ExprCaseClause struct {
 	StatementList  []Node
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ExprCaseClause) Position() (r token.Position) {
 	return n.ExprSwitchCase.Position()
 }
@@ -1260,7 +1258,7 @@ type ExprSwitchCase struct {
 	ExpressionList []*ExpressionListItem
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ExprSwitchCase) Position() (r token.Position) {
 	return n.CaseOrDefault.Position()
 }
@@ -1270,10 +1268,10 @@ func (n *ExprSwitchCase) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
 
-// Slice describes a slice expression.
+// SliceExpr describes a slice expression.
 //
-//  Slice = "[" [ Expression ] ":" [ Expression ] "]" | "[" [ Expression ] ":" Expression ":" Expression "]" .
-type Slice struct {
+//  SliceExpr = "[" [ Expression ] ":" [ Expression ] "]" | "[" [ Expression ] ":" Expression ":" Expression "]" .
+type SliceExpr struct {
 	PrimaryExpr Node
 	LBracket    Token
 	Expression  Node
@@ -1284,13 +1282,13 @@ type Slice struct {
 	RBracket    Token
 }
 
-// Positions implements Node.
-func (n *Slice) Position() (r token.Position) {
+// Position implements Node.
+func (n *SliceExpr) Position() (r token.Position) {
 	return n.LBracket.Position()
 }
 
 // Source implements Node.
-func (n *Slice) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+func (n *SliceExpr) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // SelectStmt describes a select statement.
 //
@@ -1303,7 +1301,7 @@ type SelectStmt struct {
 	Semicolon   Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *SelectStmt) Position() (r token.Position) {
 	return n.Select.Position()
 }
@@ -1322,7 +1320,7 @@ type SendStmt struct {
 	Semicolon  Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *SendStmt) Position() (r token.Position) {
 	return n.Channel.Position()
 }
@@ -1341,7 +1339,7 @@ type BreakStmt struct {
 	Semicolon Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *BreakStmt) Position() (r token.Position) {
 	return n.Break.Position()
 }
@@ -1358,7 +1356,7 @@ type ContinueStmt struct {
 	Semicolon Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ContinueStmt) Position() (r token.Position) {
 	return n.Continue.Position()
 }
@@ -1374,7 +1372,7 @@ type FallthroughStmt struct {
 	Semicolon   Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *FallthroughStmt) Position() (r token.Position) {
 	return n.Fallthrough.Position()
 }
@@ -1395,7 +1393,7 @@ type Conversion struct {
 	RParen     Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *Conversion) Position() (r token.Position) {
 	return n.Type.Position()
 }
@@ -1413,7 +1411,7 @@ type AliasDecl struct {
 	Semicolon Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *AliasDecl) Position() (r token.Position) {
 	return n.Ident.Position()
 }
@@ -1431,7 +1429,7 @@ type ArrayType struct {
 	ElementType Node
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ArrayType) Position() (r token.Position) {
 	return n.LBracket.Position()
 }
@@ -1450,7 +1448,7 @@ type ChannelType struct {
 	ElementType Node
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ChannelType) Position() (r token.Position) {
 	if n.ArrowPre.IsValid() {
 		return n.ArrowPre.Position()
@@ -1471,7 +1469,7 @@ type FunctionType struct {
 	Signature *Signature
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *FunctionType) Position() (r token.Position) {
 	return n.Func.Position()
 }
@@ -1491,7 +1489,7 @@ type MapType struct {
 	ElementType Node
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *MapType) Position() (r token.Position) {
 	return n.Map.Position()
 }
@@ -1508,7 +1506,7 @@ type GoStmt struct {
 	Semicolon  Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *GoStmt) Position() (r token.Position) {
 	return n.Go.Position()
 }
@@ -1524,7 +1522,7 @@ type GenericOperand struct {
 	TypeArgs    *TypeArgs
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *GenericOperand) Position() (r token.Position) {
 	return n.OperandName.Position()
 }
@@ -1543,7 +1541,7 @@ type GotoStmt struct {
 	Semicolon Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *GotoStmt) Position() (r token.Position) {
 	return n.Goto.Position()
 }
@@ -1560,7 +1558,7 @@ type LabeledStmt struct {
 	Statement Node
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *LabeledStmt) Position() (r token.Position) {
 	return n.Label.Position()
 }
@@ -1578,7 +1576,7 @@ type TypeArgs struct {
 	Comma    Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *TypeArgs) Position() (r token.Position) {
 	return n.LBracket.Position()
 }
@@ -1593,7 +1591,7 @@ type TypeListItem struct {
 	Comma Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *TypeListItem) Position() (r token.Position) {
 	return n.Type.Position()
 }
@@ -1611,7 +1609,7 @@ type IncDecStmt struct {
 	Semicolon  Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *IncDecStmt) Position() (r token.Position) {
 	return n.Expression.Position()
 }
@@ -1630,7 +1628,7 @@ type ParenExpr struct {
 	RParen     Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ParenExpr) Position() (r token.Position) {
 	return n.LParen.Position()
 }
@@ -1648,7 +1646,7 @@ type ParenType struct {
 	RParen Token
 }
 
-// Positions implements Node.
+// Position implements Node.
 func (n *ParenType) Position() (r token.Position) {
 	return n.LParen.Position()
 }

@@ -8112,6 +8112,7 @@
 /usr/local/go/test/zerodivide.go
 all_test.go
 ast.go
+check.go
 etc.go
 gc.go
 internal/ebnf/all_test.go
@@ -8126,3 +8127,4 @@ parser.go
 scanner.go
 scanner_test.go
 stringer.go
+type.go

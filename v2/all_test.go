@@ -65,7 +65,7 @@ func stack() []byte { return debug.Stack() }
 func use(...interface{}) {}
 
 func init() {
-	use(caller, dbg, stack) //TODOOK
+	use(caller, dbg, stack, dumpExpr) //TODOOK
 }
 
 // ----------------------------------------------------------------------------
@@ -280,7 +280,7 @@ func testScan(p *parallel, t *testing.T, root, skip string) {
 					}
 					if !ok {
 						p.fail()
-						return fmt.Errorf("%v: got %v:", e, g)
+						return fmt.Errorf("%v: got %v", e, g)
 					}
 				}
 
@@ -607,7 +607,7 @@ func TestTokenSet(t *testing.T) {
 }
 
 func TestParser(t *testing.T) {
-	g := newGolden(t, fmt.Sprintf("testdata/test_parse.golden"))
+	g := newGolden(t, "testdata/test_parse.golden")
 
 	defer g.close()
 
@@ -657,7 +657,6 @@ func parserFails(fn string, src []byte) bool {
 }
 
 func testParser(p *parallel, t *testing.T, g *golden, root string) {
-	// blackList := map[string]struct{}{}
 	cfg := &ParseSourceFileConfig{}
 	err := filepath.Walk(root, func(path0 string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -733,11 +732,30 @@ func testParser(p *parallel, t *testing.T, g *golden, root string) {
 				return fmt.Errorf("%v\ngot\n%s\nexp\n%s\ngot\n%s\nexp\n%s", s, got, exp, hex.Dump([]byte(got)), hex.Dump([]byte(exp)))
 			}
 
+			loaderOK := true
+			cfg := &CheckConfig{
+				Loader: func(pth string) (*Package, error) {
+					loaderOK = false
+					return nil, fmt.Errorf("%s", errorf("TODO no loader"))
+				},
+			}
+			ctx := newCtx(cfg, &Package{SourceFiles: []*SourceFile{ast}})
+			if err := ctx.check(); loaderOK && err != nil {
+				if pth := filepath.ToSlash(path); !strings.Contains(pth, "/test/") && !strings.Contains(pth, "/testdata/") {
+					p.fail()
+					if *oTrcFail {
+						fmt.Fprintf(os.Stderr, "FAIL: %v\n", path)
+					}
+					return err
+				}
+			}
+
 			p.ok()
 			g.w("%s\n", path)
 			if *oTrcOK {
 				fmt.Fprintf(os.Stderr, "OK: %v\n", path)
 			}
+
 			return nil
 		})
 		return nil

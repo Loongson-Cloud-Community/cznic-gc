@@ -99,14 +99,6 @@ type Token struct { // 24 bytes on 64 bit arch
 	sepOff int32
 }
 
-func (n Token) sepPosition() (r token.Position) {
-	if !n.IsValid() {
-		return r
-	}
-
-	return token.Position(n.source.file.PositionFor(mtoken.Pos(n.sepOff+1), true))
-}
-
 // Position implements Node.
 func (n Token) Position() (r token.Position) {
 	if n.IsValid() {
@@ -126,14 +118,6 @@ func (n Token) String() string {
 	}
 
 	return fmt.Sprintf("%v: %q %s", n.Position(), n.Src(), n.Ch)
-}
-
-func (n Token) str() string {
-	if n.Ch <= beforeTokens || n.Ch >= afterTokens { //TODO
-		return fmt.Sprintf("%q %#U", n.Src(), rune(n.Ch))
-	}
-
-	return fmt.Sprintf("%q %s", n.Src(), n.Ch)
 }
 
 // IsValid reports the validity of n. Tokens not present in some nodes will
@@ -249,11 +233,10 @@ func isIDFirst(c byte) bool {
 		c == '_'
 }
 
-func isBinaryDigit(c byte) bool { return c == '0' || c == '1' }
-func isDigit(c byte) bool       { return c >= '0' && c <= '9' }
-func isHexDigit(c byte) bool    { return isDigit(c) || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F' }
-func isIDNext(c byte) bool      { return isIDFirst(c) || isDigit(c) }
-func isOctalDigit(c byte) bool  { return c >= '0' && c <= '7' }
+func isDigit(c byte) bool      { return c >= '0' && c <= '9' }
+func isHexDigit(c byte) bool   { return isDigit(c) || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F' }
+func isIDNext(c byte) bool     { return isIDFirst(c) || isDigit(c) }
+func isOctalDigit(c byte) bool { return c >= '0' && c <= '7' }
 
 func (s *Scanner) next() {
 	if int(s.off) == len(s.buf)-1 {
@@ -1208,7 +1191,6 @@ out:
 	if s.Tok.Ch = Keywords[string(s.Tok.src())]; s.Tok.Ch == 0 {
 		s.Tok.Ch = IDENTIFIER
 	}
-	return
 }
 
 func (s *Scanner) generalComment(off int32) (injectSemi bool) {
