@@ -7,6 +7,7 @@ package gc // import "modernc.org/gc/v2"
 import (
 	"fmt"
 	"go/token"
+	"sort"
 )
 
 var (
@@ -39,6 +40,12 @@ type Scope struct {
 	Parent *Scope
 }
 
+// IsUniverse reports whether s is the universe scope.
+func (s *Scope) IsUniverse() bool { return s.Parent == nil }
+
+// IsPackage reports whether s is a package scope.
+func (s *Scope) IsPackage() bool { return s.Parent != nil && s.Parent.IsUniverse() }
+
 func (s *Scope) add(c *ctx, nm string, n Node) {
 	if nm == "_" {
 		return
@@ -55,34 +62,6 @@ func (s *Scope) add(c *ctx, nm string, n Node) {
 	s.Nodes[nm] = n
 }
 
-// Package collects source files.
-type Package struct {
-	ImportPath  string
-	Inits       []*FunctionDecl
-	Name        string
-	Scope       Scope
-	SourceFiles []*SourceFile
-}
-
-// NewPackage returns a newly created Package or an error, if any.
-func NewPackage(importPath string, files []*SourceFile) (r *Package, err error) {
-	return &Package{ImportPath: importPath, Scope: Scope{Parent: &universe}}, nil
-}
-
-// Position implements Node. Position return a zero value.
-func (n *Package) Position() (r token.Position) {
-	if len(n.SourceFiles) != 0 {
-		r = n.SourceFiles[0].PackageClause.Position()
-	}
-	return r
-}
-
-// Source implements Node. Source returns a zero value.
-func (n *Package) Source(full bool) []byte { return nil }
-
-// Check type checks n.
-func (n *Package) Check(cfg *CheckConfig) error { return newCtx(cfg, n).check() }
-
 // CheckConfig configures the type checker.
 type CheckConfig struct {
 	Loader   func(importPath string) (*Package, error)
@@ -90,13 +69,19 @@ type CheckConfig struct {
 }
 
 type ctx struct {
-	cfg    *CheckConfig
-	pkg    *Package
-	errors errList
+	cfg       *CheckConfig
+	errors    errList
+	pkg       *Package
+	scope     *Scope
+	tldCycles map[string]byte
 }
 
 func newCtx(cfg *CheckConfig, pkg *Package) *ctx {
-	return &ctx{cfg: cfg, pkg: pkg}
+	return &ctx{
+		cfg:       cfg,
+		pkg:       pkg,
+		tldCycles: map[string]byte{},
+	}
 }
 
 func (c *ctx) err(n Node, s string, args ...interface{}) {
@@ -107,47 +92,27 @@ func (c *ctx) err(n Node, s string, args ...interface{}) {
 	c.errors.err(pos, s, args...)
 }
 
-func (c *ctx) check() (err error) {
-	for _, file := range c.pkg.SourceFiles {
-		c.checkFile(file)
-	}
-	return c.errors.Err()
-}
-
-func (c *ctx) checkFile(file *SourceFile) {
-	pkgName := file.PackageClause.Package.Src()
+func (n *SourceFile) check(c *ctx) {
+	pkgName := n.PackageClause.Package.Src()
 	switch {
 	case c.pkg.Name == "":
 		c.pkg.Name = pkgName
 	default:
 		if pkgName != c.pkg.Name {
-			c.err(file.PackageClause.PackageName, "expected package name %s", c.pkg.Name)
+			c.err(n.PackageClause.PackageName, "expected package name %s", c.pkg.Name)
 		}
 	}
-	for _, id := range file.ImportDecls {
-		for _, is := range id.ImportSpecs {
-			pkg, err := c.cfg.Loader(is.ImportPath.Src())
-			if err != nil {
-				c.err(is.ImportPath, "%s", err)
-				return
-			}
+	n.checkImports(c)
+	n.collectTLDs(c)
+}
 
-			qualifier := pkg.Name
-			if is.Qualifier.IsValid() {
-				qualifier = is.Qualifier.Src()
-			}
-			file.Scope.add(c, qualifier, pkg)
-			if _, ok := c.pkg.Scope.Nodes[qualifier]; !ok {
-				c.pkg.Scope.add(c, qualifier, pkg)
-			}
-		}
-	}
-	for _, tld := range file.TopLevelDecls {
+func (n *SourceFile) collectTLDs(c *ctx) {
+	for _, tld := range n.TopLevelDecls {
 		switch x := tld.(type) {
 		case *ConstDecl:
 			for _, cs := range x.ConstSpecs {
-				for _, id := range cs.IdentifierList {
-					c.pkg.Scope.add(c, id.Ident.Src(), cs)
+				for i, id := range cs.IdentifierList {
+					c.pkg.Scope.add(c, id.Ident.Src(), &Constant{Expr: cs.expressionList[i], Ident: id.Ident, iota: cs.iota})
 				}
 			}
 		case *FunctionDecl:
@@ -164,9 +129,9 @@ func (c *ctx) checkFile(file *SourceFile) {
 			}
 
 			switch rx := x.Receiver.ParameterList[0].Type.(type) {
-			case *PointerType:
+			case *PointerTypeNode:
 				switch t := rx.BaseType.(type) {
-				case *TypeName:
+				case *TypeNameNode:
 					if t.Name.PackageName.IsValid() {
 						c.err(t.Name, "cannot define new methods on non-local type %s", t.Name.Source(false))
 						break
@@ -176,7 +141,7 @@ func (c *ctx) checkFile(file *SourceFile) {
 				default:
 					c.err(x, errorf("TODO %T", t))
 				}
-			case *TypeName:
+			case *TypeNameNode:
 				if rx.Name.PackageName.IsValid() {
 					c.err(rx.Name, "cannot define new methods on non-local type %s", rx.Name.Source(false))
 					break
@@ -192,21 +157,148 @@ func (c *ctx) checkFile(file *SourceFile) {
 			for _, ts := range x.TypeSpecs {
 				switch y := ts.(type) {
 				case *TypeDef:
-					c.pkg.Scope.add(c, y.Ident.Src(), y)
+					c.pkg.Scope.add(c, y.Ident.Src(), &TypeName{node: y})
 				case *AliasDecl:
-					c.pkg.Scope.add(c, y.Ident.Src(), y)
+					c.pkg.Scope.add(c, y.Ident.Src(), &AliasType{node: y})
 				default:
 					c.err(ts, errorf("TODO %T", y))
 				}
 			}
 		case *VarDecl:
 			for _, vs := range x.VarSpecs {
-				for _, id := range vs.IdentifierList {
-					c.pkg.Scope.add(c, id.Ident.Src(), vs)
+				for i, id := range vs.IdentifierList {
+					var expr Node
+					if i < len(vs.ExpressionList) {
+						expr = vs.ExpressionList[i].Expression
+					}
+					c.pkg.Scope.add(c, id.Ident.Src(), &Variable{Expr: expr, Ident: id.Ident})
 				}
 			}
 		default:
 			c.err(tld, "unexpected top level declaration node type: %T", x)
 		}
 	}
+}
+
+func (n *SourceFile) checkImports(c *ctx) {
+	for _, id := range n.ImportDecls {
+		for _, is := range id.ImportSpecs {
+			pkg, err := c.cfg.Loader(is.ImportPath.Src())
+			if err != nil {
+				c.err(is.ImportPath, "%s", err)
+				return
+			}
+
+			qualifier := pkg.Name
+			if is.Qualifier.IsValid() {
+				qualifier = is.Qualifier.Src()
+			}
+			n.Scope.add(c, qualifier, pkg)
+			if _, ok := c.pkg.Scope.Nodes[qualifier]; !ok {
+				c.pkg.Scope.add(c, qualifier, pkg)
+			}
+		}
+	}
+}
+
+const (
+	checkZero = iota
+	checkChecking
+	checkChecked
+)
+
+// Package collects source files.
+type Package struct {
+	ImportPath  string
+	Inits       []*FunctionDecl
+	Name        string
+	Scope       Scope
+	SourceFiles []*SourceFile
+}
+
+// NewPackage returns a newly created Package or an error, if any.
+func NewPackage(importPath string, files []*SourceFile) (r *Package, err error) {
+	return &Package{ImportPath: importPath, SourceFiles: files, Scope: Scope{Parent: &universe}}, nil
+}
+
+// Position implements Node. Position return a zero value.
+func (n *Package) Position() (r token.Position) {
+	if len(n.SourceFiles) != 0 {
+		r = n.SourceFiles[0].PackageClause.Position()
+	}
+	return r
+}
+
+// Source implements Node. Source returns a zero value.
+func (n *Package) Source(full bool) []byte { return nil }
+
+// Check type checks n.
+func (n *Package) Check(cfg *CheckConfig) error {
+	c := newCtx(cfg, n)
+	for _, file := range n.SourceFiles {
+		file.Scope.Parent = &n.Scope
+		file.check(c)
+	}
+	c.scope = &n.Scope
+	n.checkDeclarations(c)
+	return c.errors.Err()
+}
+
+// TLD const, type, var
+func (n *Package) checkDeclarations(c *ctx) {
+	var tldNames []string
+	for tldName := range n.Scope.Nodes {
+		tldNames = append(tldNames, tldName)
+	}
+	sort.Strings(tldNames)
+	for _, tldName := range tldNames {
+		n.checkDeclaration(c, tldName)
+	}
+}
+
+func (n *Package) checkDeclaration(c *ctx, nm string) {
+	defer func() {
+		c.tldCycles[nm] = checkChecked
+	}()
+
+	decl := n.Scope.Nodes[nm]
+	switch c.tldCycles[nm] {
+	case checkChecked:
+		return
+	case checkChecking:
+		c.err(n.Scope.Nodes[nm], errorf("type checking loop: %s", nm))
+		return
+	}
+
+	c.tldCycles[nm] = checkChecking
+	switch x := decl.(type) {
+	case *Constant:
+		x.check(c, nm)
+	case *TypeName:
+		x.check(c, nm)
+	case *Variable:
+		x.check(c, nm)
+	case *AliasType:
+		x.check(c, nm)
+	case *FunctionDecl, *MethodDecl:
+		// nop
+	default:
+		c.err(x, errorf("TODO %T", x))
+	}
+}
+
+func (n *TypeName) check(c *ctx, nm string) {
+	//TODO c.err(n, errorf("TODO %T", n))
+}
+
+func (n *Variable) check(c *ctx, nm string) {
+	//TODO c.err(n, errorf("TODO %T", n))
+}
+
+func (n *AliasType) check(c *ctx, nm string) {
+	//TODO c.err(n, errorf("TODO %T", n))
+}
+
+func (n *Constant) check(c *ctx, nm string) {
+	//TODO c.err(n, errorf("TODO %T", n))
 }

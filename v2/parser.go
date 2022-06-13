@@ -6,6 +6,7 @@ package gc // import "modernc.org/gc/v2"
 
 import (
 	"fmt"
+	"go/constant"
 )
 
 var (
@@ -175,8 +176,17 @@ func (p *parser) constDecl() (r *ConstDecl) {
 }
 
 func (p *parser) constSpecs() (r []*ConstSpec) {
+	var iota int64
+	var el []*ExpressionListItem
 	for p.ch() == IDENTIFIER {
-		r = append(r, p.constSpec(true))
+		n := p.constSpec(true)
+		r = append(r, n)
+		n.iota = iota
+		iota++
+		if len(n.ExpressionList) != 0 {
+			el = n.ExpressionList
+		}
+		n.expressionList = el
 	}
 	return r
 }
@@ -208,6 +218,11 @@ func (p *parser) constSpec(semi bool) (r *ConstSpec) {
 		p.shift()
 		return r
 	}
+	if len(r.IdentifierList) != len(r.ExpressionList) && len(r.ExpressionList) != 0 {
+		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+		p.shift()
+	}
+	r.expressionList = r.ExpressionList
 	r.Semicolon = p.semi(semi)
 	return r
 }
@@ -261,21 +276,23 @@ func (p *parser) typeSpec(semi bool) (r Node) {
 			switch p.ch() {
 			case ']':
 				// identifier "[" . "]"
-				return &TypeDef{Ident: id, Type: &SliceType{LBracket: lbracket, RBracket: p.shift(), ElementType: p.type1()}, Semicolon: p.semi(semi)}
+				return &TypeDef{Ident: id, Type: &SliceTypeNode{LBracket: lbracket, RBracket: p.shift(), ElementType: p.type1()}, Semicolon: p.semi(semi)}
 			case ELLIPSIS:
 				// identifier "[" . "..."
-				return &TypeDef{Ident: id, Type: &ArrayType{LBracket: lbracket, ArrayLength: p.shift(), RBracket: p.must(']'), ElementType: p.type1()}, Semicolon: p.semi(semi)}
+				return &TypeDef{Ident: id, Type: &ArrayTypeNode{LBracket: lbracket, ArrayLength: p.shift(), RBracket: p.must(']'), ElementType: p.type1()}, Semicolon: p.semi(semi)}
 			default:
 				expr := p.expression(nil)
 				// identifier "[" expression .
 				switch p.ch() {
 				case ']':
 					// identifier "[" expression . "]"
-					return &TypeDef{Ident: id, Type: &ArrayType{LBracket: lbracket, ArrayLength: expr, RBracket: p.shift(), ElementType: p.type1()}, Semicolon: p.semi(semi)}
+					return &TypeDef{Ident: id, Type: &ArrayTypeNode{LBracket: lbracket, ArrayLength: expr, RBracket: p.shift(), ElementType: p.type1()}, Semicolon: p.semi(semi)}
 				default:
 					switch x := expr.(type) {
 					case Token:
 						return &TypeDef{Ident: id, TypeParameters: p.typeParameters2(lbracket, x), Type: p.type1(), Semicolon: p.semi(semi)}
+					case *Ident:
+						return &TypeDef{Ident: id, TypeParameters: p.typeParameters2(lbracket, x.Token), Type: p.type1(), Semicolon: p.semi(semi)}
 					default:
 						p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 						p.shift()
@@ -451,14 +468,14 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 			case ')':
 				return append(r, &ParameterDecl{Type: id})
 			case '.':
-				r = append(r, &ParameterDecl{Type: p.typeName2(&TypeName{Name: &QualifiedIdent{PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}}), Comma: p.opt(',')})
+				r = append(r, &ParameterDecl{Type: p.typeName2(&TypeNameNode{Name: &QualifiedIdent{PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}}), Comma: p.opt(',')})
 			case '[':
 				lbracket := p.shift()
 				// identifier "[" .
 				switch p.ch() {
 				case ']':
 					// identifier "[" . "]"
-					r = append(r, &ParameterDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, Type: &SliceType{LBracket: lbracket, RBracket: p.must(']'), ElementType: p.type1()}, Comma: p.opt(',')})
+					r = append(r, &ParameterDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, Type: &SliceTypeNode{LBracket: lbracket, RBracket: p.must(']'), ElementType: p.type1()}, Comma: p.opt(',')})
 
 				default:
 					switch x := p.exprOrType().(type) {
@@ -475,11 +492,11 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 							switch p.ch() {
 							case ')':
 								// identifier "[" expression "]" . ")"
-								return append(r, &ParameterDecl{Type: &TypeName{Name: &QualifiedIdent{Ident: id}, TypeArgs: &TypeArgs{LBracket: lbracket, TypeList: []*TypeListItem{{Type: x}}, RBracket: rbracket}}, Comma: p.opt(',')})
+								return append(r, &ParameterDecl{Type: &TypeNameNode{Name: &QualifiedIdent{Ident: id}, TypeArgs: &TypeArgs{LBracket: lbracket, TypeList: []*TypeListItem{{Type: x}}, RBracket: rbracket}}, Comma: p.opt(',')})
 							//                      Type
 							case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 								// identifier "[" expression "]" . Type
-								r = append(r, &ParameterDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, Type: &ArrayType{LBracket: lbracket, ArrayLength: x, RBracket: rbracket, ElementType: p.type1()}, Comma: p.opt(',')})
+								r = append(r, &ParameterDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, Type: &ArrayTypeNode{LBracket: lbracket, ArrayLength: x, RBracket: rbracket, ElementType: p.type1()}, Comma: p.opt(',')})
 							default:
 								p.err(errorf("TODO %v", p.ch().str()))
 								p.shift()
@@ -487,7 +504,7 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 							}
 						case ',':
 							// identifier "[" expression . ","
-							r = append(r, &ParameterDecl{Type: p.typeName2(&TypeName{Name: &QualifiedIdent{Ident: id}, TypeArgs: p.typeArgs2(lbracket, x)})})
+							r = append(r, &ParameterDecl{Type: p.typeName2(&TypeNameNode{Name: &QualifiedIdent{Ident: id}, TypeArgs: p.typeArgs2(lbracket, x)})})
 						default:
 							p.err(errorf("TODO %v", p.ch().str()))
 							p.shift()
@@ -700,9 +717,14 @@ func (p *parser) statement() (r Node) {
 		default:
 			switch p.ch() {
 			case ':':
-				id, ok := x.(Token)
-				if !ok {
-					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				var id Token
+				switch y := x.(type) {
+				case Token:
+					id = y
+				case *Ident:
+					id = y.Token
+				default:
+					p.errNode(y, errorf("TODO %v", p.s.Tok.Ch.str()))
 					p.shift()
 					return r
 				}
@@ -1031,8 +1053,13 @@ func (p *parser) switchStmt() (r Node) {
 
 					switch p.ch() {
 					case DEFINE:
-						t, ok := expr.(Token)
-						if !ok {
+						var tok Token
+						switch z := expr.(type) {
+						case Token:
+							tok = z
+						case *Ident:
+							tok = z.Token
+						default:
 							p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 							p.shift()
 							return r
@@ -1041,7 +1068,7 @@ func (p *parser) switchStmt() (r Node) {
 						def := p.shift()
 						switch y := p.primaryExpression().(type) {
 						case *TypeSwitchGuard:
-							y.Ident = t
+							y.Ident = tok
 							y.Define = def
 							return &TypeSwitchStmt{Switch: sw, SimpleStmt: x, Semicolon: semi, TypeSwitchGuard: y, LBrace: p.body(), TypeCaseClauses: p.typeCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
 						default:
@@ -1348,18 +1375,18 @@ func (p *parser) exprOrSimpleStmt(semi bool) (r Node) {
 
 func (p *parser) exprToIDList(e Node) (r []*IdentifierListItem) {
 	switch x := e.(type) {
-	case Token:
+	case Token: //TODO-
 		switch x.Ch {
 		case IDENTIFIER:
 			return []*IdentifierListItem{{Ident: x}}
 		default:
-			p.err(errorf("TODO %v", x))
-			p.shift()
+			p.errNode(e, errorf("TODO %v", x))
 			return r
 		}
+	case *Ident:
+		return []*IdentifierListItem{{Ident: x.Token}}
 	default:
-		p.err(errorf("TODO %T", x))
-		p.shift()
+		p.errNode(e, errorf("TODO %T", x))
 		return r
 	}
 }
@@ -1367,18 +1394,18 @@ func (p *parser) exprToIDList(e Node) (r []*IdentifierListItem) {
 func (p *parser) exprListToIDList(l []*ExpressionListItem) (r []*IdentifierListItem) {
 	for _, v := range l {
 		switch x := v.Expression.(type) {
-		case Token:
+		case Token: //TODO-
 			switch x.Ch {
 			case IDENTIFIER:
 				r = append(r, &IdentifierListItem{Ident: x, Comma: v.Comma})
 			default:
-				p.err(errorf("TODO %v", x))
-				p.shift()
+				p.errNode(x, errorf("TODO %v", x))
 				return r
 			}
+		case *Ident:
+			r = append(r, &IdentifierListItem{Ident: x.Token, Comma: v.Comma})
 		default:
-			p.err(errorf("TODO %T", x))
-			p.shift()
+			p.errNode(x, errorf("TODO %T", x))
 			return r
 		}
 	}
@@ -1393,17 +1420,17 @@ func (p *parser) type1() (r Node) {
 	case '(':
 		return &ParenType{LParen: p.shift(), Type: p.type1(), RParen: p.must(')')}
 	case '*':
-		return &PointerType{Star: p.shift(), BaseType: p.type1()}
+		return &PointerTypeNode{Star: p.shift(), BaseType: p.type1()}
 	case '[':
 		lbracket := p.shift()
 		switch p.ch() {
 		case ']':
-			return &SliceType{LBracket: lbracket, RBracket: p.shift(), ElementType: p.type1()}
+			return &SliceTypeNode{LBracket: lbracket, RBracket: p.shift(), ElementType: p.type1()}
 		//                Expression
 		case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-			return &ArrayType{LBracket: lbracket, ArrayLength: p.expression(nil), RBracket: p.must(']'), ElementType: p.type1()}
+			return &ArrayTypeNode{LBracket: lbracket, ArrayLength: p.expression(nil), RBracket: p.must(']'), ElementType: p.type1()}
 		case ELLIPSIS:
-			return &ArrayType{LBracket: lbracket, ArrayLength: p.shift(), RBracket: p.must(']'), ElementType: p.type1()}
+			return &ArrayTypeNode{LBracket: lbracket, ArrayLength: p.shift(), RBracket: p.must(']'), ElementType: p.type1()}
 		default:
 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
@@ -1413,16 +1440,16 @@ func (p *parser) type1() (r Node) {
 		return p.channelType()
 	case FUNC:
 		// FunctionType = "func" Signature .
-		return &FunctionType{Func: p.shift(), Signature: p.signature()}
+		return &FunctionTypeNode{Func: p.shift(), Signature: p.signature()}
 	case IDENTIFIER:
 		return p.typeName()
 	case INTERFACE:
 		// InterfaceType = "interface" lbrace "#fixlbr" "}"
 		// 	| "interface" lbrace InterfaceElem InterfaceType_1 InterfaceType_2 "#fixlbr" "}" .
 		var lbr bool
-		return &InterfaceType{Interface: p.shift(), LBrace: p.lbrace(&lbr), InterfaceElems: p.interfaceElems(), RBrace: p.fixlbr(lbr)}
+		return &InterfaceTypeNode{Interface: p.shift(), LBrace: p.lbrace(&lbr), InterfaceElems: p.interfaceElems(), RBrace: p.fixlbr(lbr)}
 	case MAP:
-		return &MapType{Map: p.shift(), LBracket: p.must('['), KeyType: p.type1(), RBracket: p.must(']'), ElementType: p.type1()}
+		return &MapTypeNode{Map: p.shift(), LBracket: p.must('['), KeyType: p.type1(), RBracket: p.must(']'), ElementType: p.type1()}
 	case STRUCT:
 		// StructType = "struct" lbrace "#fixlbr" "}"
 		// 	| "struct" lbrace FieldDecl StructType_1 StructType_2 "#fixlbr" "}" .
@@ -1431,7 +1458,7 @@ func (p *parser) type1() (r Node) {
 		// StructType_2 =
 		// 	| ";" .
 		var lbr bool
-		n := &StructType{Struct: p.shift(), LBrace: p.lbrace(&lbr)}
+		n := &StructTypeNode{Struct: p.shift(), LBrace: p.lbrace(&lbr)}
 		if p.ch() == '}' {
 			n.RBrace = p.fixlbr(lbr)
 			return n
@@ -1458,12 +1485,12 @@ func (p *parser) type1() (r Node) {
 // ChannelType = "<-" "chan" ElementType
 // 	| "chan" "<-" ElementType
 // 	| "chan" ElementType .
-func (p *parser) channelType() (r *ChannelType) {
+func (p *parser) channelType() (r *ChannelTypeNode) {
 	switch p.ch() {
 	case ARROW:
-		return &ChannelType{ArrowPre: p.shift(), Chan: p.shift(), ElementType: p.type1()}
+		return &ChannelTypeNode{ArrowPre: p.shift(), Chan: p.shift(), ElementType: p.type1()}
 	case CHAN:
-		return &ChannelType{Chan: p.shift(), ArrayPost: p.opt(ARROW), ElementType: p.type1()}
+		return &ChannelTypeNode{Chan: p.shift(), ArrayPost: p.opt(ARROW), ElementType: p.type1()}
 	default:
 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
@@ -1490,17 +1517,17 @@ func (p *parser) fieldDecl() (r *FieldDecl) {
 			r = &FieldDecl{IdentifierList: p.identifierList2(id), Type: p.type1()}
 		case ';', '}':
 			//  identifier . ";"
-			r = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: &TypeName{Name: &QualifiedIdent{Ident: id}}}}
+			r = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: &TypeNameNode{Name: &QualifiedIdent{Ident: id}}}}
 		case '.':
 			//  identifier . "."
-			r = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: p.typeName2(&TypeName{Name: &QualifiedIdent{PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}})}}
+			r = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: p.typeName2(&TypeNameNode{Name: &QualifiedIdent{PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}})}}
 		case '[':
 			lbracket := p.shift()
 			//  identifier "[" .
 			switch p.ch() {
 			case ']':
 				//  identifier "[" . "]"
-				r = &FieldDecl{IdentifierList: p.identifierList2(id), Type: &SliceType{LBracket: lbracket, RBracket: p.must(']'), ElementType: p.type1()}}
+				r = &FieldDecl{IdentifierList: p.identifierList2(id), Type: &SliceTypeNode{LBracket: lbracket, RBracket: p.must(']'), ElementType: p.type1()}}
 				// case ']', FLOAT_LIT, IMAG_LIT, INT_LIT, RUNE_LIT, STRING_LIT:
 				// 	// . identifier "[" "]"
 				// 	r = &FieldDecl{IdentifierList: p.identifierList(), Type: p.type1()}
@@ -1521,13 +1548,13 @@ func (p *parser) fieldDecl() (r *FieldDecl) {
 						switch p.ch() {
 						case ';', '}':
 							// . identifier "[" Expression "]" . ";"
-							r = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: &TypeName{Name: &QualifiedIdent{Ident: id}, TypeArgs: &TypeArgs{LBracket: lbracket, TypeList: []*TypeListItem{{Type: x}}, RBracket: rbracket}}}}
+							r = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: &TypeNameNode{Name: &QualifiedIdent{Ident: id}, TypeArgs: &TypeArgs{LBracket: lbracket, TypeList: []*TypeListItem{{Type: x}}, RBracket: rbracket}}}}
 						default:
-							r = &FieldDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, Type: &ArrayType{LBracket: lbracket, ArrayLength: x, RBracket: rbracket, ElementType: p.type1()}}
+							r = &FieldDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, Type: &ArrayTypeNode{LBracket: lbracket, ArrayLength: x, RBracket: rbracket, ElementType: p.type1()}}
 						}
 					case ',':
 						// . identifier "[" Expression . ","
-						r = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: &TypeName{Name: &QualifiedIdent{Ident: id}, TypeArgs: &TypeArgs{LBracket: lbracket, TypeList: p.typeList2(x), RBracket: p.must(']')}}}}
+						r = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: &TypeNameNode{Name: &QualifiedIdent{Ident: id}, TypeArgs: &TypeArgs{LBracket: lbracket, TypeList: p.typeList2(x), RBracket: p.must(']')}}}}
 					default:
 						p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 						p.shift()
@@ -1536,7 +1563,7 @@ func (p *parser) fieldDecl() (r *FieldDecl) {
 				}
 			default:
 				//  identifier "[" . Expression
-				r = &FieldDecl{IdentifierList: p.identifierList2(id), Type: &ArrayType{LBracket: lbracket, ArrayLength: p.expression(nil), RBracket: p.must(']'), ElementType: p.type1()}}
+				r = &FieldDecl{IdentifierList: p.identifierList2(id), Type: &ArrayTypeNode{LBracket: lbracket, ArrayLength: p.expression(nil), RBracket: p.must(']'), ElementType: p.type1()}}
 			}
 		default:
 			r = &FieldDecl{IdentifierList: p.identifierList2(id)}
@@ -1588,9 +1615,9 @@ func (p *parser) interfaceElems() (r []Node) {
 				r = append(r, p.typeElem2(&TypeTerm{Type: id}, true))
 			case '.':
 				// identifier . "."
-				r = append(r, p.typeElem2(&TypeTerm{Type: p.typeName2(&TypeName{Name: &QualifiedIdent{PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}})}, true))
+				r = append(r, p.typeElem2(&TypeTerm{Type: p.typeName2(&TypeNameNode{Name: &QualifiedIdent{PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}})}, true))
 			case '[':
-				r = append(r, p.typeElem2(&TypeTerm{Type: p.typeName2(&TypeName{Name: &QualifiedIdent{Ident: id}})}, true))
+				r = append(r, p.typeElem2(&TypeTerm{Type: p.typeName2(&TypeNameNode{Name: &QualifiedIdent{Ident: id}})}, true))
 			default:
 				p.err(errorf("TODO %v", p.ch().str()))
 				p.shift()
@@ -1667,15 +1694,15 @@ func (p *parser) typeTerm() (r *TypeTerm) {
 // 	| TypeArgs .
 // TypeName_2 =
 // 	| TypeArgs .
-func (p *parser) typeName() (r *TypeName) {
+func (p *parser) typeName() (r *TypeNameNode) {
 	switch p.ch() {
 	case IDENTIFIER:
 		id := p.shift()
 		switch p.ch() {
 		case '.':
-			r = &TypeName{Name: &QualifiedIdent{PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}}
+			r = &TypeNameNode{Name: &QualifiedIdent{PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}}
 		default:
-			r = &TypeName{Name: &QualifiedIdent{Ident: id}}
+			r = &TypeNameNode{Name: &QualifiedIdent{Ident: id}}
 		}
 	default:
 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
@@ -1685,7 +1712,7 @@ func (p *parser) typeName() (r *TypeName) {
 	return p.typeName2(r)
 }
 
-func (p *parser) typeName2(in *TypeName) (r *TypeName) {
+func (p *parser) typeName2(in *TypeNameNode) (r *TypeNameNode) {
 	r = in
 	switch p.ch() {
 	//                  TypeArgs
@@ -1861,8 +1888,26 @@ func (p *parser) primaryExpression() (r Node) {
 	checkForLiteral := false
 	switch p.ch() {
 	//                   Operand case '(', '*', '[', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-	case FLOAT_LIT, IMAG_LIT, INT_LIT, RUNE_LIT, STRING_LIT:
-		r = p.shift()
+	case FLOAT_LIT, INT_LIT, IMAG_LIT, RUNE_LIT, STRING_LIT:
+		tok := p.shift()
+		v := constant.MakeFromLiteral(tok.Src(), xlat[tok.Ch], 0)
+		if v.Kind() == constant.Unknown {
+			p.errNode(tok, "invalid literal: %s", tok.Src())
+		}
+		var typ Type
+		switch tok.Ch {
+		case FLOAT_LIT:
+			typ = untypedFloat
+		case INT_LIT:
+			typ = untypedInt
+		case IMAG_LIT:
+			typ = untypedComplex
+		case RUNE_LIT:
+			typ = untypedInt
+		case STRING_LIT:
+			typ = untypedString
+		}
+		r = &BasicLit{typer: newTyper(typ), valuer: newValuer(v), Token: tok}
 	//                Conversion case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 	//                MethodExpr case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 	case '(':
@@ -1887,7 +1932,7 @@ func (p *parser) primaryExpression() (r Node) {
 		case '{', body:
 			r = &CompositeLit{LiteralType: t, LiteralValue: p.literalValue1()}
 		case '(':
-			r = &Conversion{Type: t, LParen: p.shift(), Expression: p.expression(nil), Comma: p.opt(','), RParen: p.must(')')}
+			r = &Conversion{ConvertType: t, LParen: p.shift(), Expression: p.expression(nil), Comma: p.opt(','), RParen: p.must(')')}
 		case '.':
 			r = t
 		default:
@@ -1903,7 +1948,7 @@ func (p *parser) primaryExpression() (r Node) {
 			var lbr bool
 			r = &FunctionLit{Func: f, Signature: sig, FunctionBody: &Block{LBrace: p.lbrace(&lbr), StatementList: p.statementList(), RBrace: p.fixlbr(lbr)}}
 		case '(':
-			r = &FunctionType{Func: f, Signature: sig}
+			r = &FunctionTypeNode{Func: f, Signature: sig}
 		default:
 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
@@ -1919,7 +1964,7 @@ func (p *parser) primaryExpression() (r Node) {
 			//  identifier "." .
 			switch p.ch() {
 			case IDENTIFIER:
-				//  identifier "." identifier
+				//  identifier "." . identifier
 				r = &QualifiedIdent{PackageName: id, Dot: dot, Ident: p.shift()}
 			case '(':
 				lparen := p.shift()
@@ -1930,7 +1975,7 @@ func (p *parser) primaryExpression() (r Node) {
 					return &TypeSwitchGuard{PrimaryExpr: id, Dot: dot, LParen: lparen, Type: p.shift(), RParen: p.must(')')}
 				default:
 					//  identifier "." "(" . identifier
-					return p.primaryExpression2(&TypeAssertion{PrimaryExpr: id, Dot: dot, LParen: lparen, Type: p.type1(), RParen: p.must(')')}, false)
+					return p.primaryExpression2(&TypeAssertion{PrimaryExpr: id, Dot: dot, LParen: lparen, AssertType: p.type1(), RParen: p.must(')')}, false)
 				}
 			default:
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
@@ -1938,7 +1983,7 @@ func (p *parser) primaryExpression() (r Node) {
 				return r
 			}
 		default:
-			r = id
+			r = &Ident{Token: id}
 		}
 
 		// QualifiedIdent .
@@ -2019,7 +2064,7 @@ func (p *parser) primaryExpression2(pe Node, checkForLiteral bool) (r Node) {
 				case TYPE:
 					return &TypeSwitchGuard{PrimaryExpr: r, Dot: dot, LParen: lparen, Type: p.shift(), RParen: p.must(')')}
 				default:
-					r = &TypeAssertion{PrimaryExpr: r, Dot: dot, LParen: lparen, Type: p.type1(), RParen: p.must(')')}
+					r = &TypeAssertion{PrimaryExpr: r, Dot: dot, LParen: lparen, AssertType: p.type1(), RParen: p.must(')')}
 				}
 			default:
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
@@ -2096,7 +2141,7 @@ func (p *parser) arguments(pe Node) (r *Arguments) {
 
 	switch x := p.exprOrType().(type) {
 	case typ:
-		r.Type = x
+		r.TypeArg = x
 		switch p.ch() {
 		case ',':
 			r.Comma = p.shift()
@@ -2178,7 +2223,7 @@ func (p *parser) exprOrType() (r Node) {
 		// "*" .
 		switch x := p.exprOrType().(type) {
 		case typ:
-			return &PointerType{Star: star, BaseType: x}
+			return &PointerTypeNode{Star: star, BaseType: x}
 		default:
 			return &UnaryExpr{UnaryOp: star, UnaryExpr: x}
 		}
@@ -2189,7 +2234,7 @@ func (p *parser) exprOrType() (r Node) {
 			// ChannelType = "<-" "chan" ElementType
 			// 	| "chan" "<-" ElementType
 			// 	| "chan" ElementType .
-			r = &ChannelType{ArrowPre: arrow, Chan: p.shift(), ElementType: p.type1()}
+			r = &ChannelTypeNode{ArrowPre: arrow, Chan: p.shift(), ElementType: p.type1()}
 			switch p.ch() {
 			case ')':
 				return r
@@ -2207,7 +2252,7 @@ func (p *parser) exprOrType() (r Node) {
 		case '{', body:
 			return p.expression(p.primaryExpression2(&CompositeLit{LiteralType: t, LiteralValue: p.literalValue1()}, false))
 		case '(':
-			return p.expression(p.primaryExpression2(&Conversion{Type: t, LParen: p.shift(), Expression: p.expression(nil), Comma: p.opt(','), RParen: p.must(')')}, false))
+			return p.expression(p.primaryExpression2(&Conversion{ConvertType: t, LParen: p.shift(), Expression: p.expression(nil), Comma: p.opt(','), RParen: p.must(')')}, false))
 		case ',', ')', ']':
 			return t
 		default:
@@ -2223,7 +2268,7 @@ func (p *parser) exprOrType() (r Node) {
 			var lbr bool
 			return p.expression(p.primaryExpression2(&FunctionLit{Func: f, Signature: sig, FunctionBody: &Block{LBrace: p.lbrace(&lbr), StatementList: p.statementList(), RBrace: p.fixlbr(lbr)}}, false))
 		case ')', ']':
-			return &FunctionType{Func: f, Signature: sig}
+			return &FunctionTypeNode{Func: f, Signature: sig}
 		default:
 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
@@ -2248,7 +2293,7 @@ func (p *parser) exprOrType() (r Node) {
 					return &TypeSwitchGuard{PrimaryExpr: id, Dot: dot, LParen: lparen, Type: p.shift(), RParen: p.must(')')}
 				default:
 					//  identifier "." "(" . identifier
-					return p.expression(p.primaryExpression2(&TypeAssertion{PrimaryExpr: id, Dot: dot, LParen: lparen, Type: p.type1(), RParen: p.must(')')}, false))
+					return p.expression(p.primaryExpression2(&TypeAssertion{PrimaryExpr: id, Dot: dot, LParen: lparen, AssertType: p.type1(), RParen: p.must(')')}, false))
 				}
 			default:
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
@@ -2256,7 +2301,7 @@ func (p *parser) exprOrType() (r Node) {
 				return r
 			}
 		default:
-			r = id
+			r = &Ident{Token: id}
 		}
 		// QualifiedIdent .
 		switch p.ch() {
@@ -2281,12 +2326,14 @@ func (p *parser) exprOrType() (r Node) {
 						return p.expression(p.primaryExpression2(p.slice2(r, lbracket, x), false))
 					case ',':
 						typeArgs := p.typeArgs2(lbracket, x)
-						var tn *TypeName
+						var tn *TypeNameNode
 						switch y := r.(type) {
 						case *QualifiedIdent:
-							tn = &TypeName{Name: y, TypeArgs: typeArgs}
+							tn = &TypeNameNode{Name: y, TypeArgs: typeArgs}
 						case Token:
-							tn = &TypeName{Name: &QualifiedIdent{Ident: y}, TypeArgs: typeArgs}
+							tn = &TypeNameNode{Name: &QualifiedIdent{Ident: y}, TypeArgs: typeArgs}
+						case *Ident:
+							tn = &TypeNameNode{Name: &QualifiedIdent{Ident: y.Token}, TypeArgs: typeArgs}
 						default:
 							p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 							p.shift()

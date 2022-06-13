@@ -26,6 +26,6 @@ tmp:
 	grep -a 'TOTAL\|\[^"\]\<FAIL\>\|\<PASS\>' log || true
 
 tmp2:
-	GOMAXPROCS=1 go test -v -race -run TestParser/ -trc -re /usr/local/go/test/fixedbugs/issue15055.go 2>&1 | tee log
+	GOMAXPROCS=1 go test -v -race -run TestParser/ -trc 2>&1 | tee log
 	grep -a '^TODO' log | sort | uniq -c | sort -n | tee log-2
 	grep -a 'TOTAL\|\[^"\]\<FAIL\>\|\<PASS\>' log || true

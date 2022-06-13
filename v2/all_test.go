@@ -647,7 +647,8 @@ func parserFails(fn string, src []byte) bool {
 	switch s := filepath.ToSlash(fn); { // Files go/parser parses w/o error but contain syntax errors
 	case
 		strings.HasSuffix(s, "test/fixedbugs/bug299.go"),
-		strings.HasSuffix(s, "test/fixedbugs/issue15055.go"):
+		strings.HasSuffix(s, "test/fixedbugs/issue15055.go"),
+		strings.HasSuffix(s, "test/fixedbugs/issue20232.go"): // :9:11: invalid literal: 6e5518446744
 
 		return true
 	}
@@ -685,13 +686,18 @@ func testParser(p *parallel, t *testing.T, g *golden, root string) {
 		}
 		path := path0
 		p.file()
-		p.exec(func() error {
+		p.exec(func() (err error) {
+			defer func() {
+				if err != nil {
+					p.fail()
+					if *oTrcFail {
+						fmt.Fprintf(os.Stderr, "FAIL: %v\n", path)
+					}
+				}
+			}()
+
 			b, err := os.ReadFile(path)
 			if err != nil {
-				p.fail()
-				if *oTrcFail {
-					fmt.Fprintf(os.Stderr, "FAIL: %v\n", path)
-				}
 				return err
 			}
 
@@ -702,21 +708,31 @@ func testParser(p *parallel, t *testing.T, g *golden, root string) {
 					return nil
 				}
 
-				p.fail()
-				if *oTrcFail {
-					fmt.Fprintf(os.Stderr, "FAIL: %v\n", path)
-				}
 				return err
+			}
+
+			loaderOK := true
+			cfg := &CheckConfig{
+				Loader: func(pth string) (*Package, error) {
+					loaderOK = false
+					return nil, fmt.Errorf("%s", errorf("TODO no loader"))
+				},
+			}
+			pkg, err := NewPackage("", []*SourceFile{ast})
+			if err != nil {
+				return err
+			}
+
+			if err := pkg.Check(cfg); loaderOK && err != nil {
+				if pth := filepath.ToSlash(path); !strings.Contains(pth, "/test/") && !strings.Contains(pth, "/testdata/") {
+					return err
+				}
 			}
 
 			b2 := ast.Source(true)
 			got := strings.TrimRight(string(b2), "\n\r \t")
 			exp := strings.TrimRight(string(b), "\n\r \t")
 			if got != exp {
-				p.fail()
-				if *oTrcFail {
-					fmt.Fprintf(os.Stderr, "FAIL: %v\n", path)
-				}
 				diff := difflib.UnifiedDiff{
 					A:        difflib.SplitLines(exp),
 					B:        difflib.SplitLines(got),
@@ -732,30 +748,11 @@ func testParser(p *parallel, t *testing.T, g *golden, root string) {
 				return fmt.Errorf("%v\ngot\n%s\nexp\n%s\ngot\n%s\nexp\n%s", s, got, exp, hex.Dump([]byte(got)), hex.Dump([]byte(exp)))
 			}
 
-			loaderOK := true
-			cfg := &CheckConfig{
-				Loader: func(pth string) (*Package, error) {
-					loaderOK = false
-					return nil, fmt.Errorf("%s", errorf("TODO no loader"))
-				},
-			}
-			ctx := newCtx(cfg, &Package{SourceFiles: []*SourceFile{ast}})
-			if err := ctx.check(); loaderOK && err != nil {
-				if pth := filepath.ToSlash(path); !strings.Contains(pth, "/test/") && !strings.Contains(pth, "/testdata/") {
-					p.fail()
-					if *oTrcFail {
-						fmt.Fprintf(os.Stderr, "FAIL: %v\n", path)
-					}
-					return err
-				}
-			}
-
 			p.ok()
 			g.w("%s\n", path)
 			if *oTrcOK {
 				fmt.Fprintf(os.Stderr, "OK: %v\n", path)
 			}
-
 			return nil
 		})
 		return nil
