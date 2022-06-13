@@ -66,6 +66,7 @@ var (
 		(*MapTypeNode)(nil),
 		(*MethodDecl)(nil),
 		(*MethodElem)(nil),
+		(*MethodExpr)(nil),
 		(*Package)(nil),
 		(*PackageClause)(nil),
 		(*ParameterDecl)(nil),
@@ -108,16 +109,29 @@ var (
 		(*VarSpec)(nil),
 		(*Variable)(nil),
 	}
+
+	_ = []typeNode{
+		(*StructTypeNode)(nil),
+		(*PointerTypeNode)(nil),
+		(*TypeNameNode)(nil),
+		(*SliceTypeNode)(nil),
+		(*InterfaceTypeNode)(nil),
+		(*ArrayTypeNode)(nil),
+		(*ChannelTypeNode)(nil),
+		(*FunctionTypeNode)(nil),
+		(*MapTypeNode)(nil),
+		(*ParenType)(nil),
+	}
 )
 
-type typ interface {
+type typeNode interface {
 	Node
-	isTyp()
+	isTypeNode()
 }
 
-type isTyp struct{}
+type typeNoder struct{}
 
-func (isTyp) isType() {}
+func (typeNoder) isTypeNode() {}
 
 type simpleStmt interface {
 	Node
@@ -398,7 +412,7 @@ func (n *Block) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n,
 //
 //  StructTyp = "struct" "{" { FieldDecl ";" } "}" .
 type StructTypeNode struct {
-	isTyp
+	typeNoder
 	Struct     Token
 	LBrace     Token
 	FieldDecls []Node
@@ -485,7 +499,7 @@ func (n *VarSpec) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, 
 //
 //  PointerTypeNode = "*" BaseType .
 type PointerTypeNode struct {
-	isTyp
+	typeNoder
 	Star     Token
 	BaseType Node
 }
@@ -505,7 +519,7 @@ func (n *PointerTypeNode) Source(full bool) []byte {
 //  TypeNameNode = QualifiedIdent [ TypeArgs ]
 //  	| identifier [ TypeArgs ] .
 type TypeNameNode struct {
-	isTyp
+	typeNoder
 	Name     *QualifiedIdent
 	TypeArgs *TypeArgs
 }
@@ -572,7 +586,7 @@ func (n *ConstSpec) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}
 //
 // ExpressionList = Expression { "," Expression } .
 type ExpressionListItem struct {
-	Expression Node
+	Expression Node //TODO Expression
 	Comma      Token
 }
 
@@ -589,7 +603,7 @@ func (n *ExpressionListItem) Source(full bool) []byte {
 // ExpressionStmt describes an expression statement.
 //
 type ExpressionStmt struct {
-	Expression Node
+	Expression Node //TODO Expression
 	Semicolon  Token
 }
 
@@ -608,9 +622,9 @@ func (n *ExpressionStmt) Source(full bool) []byte {
 type BinaryExpression struct {
 	typer
 	valuer
-	A  Node
+	A  Node //TODO Expression
 	Op Token
-	B  Node
+	B  Node //TODO Expression
 }
 
 // Position implements Node.
@@ -687,7 +701,7 @@ func (n *ReturnStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{
 type Selector struct {
 	typer
 	valuer
-	PrimaryExpr Node
+	PrimaryExpr Expression
 	Dot         Token
 	Ident       Token
 }
@@ -706,7 +720,7 @@ func (n *Selector) Source(full bool) []byte { return nodeSource(&bytes.Buffer{},
 type Arguments struct {
 	typer
 	valuer
-	PrimaryExpr    Node
+	PrimaryExpr    Expression
 	LParen         Token
 	TypeArg        Node
 	Comma          Token
@@ -731,7 +745,7 @@ type IfStmt struct {
 	If         Token
 	SimpleStmt Node
 	Semicolon  Token
-	Expression Node
+	Expression Node //TODO Expression
 	Block      *Block
 	Else       Token
 	ElsePart   Node
@@ -750,7 +764,7 @@ func (n *IfStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n
 //
 //  SliceTypeNode = "[" "]" ElementType .
 type SliceTypeNode struct {
-	isTyp
+	typeNoder
 	LBracket    Token
 	RBracket    Token
 	ElementType Node
@@ -792,7 +806,7 @@ type UnaryExpr struct {
 	typer
 	valuer
 	UnaryOp   Token
-	UnaryExpr Node
+	UnaryExpr Expression
 }
 
 // Position implements Node.
@@ -842,9 +856,9 @@ func (n *LiteralValue) Source(full bool) []byte { return nodeSource(&bytes.Buffe
 //
 //  KeyedElement = [ Key ":" ] Element .
 type KeyedElement struct {
-	Key     Node
+	Key     Node //TODO Expression
 	Colon   Token
-	Element Node
+	Element Node //TODO Expression
 	Comma   Token
 }
 
@@ -864,7 +878,7 @@ func (n *KeyedElement) Source(full bool) []byte { return nodeSource(&bytes.Buffe
 //
 //  InterfaceTypeNode = "interface" "{" { InterfaceElem ";" } "}" .
 type InterfaceTypeNode struct {
-	isTyp
+	typeNoder
 	Interface      Token
 	LBrace         Token
 	InterfaceElems []Node
@@ -906,7 +920,7 @@ func (n *ForStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, 
 type ForClause struct {
 	InitStmt   Node
 	Semicolon  Token
-	Condition  Node
+	Condition  Node //TODO Expression
 	Semicolon2 Token
 	PostStmt   Node
 }
@@ -925,11 +939,12 @@ func (n *ForClause) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}
 
 // RangeClause describes a range clause.
 //
+//  RangeClause = [ ExpressionList "=" | IdentifierList ":=" ] "range" Expression .
 type RangeClause struct {
 	ExpressionList []*ExpressionListItem
 	Assign         Token
 	Range          Token
-	Expression     Node
+	Expression     Node //TODO Expression
 }
 
 // Position implements Node.
@@ -942,6 +957,7 @@ func (n *RangeClause) Source(full bool) []byte { return nodeSource(&bytes.Buffer
 
 // MethodElem describes a method element.
 //
+// MethodElem     = MethodName Signature .
 type MethodElem struct {
 	MethodName Token
 	Signature  *Signature
@@ -955,6 +971,25 @@ func (n *MethodElem) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *MethodElem) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// MethodExpr describes a method expression.
+//
+//  MethodExpr    = ReceiverType "." MethodName .
+type MethodExpr struct {
+	typer
+	valuer
+	Receiver Node
+	Dot      Token
+	Ident    Token
+}
+
+// Position implements Node.
+func (n *MethodExpr) Position() (r token.Position) {
+	return n.Receiver.Position()
+}
+
+// Source implements Node.
+func (n *MethodExpr) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 // TypeParameters describes type parameters.
 //
@@ -1044,9 +1079,9 @@ func (n *TypeTerm) Source(full bool) []byte { return nodeSource(&bytes.Buffer{},
 type Index struct {
 	typer
 	valuer
-	PrimaryExpr Node
+	PrimaryExpr Expression
 	LBracket    Token
-	Expression  Node
+	Expression  Node //TODO Expression
 	RBracket    Token
 }
 
@@ -1063,7 +1098,7 @@ func (n *Index) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n,
 //  DeferStmt = "defer" Expression .
 type DeferStmt struct {
 	Defer      Token
-	Expression Node
+	Expression Node //TODO Expression
 	Semicolon  Token
 }
 
@@ -1116,7 +1151,7 @@ type ExpressionSwitchStmt struct {
 	Switch          Token
 	SimpleStmt      Node
 	Semicolon       Token
-	Expression      Node
+	Expression      Node //TODO Expression
 	LBrace          Token
 	ExprCaseClauses []*ExprCaseClause
 	RBrace          Token
@@ -1161,12 +1196,14 @@ func (n *TypeSwitchStmt) Source(full bool) []byte {
 //
 //  TypeSwitchGuard = [ identifier ":=" ] PrimaryExpr "." "(" "type" ")" .
 type TypeSwitchGuard struct {
+	typer
+	valuer
 	Ident       Token
 	Define      Token
-	PrimaryExpr Node
+	PrimaryExpr Expression
 	Dot         Token
 	LParen      Token
-	Type        Token
+	TypeToken   Token
 	RParen      Token
 }
 
@@ -1227,7 +1264,7 @@ func (n *TypeSwitchCase) Source(full bool) []byte {
 type TypeAssertion struct {
 	typer
 	valuer
-	PrimaryExpr Node
+	PrimaryExpr Expression
 	Dot         Token
 	LParen      Token
 	AssertType  Node
@@ -1318,13 +1355,13 @@ func (n *ExprSwitchCase) Source(full bool) []byte {
 type SliceExpr struct {
 	typer
 	valuer
-	PrimaryExpr Node
+	PrimaryExpr Expression
 	LBracket    Token
-	Expression  Node
+	Expression  Node //TODO Expression
 	Colon       Token
-	Expression2 Node
+	Expression2 Node //TODO Expression
 	Colon2      Token
-	Expression3 Node
+	Expression3 Node //TODO Expression
 	RBracket    Token
 }
 
@@ -1362,7 +1399,7 @@ type SendStmt struct {
 	simpleStmter
 	Channel    Node
 	Arrow      Token
-	Expression Node
+	Expression Node //TODO Expression
 	Semicolon  Token
 }
 
@@ -1436,7 +1473,7 @@ type Conversion struct {
 	valuer
 	ConvertType Node
 	LParen      Token
-	Expression  Node
+	Expression  Node //TODO Expression
 	Comma       Token
 	RParen      Token
 }
@@ -1470,9 +1507,9 @@ func (n *AliasDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}
 // ArrayTypeNode describes a channel type.
 //
 type ArrayTypeNode struct {
-	isTyp
+	typeNoder
 	LBracket    Token
-	ArrayLength Node
+	ArrayLength Node //TODO Expression
 	RBracket    Token
 	ElementType Node
 }
@@ -1489,7 +1526,7 @@ func (n *ArrayTypeNode) Source(full bool) []byte { return nodeSource(&bytes.Buff
 //
 //  ChannelTypeNode = ( "chan" | "chan" "<-" | "<-" "chan" ) ElementType .
 type ChannelTypeNode struct {
-	isTyp
+	typeNoder
 	ArrowPre    Token
 	Chan        Token
 	ArrayPost   Token
@@ -1514,7 +1551,7 @@ func (n *ChannelTypeNode) Source(full bool) []byte {
 //
 //  FunctionTypeNode = "func" Signature .
 type FunctionTypeNode struct {
-	isTyp
+	typeNoder
 	Func      Token
 	Signature *Signature
 }
@@ -1533,7 +1570,7 @@ func (n *FunctionTypeNode) Source(full bool) []byte {
 //
 //  MapTypeNode = "map" "[" KeyType "]" ElementType .
 type MapTypeNode struct {
-	isTyp
+	typeNoder
 	Map         Token
 	LBracket    Token
 	KeyType     Node
@@ -1554,7 +1591,7 @@ func (n *MapTypeNode) Source(full bool) []byte { return nodeSource(&bytes.Buffer
 // GoStmt = "go" Expression .
 type GoStmt struct {
 	Go         Token
-	Expression Node
+	Expression Node //TODO Expression
 	Semicolon  Token
 }
 
@@ -1570,6 +1607,8 @@ func (n *GoStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n
 //
 // GenericOperand = OperandName TypeArgs .
 type GenericOperand struct {
+	typer
+	valuer
 	OperandName Node
 	TypeArgs    *TypeArgs
 }
@@ -1656,7 +1695,7 @@ func (n *TypeListItem) Source(full bool) []byte { return nodeSource(&bytes.Buffe
 //  IncDecStmt = Expression ( "++" | "--" ) .
 type IncDecStmt struct {
 	simpleStmter
-	Expression Node
+	Expression Node //TODO Expression
 	Op         Token
 	Semicolon  Token
 }
@@ -1678,7 +1717,7 @@ type ParenExpr struct {
 	typer
 	valuer
 	LParen     Token
-	Expression Node
+	Expression Node //TODO Expression
 	RParen     Token
 }
 
@@ -1694,7 +1733,7 @@ func (n *ParenExpr) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}
 //
 // ParenType = "(" Type ")" .
 type ParenType struct {
-	isTyp
+	typeNoder
 	LParen Token
 	Type   Node
 	RParen Token
@@ -1712,7 +1751,7 @@ func (n *ParenType) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}
 type Constant struct {
 	typer
 	valuer
-	Expr  Node
+	Expr  Node //TODO Expression
 	Ident Token
 	iota  int64
 }
@@ -1728,7 +1767,7 @@ func (n *Constant) Source(full bool) []byte {
 // Variable represents a Go variable.
 type Variable struct {
 	typer
-	Expr  Node
+	Expr  Node //TODO Expression
 	Ident Token
 }
 

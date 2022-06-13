@@ -10,22 +10,27 @@ import (
 )
 
 var (
-	_ Expression = (*Arguments)(nil)
-	_ Expression = (*BasicLit)(nil)
-	_ Expression = (*BinaryExpression)(nil)
-	_ Expression = (*CompositeLit)(nil)
-	_ Expression = (*Constant)(nil)
-	_ Expression = (*Conversion)(nil)
-	_ Expression = (*FunctionLit)(nil)
-	_ Expression = (*Ident)(nil)
-	_ Expression = (*Index)(nil)
-	_ Expression = (*ParenExpr)(nil)
-	_ Expression = (*QualifiedIdent)(nil)
-	_ Expression = (*Selector)(nil)
-	_ Expression = (*SliceExpr)(nil)
-	_ Expression = (*TypeAssertion)(nil)
-	_ Expression = (*UnaryExpr)(nil)
-	_ Expression = (*invalidExprType)(nil)
+	_ = []Expression{
+		(*Arguments)(nil),
+		(*BasicLit)(nil),
+		(*BinaryExpression)(nil),
+		(*CompositeLit)(nil),
+		(*Constant)(nil),
+		(*Conversion)(nil),
+		(*FunctionLit)(nil),
+		(*GenericOperand)(nil),
+		(*Ident)(nil),
+		(*Index)(nil),
+		(*MethodExpr)(nil),
+		(*ParenExpr)(nil),
+		(*QualifiedIdent)(nil),
+		(*Selector)(nil),
+		(*SliceExpr)(nil),
+		(*TypeAssertion)(nil),
+		(*TypeSwitchGuard)(nil),
+		(*UnaryExpr)(nil),
+		(*invalidExprType)(nil),
+	}
 )
 
 var (

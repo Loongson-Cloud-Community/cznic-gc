@@ -479,7 +479,7 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 
 				default:
 					switch x := p.exprOrType().(type) {
-					case typ:
+					case typeNode:
 						p.err(errorf("TODO %v", p.ch().str()))
 						p.shift()
 						return r
@@ -1534,7 +1534,7 @@ func (p *parser) fieldDecl() (r *FieldDecl) {
 			case IDENTIFIER:
 				// . identifier "[" . identifier
 				switch x := p.exprOrType().(type) {
-				case typ:
+				case typeNode:
 					// . identifier "[" Type .
 					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 					p.shift()
@@ -1841,7 +1841,7 @@ func (p *parser) unaryExpression() (r Node) {
 		return p.primaryExpression()
 	//                  unary_op case '!', '&', '*', '+', '-', '^', ARROW:
 	case '!', '&', '*', '+', '-', '^':
-		return &UnaryExpr{UnaryOp: p.shift(), UnaryExpr: p.unaryExpression()}
+		return &UnaryExpr{UnaryOp: p.shift(), UnaryExpr: p.unaryExpression().(Expression)}
 	case ARROW:
 		arrow := p.shift()
 		// "<-" .
@@ -1851,7 +1851,7 @@ func (p *parser) unaryExpression() (r Node) {
 			p.shift()
 			return r
 		default:
-			return &UnaryExpr{UnaryOp: arrow, UnaryExpr: p.unaryExpression()}
+			return &UnaryExpr{UnaryOp: arrow, UnaryExpr: p.unaryExpression().(Expression)}
 		}
 	default:
 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
@@ -1913,8 +1913,16 @@ func (p *parser) primaryExpression() (r Node) {
 	case '(':
 		lparen := p.shift()
 		switch x := p.exprOrType().(type) {
-		case typ:
+		case typeNode:
 			r = &ParenType{LParen: lparen, Type: x, RParen: p.must(')')}
+			switch p.ch() {
+			case '(', '.':
+				// ok
+			default:
+				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
+				p.shift()
+				return r
+			}
 		default:
 			r = &ParenExpr{LParen: lparen, Expression: x, RParen: p.must(')')}
 		}
@@ -1972,10 +1980,10 @@ func (p *parser) primaryExpression() (r Node) {
 				switch p.ch() {
 				case TYPE:
 					//  identifier "." "(" . "type"
-					return &TypeSwitchGuard{PrimaryExpr: id, Dot: dot, LParen: lparen, Type: p.shift(), RParen: p.must(')')}
+					return &TypeSwitchGuard{PrimaryExpr: &Ident{Token: id}, Dot: dot, LParen: lparen, TypeToken: p.shift(), RParen: p.must(')')}
 				default:
 					//  identifier "." "(" . identifier
-					return p.primaryExpression2(&TypeAssertion{PrimaryExpr: id, Dot: dot, LParen: lparen, AssertType: p.type1(), RParen: p.must(')')}, false)
+					return p.primaryExpression2(&TypeAssertion{PrimaryExpr: &Ident{Token: id}, Dot: dot, LParen: lparen, AssertType: p.type1(), RParen: p.must(')')}, false)
 				}
 			default:
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
@@ -1996,13 +2004,13 @@ func (p *parser) primaryExpression() (r Node) {
 			//                      Type case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 			case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
 				switch x := p.exprOrType().(type) {
-				case typ:
+				case typeNode:
 					r = &GenericOperand{OperandName: r, TypeArgs: p.typeArgs2(lbracket, x)}
 				default:
 					// QualifiedIdent "[" Expression .
 					switch p.ch() {
 					case ']':
-						r = &Index{PrimaryExpr: r, LBracket: lbracket, Expression: x, RBracket: p.shift()}
+						r = &Index{PrimaryExpr: r.(Expression), LBracket: lbracket, Expression: x, RBracket: p.shift()}
 					case ':':
 						r = p.slice2(r, lbracket, x)
 					case ',':
@@ -2046,7 +2054,12 @@ func (p *parser) primaryExpression2(pe Node, checkForLiteral bool) (r Node) {
 		switch p.ch() {
 		//                 Arguments
 		case '(':
-			r = p.arguments(r)
+			switch x := r.(type) {
+			case typeNode:
+				r = &Conversion{ConvertType: x, LParen: p.shift(), Expression: p.expression(nil), Comma: p.opt(','), RParen: p.must(')')}
+			default:
+				r = p.arguments(r)
+			}
 			//                     Index case '[':
 			//                     Slice case '[':
 		case '[':
@@ -2057,14 +2070,19 @@ func (p *parser) primaryExpression2(pe Node, checkForLiteral bool) (r Node) {
 			dot := p.shift()
 			switch p.ch() {
 			case IDENTIFIER:
-				r = &Selector{PrimaryExpr: r, Dot: dot, Ident: p.shift()}
+				switch x := r.(type) {
+				case typeNode:
+					r = &MethodExpr{Receiver: x, Dot: dot, Ident: p.shift()}
+				default:
+					r = &Selector{PrimaryExpr: r.(Expression), Dot: dot, Ident: p.shift()}
+				}
 			case '(':
 				lparen := p.shift()
 				switch p.ch() {
 				case TYPE:
-					return &TypeSwitchGuard{PrimaryExpr: r, Dot: dot, LParen: lparen, Type: p.shift(), RParen: p.must(')')}
+					return &TypeSwitchGuard{PrimaryExpr: r.(Expression), Dot: dot, LParen: lparen, TypeToken: p.shift(), RParen: p.must(')')}
 				default:
-					r = &TypeAssertion{PrimaryExpr: r, Dot: dot, LParen: lparen, AssertType: p.type1(), RParen: p.must(')')}
+					r = &TypeAssertion{PrimaryExpr: r.(Expression), Dot: dot, LParen: lparen, AssertType: p.type1(), RParen: p.must(')')}
 				}
 			default:
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
@@ -2094,7 +2112,7 @@ func (p *parser) indexOrSlice(pe Node) (r Node) {
 	}
 	if p.ch() == ']' {
 		// "[" Expression . "]"
-		return &Index{PrimaryExpr: pe, LBracket: lbracket, Expression: expr, RBracket: p.shift()}
+		return &Index{PrimaryExpr: pe.(Expression), LBracket: lbracket, Expression: expr, RBracket: p.shift()}
 	}
 	return p.slice2(pe, lbracket, expr)
 }
@@ -2110,10 +2128,10 @@ func (p *parser) slice2(pe Node, lbracket Token, expr Node) (r *SliceExpr) {
 	}
 	if p.ch() == ']' {
 		// "[" Expression ":" [ Expression ] . "]"
-		return &SliceExpr{PrimaryExpr: pe, LBracket: lbracket, Expression: expr, Colon: colon, Expression2: expr2, RBracket: p.shift()}
+		return &SliceExpr{PrimaryExpr: pe.(Expression), LBracket: lbracket, Expression: expr, Colon: colon, Expression2: expr2, RBracket: p.shift()}
 	}
 
-	return &SliceExpr{PrimaryExpr: pe, LBracket: lbracket, Expression: expr, Colon: colon, Expression2: expr2, Colon2: p.must(':'), Expression3: p.expression(nil), RBracket: p.shift()}
+	return &SliceExpr{PrimaryExpr: pe.(Expression), LBracket: lbracket, Expression: expr, Colon: colon, Expression2: expr2, Colon2: p.must(':'), Expression3: p.expression(nil), RBracket: p.shift()}
 }
 
 // Arguments = "(" ")"
@@ -2133,14 +2151,14 @@ func (p *parser) slice2(pe Node, lbracket Token, expr Node) (r *SliceExpr) {
 // Arguments_6 =
 // 	| "," .
 func (p *parser) arguments(pe Node) (r *Arguments) {
-	r = &Arguments{PrimaryExpr: pe, LParen: p.must('(')}
+	r = &Arguments{PrimaryExpr: pe.(Expression), LParen: p.must('(')}
 	if p.ch() == ')' {
 		r.RParen = p.shift()
 		return r
 	}
 
 	switch x := p.exprOrType().(type) {
-	case typ:
+	case typeNode:
 		r.TypeArg = x
 		switch p.ch() {
 		case ',':
@@ -2196,7 +2214,7 @@ func (p *parser) exprOrType() (r Node) {
 		lparen := p.shift()
 		// "(" .
 		switch x := p.exprOrType().(type) {
-		case typ:
+		case typeNode:
 			// "(" Type .
 			switch p.ch() {
 			case ')':
@@ -2222,10 +2240,10 @@ func (p *parser) exprOrType() (r Node) {
 		star := p.shift()
 		// "*" .
 		switch x := p.exprOrType().(type) {
-		case typ:
+		case typeNode:
 			return &PointerTypeNode{Star: star, BaseType: x}
 		default:
-			return &UnaryExpr{UnaryOp: star, UnaryExpr: x}
+			return &UnaryExpr{UnaryOp: star, UnaryExpr: x.(Expression)}
 		}
 	case ARROW:
 		arrow := p.shift()
@@ -2244,7 +2262,7 @@ func (p *parser) exprOrType() (r Node) {
 				return r
 			}
 		default:
-			return p.expression(&UnaryExpr{UnaryOp: arrow, UnaryExpr: p.unaryExpression()})
+			return p.expression(&UnaryExpr{UnaryOp: arrow, UnaryExpr: p.unaryExpression().(Expression)})
 		}
 	case '[', CHAN, INTERFACE, MAP, STRUCT:
 		t := p.type1()
@@ -2290,10 +2308,10 @@ func (p *parser) exprOrType() (r Node) {
 				//  identifier "." "(" .
 				switch p.ch() {
 				case TYPE:
-					return &TypeSwitchGuard{PrimaryExpr: id, Dot: dot, LParen: lparen, Type: p.shift(), RParen: p.must(')')}
+					return &TypeSwitchGuard{PrimaryExpr: &Ident{Token: id}, Dot: dot, LParen: lparen, TypeToken: p.shift(), RParen: p.must(')')}
 				default:
 					//  identifier "." "(" . identifier
-					return p.expression(p.primaryExpression2(&TypeAssertion{PrimaryExpr: id, Dot: dot, LParen: lparen, AssertType: p.type1(), RParen: p.must(')')}, false))
+					return p.expression(p.primaryExpression2(&TypeAssertion{PrimaryExpr: &Ident{Token: id}, Dot: dot, LParen: lparen, AssertType: p.type1(), RParen: p.must(')')}, false))
 				}
 			default:
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
@@ -2313,7 +2331,7 @@ func (p *parser) exprOrType() (r Node) {
 			//                      Type case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 			case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
 				switch x := p.exprOrType().(type) {
-				case typ:
+				case typeNode:
 					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 					p.shift()
 					return r
@@ -2321,7 +2339,7 @@ func (p *parser) exprOrType() (r Node) {
 					// QualifiedIdent "[" Expression .
 					switch p.ch() {
 					case ']':
-						return p.expression(p.primaryExpression2(&Index{PrimaryExpr: r, LBracket: lbracket, Expression: x, RBracket: p.shift()}, true))
+						return p.expression(p.primaryExpression2(&Index{PrimaryExpr: r.(Expression), LBracket: lbracket, Expression: x, RBracket: p.shift()}, true))
 					case ':':
 						return p.expression(p.primaryExpression2(p.slice2(r, lbracket, x), false))
 					case ',':

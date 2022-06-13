@@ -6116,7 +6116,6 @@
 /usr/local/go/test/fixedbugs/issue11371.go
 /usr/local/go/test/fixedbugs/issue11590.go
 /usr/local/go/test/fixedbugs/issue11610a.go
-/usr/local/go/test/fixedbugs/issue11614.go
 /usr/local/go/test/fixedbugs/issue11656.dir/asm.go
 /usr/local/go/test/fixedbugs/issue11656.dir/asm_generic.go
 /usr/local/go/test/fixedbugs/issue11656.dir/issue11656.go
