@@ -73,11 +73,12 @@ func init() {
 var (
 	_ scannertest.Interface = (*testScanner)(nil)
 
-	oFailNow = flag.Bool("failnow", false, "")
-	oRE      = flag.String("re", "", "")
-	oTrc     = flag.Bool("trc", false, "")
-	oTrcFail = flag.Bool("trcfail", false, "")
-	oTrcOK   = flag.Bool("trcok", false, "")
+	oFailNow   = flag.Bool("failnow", false, "")
+	oRE        = flag.String("re", "", "")
+	oTrc       = flag.Bool("trc", false, "")
+	oTrcFail   = flag.Bool("trcfail", false, "")
+	oTrcOK     = flag.Bool("trcok", false, "")
+	oTypecheck = flag.Bool("typecheck", false, "")
 
 	digits  = expand(unicode.Nd)
 	letters = expand(unicode.L)
@@ -170,7 +171,7 @@ func (g *golden) close() {
 }
 
 func TestMain(m *testing.M) {
-	extendedErrors = true
+	ExtendedErrors = true
 	flag.BoolVar(&trcError, "trcerror", false, "")
 	flag.Parse()
 	if s := *oRE; s != "" {
@@ -723,9 +724,11 @@ func testParser(p *parallel, t *testing.T, g *golden, root string) {
 				return err
 			}
 
-			if err := pkg.Check(cfg); loaderOK && err != nil {
-				if pth := filepath.ToSlash(path); !strings.Contains(pth, "/test/") && !strings.Contains(pth, "/testdata/") {
-					return err
+			if *oTypecheck {
+				if err := pkg.Check(cfg); loaderOK && err != nil {
+					if pth := filepath.ToSlash(path); !strings.Contains(pth, "/test/") && !strings.Contains(pth, "/testdata/") {
+						return err
+					}
 				}
 			}
 

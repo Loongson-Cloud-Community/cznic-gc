@@ -38,6 +38,14 @@ var (
 	unknown     = constant.MakeUnknown()
 )
 
+// Expression represents a computation.
+type Expression interface {
+	Node
+	Type() Type
+	Value() constant.Value
+	checker
+}
+
 type valuer struct{ v constant.Value }
 
 func newValuer(v constant.Value) valuer { return valuer{v} }
@@ -51,17 +59,12 @@ func (v valuer) Value() constant.Value {
 }
 
 type invalidExprType struct {
+	guard
 	typer
 	valuer
 }
 
+func (n *invalidExprType) Kind() Kind                   { return InvalidKind }
+func (n *invalidExprType) check(c *ctx)                 {}
 func (n *invalidExprType) Position() (r token.Position) { return r }
 func (n *invalidExprType) Source(full bool) []byte      { return []byte("<invalid expression>") }
-
-// Expression represents a computation.
-type Expression interface {
-	Node
-	Type() Type
-	Value() constant.Value
-	// eval(c *ctx)
-}

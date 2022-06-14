@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"go/token"
 	"sort"
+	"strconv"
 )
 
 var (
@@ -48,6 +49,9 @@ func (s *Scope) IsPackage() bool { return s.Parent != nil && s.Parent.IsUniverse
 
 func (s *Scope) add(c *ctx, nm string, n Node) {
 	if nm == "_" {
+		if s.IsPackage() {
+			c.pkg.Blanks = append(c.pkg.Blanks, n)
+		}
 		return
 	}
 
@@ -55,6 +59,7 @@ func (s *Scope) add(c *ctx, nm string, n Node) {
 		s.Nodes = map[string]Node{}
 	}
 	if x, ok := s.Nodes[nm]; ok {
+		trc("%v: %q (%v: %v: %v:)", n.Position(), nm, origin(4), origin(3), origin(2))
 		c.err(n, "%s redeclared, previous declaration at %v:", nm, x.Position())
 		return
 	}
@@ -62,25 +67,19 @@ func (s *Scope) add(c *ctx, nm string, n Node) {
 	s.Nodes[nm] = n
 }
 
-// CheckConfig configures the type checker.
-type CheckConfig struct {
-	Loader   func(importPath string) (*Package, error)
-	Resolver func(pkg *Package, ident string) Node
-}
-
 type ctx struct {
-	cfg       *CheckConfig
-	errors    errList
-	pkg       *Package
-	scope     *Scope
-	tldCycles map[string]byte
+	cfg    *CheckConfig
+	errors errList
+	pkg    *Package
+	scope  *Scope
+
+	iota int64
 }
 
 func newCtx(cfg *CheckConfig, pkg *Package) *ctx {
 	return &ctx{
-		cfg:       cfg,
-		pkg:       pkg,
-		tldCycles: map[string]byte{},
+		cfg: cfg,
+		pkg: pkg,
 	}
 }
 
@@ -92,14 +91,24 @@ func (c *ctx) err(n Node, s string, args ...interface{}) {
 	c.errors.err(pos, s, args...)
 }
 
+func (c *ctx) check(n Node) Type {
+	switch x := n.(type) {
+	case *StructTypeNode:
+		return x.check(c)
+	default:
+		c.err(n, errorf("TODO %T", x))
+		return Invalid
+	}
+}
+
 func (n *SourceFile) check(c *ctx) {
-	pkgName := n.PackageClause.Package.Src()
+	pkgName := n.PackageClause.PackageName.Src()
 	switch {
 	case c.pkg.Name == "":
 		c.pkg.Name = pkgName
 	default:
 		if pkgName != c.pkg.Name {
-			c.err(n.PackageClause.PackageName, "expected package name %s", c.pkg.Name)
+			c.err(n.PackageClause.PackageName, "expected package name %q, got %q", c.pkg.Name, pkgName)
 		}
 	}
 	n.checkImports(c)
@@ -112,7 +121,7 @@ func (n *SourceFile) collectTLDs(c *ctx) {
 		case *ConstDecl:
 			for _, cs := range x.ConstSpecs {
 				for i, id := range cs.IdentifierList {
-					c.pkg.Scope.add(c, id.Ident.Src(), &Constant{Expr: cs.expressionList[i], Ident: id.Ident, iota: cs.iota})
+					c.pkg.Scope.add(c, id.Ident.Src(), &Constant{node: cs, Expr: cs.expressionList[i].Expression, Ident: id.Ident})
 				}
 			}
 		case *FunctionDecl:
@@ -167,7 +176,7 @@ func (n *SourceFile) collectTLDs(c *ctx) {
 		case *VarDecl:
 			for _, vs := range x.VarSpecs {
 				for i, id := range vs.IdentifierList {
-					var expr Node
+					var expr Expression
 					if i < len(vs.ExpressionList) {
 						expr = vs.ExpressionList[i].Expression
 					}
@@ -183,7 +192,13 @@ func (n *SourceFile) collectTLDs(c *ctx) {
 func (n *SourceFile) checkImports(c *ctx) {
 	for _, id := range n.ImportDecls {
 		for _, is := range id.ImportSpecs {
-			pkg, err := c.cfg.Loader(is.ImportPath.Src())
+			importPath, err := strconv.Unquote(is.ImportPath.Src())
+			if err != nil {
+				c.err(is.ImportPath, "%s", err)
+				return
+			}
+
+			pkg, err := c.cfg.Loader(importPath)
 			if err != nil {
 				c.err(is.ImportPath, "%s", err)
 				return
@@ -211,6 +226,7 @@ const (
 type Package struct {
 	ImportPath  string
 	Inits       []*FunctionDecl
+	Blanks      []Node
 	Name        string
 	Scope       Scope
 	SourceFiles []*SourceFile
@@ -234,6 +250,13 @@ func (n *Package) Source(full bool) []byte { return nil }
 
 // Check type checks n.
 func (n *Package) Check(cfg *CheckConfig) error {
+	if cfg.Loader == nil {
+		return fmt.Errorf("no loader configured")
+	}
+
+	if cfg.Resolver == nil {
+		return fmt.Errorf("no resolver configured")
+	}
 	c := newCtx(cfg, n)
 	for _, file := range n.SourceFiles {
 		file.Scope.Parent = &n.Scope
@@ -241,10 +264,10 @@ func (n *Package) Check(cfg *CheckConfig) error {
 	}
 	c.scope = &n.Scope
 	n.checkDeclarations(c)
+	//TODO check func/method bodies
 	return c.errors.Err()
 }
 
-// TLD const, type, var
 func (n *Package) checkDeclarations(c *ctx) {
 	var tldNames []string
 	for tldName := range n.Scope.Nodes {
@@ -252,53 +275,227 @@ func (n *Package) checkDeclarations(c *ctx) {
 	}
 	sort.Strings(tldNames)
 	for _, tldName := range tldNames {
-		n.checkDeclaration(c, tldName)
+		switch x := n.Scope.Nodes[tldName].(type) {
+		case checker:
+			x.check(c)
+		case *Package:
+			// nop
+		default:
+			c.err(x, errorf("TODO %T", x))
+		}
 	}
 }
 
-func (n *Package) checkDeclaration(c *ctx, nm string) {
-	defer func() {
-		c.tldCycles[nm] = checkChecked
-	}()
-
-	decl := n.Scope.Nodes[nm]
-	switch c.tldCycles[nm] {
-	case checkChecked:
-		return
-	case checkChecking:
-		c.err(n.Scope.Nodes[nm], errorf("type checking loop: %s", nm))
+func (n *Arguments) check(c *ctx) {
+	if !n.enter(c, n) {
 		return
 	}
 
-	c.tldCycles[nm] = checkChecking
-	switch x := decl.(type) {
-	case *Constant:
-		x.check(c, nm)
-	case *TypeName:
-		x.check(c, nm)
-	case *Variable:
-		x.check(c, nm)
-	case *AliasType:
-		x.check(c, nm)
-	case *FunctionDecl, *MethodDecl:
-		// nop
-	default:
-		c.err(x, errorf("TODO %T", x))
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+}
+
+func (n *BasicLit) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
 	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
 }
 
-func (n *TypeName) check(c *ctx, nm string) {
-	//TODO c.err(n, errorf("TODO %T", n))
+func (n *BinaryExpression) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
 }
 
-func (n *Variable) check(c *ctx, nm string) {
-	//TODO c.err(n, errorf("TODO %T", n))
+func (n *CompositeLit) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
 }
 
-func (n *AliasType) check(c *ctx, nm string) {
-	//TODO c.err(n, errorf("TODO %T", n))
+func (n *Constant) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	iota := c.iota
+	c.iota = n.node.iota
+	defer func() { c.iota = iota }()
+
+	c.err(n, errorf("TODO %T", n))
 }
 
-func (n *Constant) check(c *ctx, nm string) {
-	//TODO c.err(n, errorf("TODO %T", n))
+func (n *Conversion) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+}
+
+func (n *FunctionLit) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+}
+
+func (n *GenericOperand) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+}
+
+func (n *Ident) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+}
+
+func (n *Index) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+}
+
+func (n *MethodExpr) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+}
+
+func (n *ParenExpr) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+}
+
+func (n *QualifiedIdent) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+}
+
+func (n *Selector) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+}
+
+func (n *SliceExpr) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+}
+
+func (n *TypeAssertion) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+}
+
+func (n *TypeSwitchGuard) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+}
+
+func (n *UnaryExpr) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+}
+
+func (n *Variable) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+}
+
+func (n *FunctionDecl) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	n.typ = n.Signature.check(c)
+}
+
+func (n *MethodDecl) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
 }

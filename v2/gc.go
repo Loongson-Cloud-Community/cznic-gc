@@ -62,3 +62,12 @@ func ParseSourceFile(cfg *ParseSourceFileConfig, name string, buf []byte) (r *So
 
 	return r, nil
 }
+
+// CheckConfig configures the type checker.
+type CheckConfig struct {
+	// Loader returns a package by its import path or an error, if any.
+	Loader func(importPath string) (*Package, error)
+	// Resolver returns type information about a symbol. The returned value may in
+	// some cases additionally implement Value.
+	Resolver func(pkg *Package, ident string) Type
+}

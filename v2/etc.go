@@ -20,7 +20,9 @@ var (
 	_ = todo //TODOOK
 	_ = trc  //TODOOK
 
-	extendedErrors bool
+	// ExtendedErrors optionally amends errors with a stack mini trace. Intended
+	// for debugging only.
+	ExtendedErrors bool
 )
 
 func origin(skip int) string {
@@ -73,7 +75,7 @@ func trc(s string, args ...interface{}) string {
 	return r
 }
 
-// errorf constructs and error message. If extendedErrors is true, the error will
+// errorf constructs and error message. If ExtendedErrors is true, the error will
 // contain a mini stack trace.
 func errorf(s string, args ...interface{}) string {
 	switch {
@@ -83,7 +85,7 @@ func errorf(s string, args ...interface{}) string {
 		s = fmt.Sprintf(s, args...)
 	}
 	switch {
-	case extendedErrors:
+	case ExtendedErrors:
 		return fmt.Sprintf("%s (%v: %v: %v:)", s, origin(4), origin(3), origin(2))
 	default:
 		return s
