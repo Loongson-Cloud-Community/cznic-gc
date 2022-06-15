@@ -437,6 +437,7 @@ func (n *Block) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n,
 //
 //  StructTyp = "struct" "{" { FieldDecl ";" } "}" .
 type StructTypeNode struct {
+	guard
 	typer
 	typeNoder
 	Struct     Token
@@ -525,6 +526,8 @@ func (n *VarSpec) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, 
 //
 //  PointerTypeNode = "*" BaseType .
 type PointerTypeNode struct {
+	guard
+	typer
 	typeNoder
 	Star     Token
 	BaseType Node
@@ -545,6 +548,8 @@ func (n *PointerTypeNode) Source(full bool) []byte {
 //  TypeNameNode = QualifiedIdent [ TypeArgs ]
 //  	| identifier [ TypeArgs ] .
 type TypeNameNode struct {
+	guard
+	typer
 	typeNoder
 	Name     *QualifiedIdent
 	TypeArgs *TypeArgs

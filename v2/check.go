@@ -72,8 +72,11 @@ type ctx struct {
 	errors errList
 	pkg    *Package
 	scope  *Scope
+	stack  []Node
 
 	iota int64
+
+	pushNamed bool
 }
 
 func newCtx(cfg *CheckConfig, pkg *Package) *ctx {
@@ -93,8 +96,9 @@ func (c *ctx) err(n Node, s string, args ...interface{}) {
 
 func (c *ctx) check(n Node) Type {
 	switch x := n.(type) {
-	case *StructTypeNode:
-		return x.check(c)
+	case typeChecker:
+		x.check(c)
+		return x.Type()
 	default:
 		c.err(n, errorf("TODO %T", x))
 		return Invalid
