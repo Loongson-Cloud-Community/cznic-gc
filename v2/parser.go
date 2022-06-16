@@ -504,6 +504,8 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 				switch x := pd.Type.(type) {
 				case Token:
 					names = append(names, &IdentifierListItem{Ident: x, Comma: pd.Comma})
+				case *Ident:
+					names = append(names, &IdentifierListItem{Ident: x.Token, Comma: pd.Comma})
 				default:
 					p.errNode(x, errorf("TODO %T", x))
 				}
@@ -534,9 +536,9 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 			case ELLIPSIS:
 				r = append(r, &ParameterDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, Ellipsis: p.shift(), Type: p.type1(), Comma: p.opt(',')})
 			case ',':
-				r = append(r, &ParameterDecl{Type: id, Comma: p.shift()})
+				r = append(r, &ParameterDecl{Type: &Ident{Token: id}, Comma: p.shift()})
 			case ')':
-				return append(r, &ParameterDecl{Type: id})
+				return append(r, &ParameterDecl{Type: &Ident{Token: id}})
 			case '.':
 				r = append(r, &ParameterDecl{Type: p.typeName2(&TypeNameNode{Name: &QualifiedIdent{PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}}), Comma: p.opt(',')})
 			case '[':
@@ -1969,7 +1971,7 @@ func (p *parser) primaryExpression() (r Node) {
 		case STRING_LIT:
 			typ = untypedString
 		}
-		r = &BasicLit{typer: newTyper(typ), valuer: newValuer(v), Token: tok}
+		r = &BasicLit{typer: newTyper(typ), valuer: newValuer(v), Token: tok, guard: checked}
 	//                Conversion case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 	//                MethodExpr case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 	case '(':

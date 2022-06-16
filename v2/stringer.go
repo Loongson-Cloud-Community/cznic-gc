@@ -93,7 +93,7 @@ func _() {
 	_ = x[Chan-4]
 	_ = x[Complex128-5]
 	_ = x[Complex64-6]
-	_ = x[DefinedType-7]
+	_ = x[Defined-7]
 	_ = x[Float32-8]
 	_ = x[Float64-9]
 	_ = x[Function-10]

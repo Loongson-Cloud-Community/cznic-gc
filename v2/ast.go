@@ -32,6 +32,7 @@ var (
 		(*ContinueStmt)(nil),
 		(*Conversion)(nil),
 		(*DeferStmt)(nil),
+		(*DefinedType)(nil),
 		(*EmbeddedField)(nil),
 		(*EmptyStmt)(nil),
 		(*ExprCaseClause)(nil),
@@ -97,7 +98,6 @@ var (
 		(*TypeDef)(nil),
 		(*TypeElem)(nil),
 		(*TypeListItem)(nil),
-		(*TypeName)(nil),
 		(*TypeNameNode)(nil),
 		(*TypeParamDecl)(nil),
 		(*TypeParameters)(nil),
@@ -111,16 +111,16 @@ var (
 	}
 
 	_ = []typeNode{
-		(*StructTypeNode)(nil),
-		(*PointerTypeNode)(nil),
-		(*TypeNameNode)(nil),
-		(*SliceTypeNode)(nil),
-		(*InterfaceTypeNode)(nil),
 		(*ArrayTypeNode)(nil),
 		(*ChannelTypeNode)(nil),
 		(*FunctionTypeNode)(nil),
+		(*InterfaceTypeNode)(nil),
 		(*MapTypeNode)(nil),
 		(*ParenType)(nil),
+		(*PointerTypeNode)(nil),
+		(*SliceTypeNode)(nil),
+		(*StructTypeNode)(nil),
+		(*TypeNameNode)(nil),
 	}
 )
 
@@ -259,23 +259,34 @@ func (n *Signature) Position() (r token.Position) {
 func (n *Signature) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 func (n *Signature) check(c *ctx) (r *FunctionType) {
-	r = &FunctionType{}
-	for _, v := range n.Parameters.ParameterList {
-		t := newTyper(c.check(v.Type))
-		if len(v.IdentifierList) == 0 {
-			r.Parameters = append(r.Parameters, &Parameter{typer: t})
-			continue
-		}
-
-		for _, w := range v.IdentifierList {
-			r.Parameters = append(r.Parameters, &Parameter{Name: w.Ident.Src(), typer: t})
-		}
-	}
+	r = &FunctionType{Parameters: params(c, n.Parameters.ParameterList)}
 	switch x := n.Result.(type) {
+	case *TypeNameNode:
+		x.check(c)
+		r.Results = []*Parameter{{typer: newTyper(x.Type())}}
+	case nil:
+		// ok
+	case *Parameters:
+		r.Parameters = params(c, x.ParameterList)
 	default:
 		c.err(x, errorf("TODO %T", x))
 	}
 	n.typ = r
+	return r
+}
+
+func params(c *ctx, a []*ParameterDecl) (r []*Parameter) {
+	for _, v := range a {
+		t := newTyper(c.check(v.Type))
+		if len(v.IdentifierList) == 0 {
+			r = append(r, &Parameter{typer: t})
+			continue
+		}
+
+		for _, w := range v.IdentifierList {
+			r = append(r, &Parameter{Name: w.Ident.Src(), typer: t})
+		}
+	}
 	return r
 }
 
@@ -321,6 +332,7 @@ func (n *TypeDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{},
 //
 //  TypeDef = identifier [ TypeParameters ] Type .
 type TypeDef struct {
+	guard
 	typer
 	Ident          Token
 	TypeParameters *TypeParameters
@@ -335,6 +347,18 @@ func (n *TypeDef) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *TypeDef) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+func (n *TypeDef) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	t := n.TypeNode.(typeChecker)
+	t.check(c)
+	n.typ = t.Type()
+}
 
 // ParameterDecl describes a parameter declaration.
 //
@@ -563,6 +587,16 @@ func (n *TypeNameNode) Position() (r token.Position) {
 // Source implements Node.
 func (n *TypeNameNode) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+func (n *TypeNameNode) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	n.typ = c.resolveQualifiedType(n.Name)
+}
+
 // QualifiedIdent describes an optionally qualified identifier.
 //
 //  QualifiedIdent = PackageName "." identifier .
@@ -766,7 +800,13 @@ type Arguments struct {
 	Ellipsis       Token
 	Comma2         Token
 	RParen         Token
+
+	convType typer
 }
+
+// ConversionType reports the conversion type when n could be interpreted as a
+// conversion.
+func (n *Arguments) ConversionType() Type { return n.convType.Type() }
 
 // Position implements Node.
 func (n *Arguments) Position() (r token.Position) {
@@ -1537,6 +1577,8 @@ func (n *Conversion) Source(full bool) []byte { return nodeSource(&bytes.Buffer{
 //
 //  AliasDecl = identifier "=" Type .
 type AliasDecl struct {
+	guard
+	typer
 	Ident     Token
 	Eq        Token
 	Type      Node
@@ -1556,6 +1598,8 @@ func (n *AliasDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}
 //  ArrayType   = "[" ArrayLength "]" ElementType .
 //  ArrayLength = Expression | "..."
 type ArrayTypeNode struct {
+	guard
+	typer
 	typeNoder
 	LBracket    Token
 	ArrayLength Expression
@@ -1771,7 +1815,12 @@ type ParenExpr struct {
 	LParen     Token
 	Expression Expression
 	RParen     Token
+	parenType  typer
 }
+
+// ParenType returns type of n if interpreted as a parenthesized type, if
+// applicable.
+func (n *ParenExpr) ParenType() Type { return n.parenType.Type() }
 
 // Position implements Node.
 func (n *ParenExpr) Position() (r token.Position) {
@@ -1823,6 +1872,7 @@ type Variable struct {
 	typer
 	Expr  Expression
 	Ident Token
+	Type  Node
 }
 
 // Position implements Node.
@@ -1847,7 +1897,7 @@ func (n *BasicLit) Position() (r token.Position) { return n.Token.Position() }
 // Source implements Node.
 func (n *BasicLit) Source(full bool) []byte { return n.Token.src() }
 
-// Ident represents an unqualified operand name.
+// Ident represents an unqualified operand/type name.
 type Ident struct {
 	guard
 	typer

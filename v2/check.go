@@ -105,6 +105,67 @@ func (c *ctx) check(n Node) Type {
 	}
 }
 
+func (c *ctx) resolveQualifiedType(n *QualifiedIdent) Type {
+	switch x := c.resolveQualifiedIdent(n).(type) {
+	case *TypeDef:
+		return x.Type()
+	case Type:
+		return x
+	default:
+		c.err(n, errorf("TODO %T", x))
+		return nil
+	}
+}
+
+func (c *ctx) resolveQualifiedIdent(n *QualifiedIdent) (r Node) {
+	pkg := c.pkg
+	s := c.scope
+	var err error
+	file := pkg.sourceFiles[n.Ident.source]
+	switch {
+	case n.PackageName.IsValid():
+		importPath := c.resolvePackage(c.scope, pkg, file, n.PackageName)
+		if importPath == "" {
+			return nil
+		}
+
+		if pkg, err = c.cfg.PackageLoader(pkg, file, importPath); err != nil {
+			c.err(n, errorf("%s", err))
+			return nil
+		}
+
+		s = &pkg.Scope
+	}
+
+	if r, err = c.cfg.SymbolResolver(s, pkg, file, n.Ident.Src()); err != nil {
+		c.err(n, errorf("%s", err))
+		return nil
+	}
+
+	return r
+}
+
+func (c *ctx) resolveIdent(n *Ident) (r Node) {
+	file := c.pkg.sourceFiles[n.Token.source]
+	var err error
+	if r, err = c.cfg.SymbolResolver(c.scope, c.pkg, file, n.Token.Src()); err != nil {
+		c.err(n, errorf("%s", err))
+		return nil
+	}
+
+	return r
+}
+
+func (c *ctx) resolvePackage(s *Scope, pkg *Package, src *SourceFile, id Token) string {
+	importPath, err := c.cfg.PackageResolver(s, pkg, src, id.Src())
+	if err != nil {
+		c.err(id, errorf("%s", err))
+		return ""
+	}
+
+	return importPath
+}
+
 func (n *SourceFile) check(c *ctx) {
 	pkgName := n.PackageClause.PackageName.Src()
 	switch {
@@ -169,12 +230,12 @@ func (n *SourceFile) collectTLDs(c *ctx) {
 		case *TypeDecl:
 			for _, ts := range x.TypeSpecs {
 				switch y := ts.(type) {
-				case *TypeDef:
-					c.pkg.Scope.add(c, y.Ident.Src(), &TypeName{node: y})
 				case *AliasDecl:
-					c.pkg.Scope.add(c, y.Ident.Src(), &AliasType{node: y})
+					c.pkg.Scope.add(c, y.Ident.Src(), ts)
+				case *TypeDef:
+					c.pkg.Scope.add(c, y.Ident.Src(), ts)
 				default:
-					c.err(ts, errorf("TODO %T", y))
+					c.err(y, errorf("TODO %T", y))
 				}
 			}
 		case *VarDecl:
@@ -184,7 +245,7 @@ func (n *SourceFile) collectTLDs(c *ctx) {
 					if i < len(vs.ExpressionList) {
 						expr = vs.ExpressionList[i].Expression
 					}
-					c.pkg.Scope.add(c, id.Ident.Src(), &Variable{Expr: expr, Ident: id.Ident})
+					c.pkg.Scope.add(c, id.Ident.Src(), &Variable{Expr: expr, Ident: id.Ident, Type: vs.Type})
 				}
 			}
 		default:
@@ -195,26 +256,32 @@ func (n *SourceFile) collectTLDs(c *ctx) {
 
 func (n *SourceFile) checkImports(c *ctx) {
 	for _, id := range n.ImportDecls {
+		trc("%v: (%d) %s", id.Position(), len(n.ImportDecls), id.Source(true))
 		for _, is := range id.ImportSpecs {
+			trc("%v: (%d) %s", is.Position(), len(id.ImportSpecs), is.Source(true))
 			importPath, err := strconv.Unquote(is.ImportPath.Src())
 			if err != nil {
 				c.err(is.ImportPath, "%s", err)
 				return
 			}
 
-			pkg, err := c.cfg.Loader(importPath)
+			trc("load %s pre", importPath)
+			pkg, err := c.cfg.PackageLoader(c.pkg, n, importPath)
 			if err != nil {
 				c.err(is.ImportPath, "%s", err)
 				return
 			}
 
+			trc("load %s post", importPath)
 			qualifier := pkg.Name
 			if is.Qualifier.IsValid() {
 				qualifier = is.Qualifier.Src()
 			}
 			n.Scope.add(c, qualifier, pkg)
+			trc("added %s to file scope", qualifier)
 			if _, ok := c.pkg.Scope.Nodes[qualifier]; !ok {
 				c.pkg.Scope.add(c, qualifier, pkg)
+				trc("added %s to package scope", qualifier)
 			}
 		}
 	}
@@ -234,11 +301,16 @@ type Package struct {
 	Name        string
 	Scope       Scope
 	SourceFiles []*SourceFile
+	sourceFiles map[*source]*SourceFile
 }
 
 // NewPackage returns a newly created Package or an error, if any.
 func NewPackage(importPath string, files []*SourceFile) (r *Package, err error) {
-	return &Package{ImportPath: importPath, SourceFiles: files, Scope: Scope{Parent: &universe}}, nil
+	sourceFiles := map[*source]*SourceFile{}
+	for _, file := range files {
+		sourceFiles[file.PackageClause.Package.source] = file
+	}
+	return &Package{ImportPath: importPath, SourceFiles: files, Scope: Scope{Parent: &universe}, sourceFiles: sourceFiles}, nil
 }
 
 // Position implements Node. Position return a zero value.
@@ -254,12 +326,16 @@ func (n *Package) Source(full bool) []byte { return nil }
 
 // Check type checks n.
 func (n *Package) Check(cfg *CheckConfig) error {
-	if cfg.Loader == nil {
-		return fmt.Errorf("no loader configured")
+	if cfg.PackageLoader == nil {
+		return fmt.Errorf("no pcakage loader configured")
 	}
 
-	if cfg.Resolver == nil {
-		return fmt.Errorf("no resolver configured")
+	if cfg.PackageResolver == nil {
+		return fmt.Errorf("no package resolver configured")
+	}
+
+	if cfg.SymbolResolver == nil {
+		return fmt.Errorf("no symbol resolver configured")
 	}
 	c := newCtx(cfg, n)
 	for _, file := range n.SourceFiles {
@@ -297,7 +373,20 @@ func (n *Arguments) check(c *ctx) {
 
 	defer n.exit()
 
-	c.err(n, errorf("TODO %T", n))
+	n.PrimaryExpr.check(c)
+	//TODO check arg list
+	switch pe := n.PrimaryExpr.Type().(type) {
+	case *InvalidType:
+		switch x := n.PrimaryExpr.(type) {
+		case *ParenExpr:
+			n.typ = x.ParenType()
+			n.convType.typ = n.Type()
+		default:
+			c.err(n, errorf("TODO %T", x))
+		}
+	default:
+		c.err(n, errorf("TODO %T", pe))
+	}
 }
 
 func (n *BasicLit) check(c *ctx) {
@@ -307,7 +396,7 @@ func (n *BasicLit) check(c *ctx) {
 
 	defer n.exit()
 
-	c.err(n, errorf("TODO %T", n))
+	c.err(n, errorf("internal error: %T %T %T", n, n.Type(), n.Value()))
 }
 
 func (n *BinaryExpression) check(c *ctx) {
@@ -327,7 +416,10 @@ func (n *CompositeLit) check(c *ctx) {
 
 	defer n.exit()
 
-	c.err(n, errorf("TODO %T", n))
+	tc := n.LiteralType.(typeChecker)
+	tc.check(c)
+	n.typ = tc.Type()
+	//TODO check n.LiteralValue
 }
 
 func (n *Constant) check(c *ctx) {
@@ -341,7 +433,9 @@ func (n *Constant) check(c *ctx) {
 	c.iota = n.node.iota
 	defer func() { c.iota = iota }()
 
-	c.err(n, errorf("TODO %T", n))
+	n.Expr.check(c)
+	n.typ = n.Expr.Type()
+	n.v = n.Expr.Value()
 }
 
 func (n *Conversion) check(c *ctx) {
@@ -381,7 +475,12 @@ func (n *Ident) check(c *ctx) {
 
 	defer n.exit()
 
-	c.err(n, errorf("TODO %T", n))
+	switch x := c.resolveIdent(n).(type) {
+	case Type:
+		n.typ = x
+	default:
+		c.err(n, errorf("TODO %T", x))
+	}
 }
 
 func (n *Index) check(c *ctx) {
@@ -411,7 +510,13 @@ func (n *ParenExpr) check(c *ctx) {
 
 	defer n.exit()
 
-	c.err(n, errorf("TODO %T", n))
+	n.Expression.check(c)
+	switch x := n.Expression.(type) {
+	case *UnaryExpr:
+		if t := x.UnaryExpr.Type(); t != Invalid && x.UnaryOp.Ch == '*' {
+			n.parenType.typ = &PointerType{Elem: t}
+		}
+	}
 }
 
 func (n *QualifiedIdent) check(c *ctx) {
@@ -421,7 +526,12 @@ func (n *QualifiedIdent) check(c *ctx) {
 
 	defer n.exit()
 
-	c.err(n, errorf("TODO %T", n))
+	switch x := c.resolveQualifiedIdent(n).(type) {
+	case Type:
+		n.typ = x
+	default:
+		c.err(n, errorf("TODO %T", x))
+	}
 }
 
 func (n *Selector) check(c *ctx) {
@@ -431,7 +541,20 @@ func (n *Selector) check(c *ctx) {
 
 	defer n.exit()
 
-	c.err(n, errorf("TODO %T", n))
+	n.PrimaryExpr.check(c)
+	switch x := n.PrimaryExpr.Type().(type) {
+	case *PointerType:
+		switch y := x.Elem.(type) {
+		case *StructType:
+			if f := y.FieldByName(n.Ident.Src()); f != nil {
+				n.typ = f.Type()
+			}
+		default:
+			c.err(n, errorf("TODO %T %T", n, y))
+		}
+	default:
+		c.err(n, errorf("TODO %T %s", n, n.Source(false)))
+	}
 }
 
 func (n *SliceExpr) check(c *ctx) {
@@ -471,7 +594,22 @@ func (n *UnaryExpr) check(c *ctx) {
 
 	defer n.exit()
 
-	c.err(n, errorf("TODO %T", n))
+	n.UnaryExpr.check(c)
+	t := n.UnaryExpr.Type()
+	if !n.UnaryOp.IsValid() {
+		n.typ = t
+		return
+	}
+
+	switch n.UnaryOp.Ch {
+	case '*':
+		switch x := t.(type) {
+		case *PointerType:
+			n.typ = x.Elem
+		}
+	default:
+		c.err(n, errorf("TODO %s", n.UnaryOp.Ch))
+	}
 }
 
 func (n *Variable) check(c *ctx) {
@@ -481,7 +619,19 @@ func (n *Variable) check(c *ctx) {
 
 	defer n.exit()
 
-	c.err(n, errorf("TODO %T", n))
+	switch {
+	case n.Type == nil && n.Expr == nil:
+		c.err(n, errorf("TODO %T", n))
+	case n.Type == nil && n.Expr != nil:
+		n.Expr.check(c)
+		n.typ = n.Expr.Type()
+	case n.Type != nil && n.Expr == nil:
+		tc := n.Type.(typeChecker)
+		tc.check(c)
+		n.typ = tc.Type()
+	default: //case n.Type != nil && n.Expr != nil:
+		c.err(n, errorf("TODO %T", n))
+	}
 }
 
 func (n *FunctionDecl) check(c *ctx) {

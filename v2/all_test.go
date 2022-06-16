@@ -714,7 +714,7 @@ func testParser(p *parallel, t *testing.T, g *golden, root string) {
 
 			loaderOK := true
 			cfg := &CheckConfig{
-				Loader: func(pth string) (*Package, error) {
+				PackageLoader: func(pkg *Package, src *SourceFile, pth string) (*Package, error) {
 					loaderOK = false
 					return nil, fmt.Errorf("%s", errorf("TODO no loader"))
 				},

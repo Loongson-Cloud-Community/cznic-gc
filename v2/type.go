@@ -5,6 +5,7 @@
 package gc // import "modernc.org/gc/v2"
 
 import (
+	"go/constant"
 	"go/token"
 )
 
@@ -32,7 +33,7 @@ var (
 	_ Type = (*PointerType)(nil)
 	_ Type = (*SliceType)(nil)
 	_ Type = (*StructType)(nil)
-	_ Type = (*TypeName)(nil)
+	_ Type = (*DefinedType)(nil)
 	_ Type = PredefinedType(0)
 )
 
@@ -118,7 +119,7 @@ const (
 	Chan           // chan
 	Complex128     // complex128
 	Complex64      // complex64
-	DefinedType    // typename
+	Defined        // typename
 	Float32        // float32
 	Float64        // float64
 	Function       // function
@@ -162,9 +163,7 @@ func (t typer) Type() Type {
 }
 
 // InvalidType represents an invalid type.
-type InvalidType struct {
-	//TODO- guard
-}
+type InvalidType struct{}
 
 // Position implements Node. Position returns a zero value.
 func (t *InvalidType) Position() (r token.Position) { return r }
@@ -174,16 +173,6 @@ func (t *InvalidType) Source(full bool) []byte { return nil }
 
 // Kind implements Type.
 func (t *InvalidType) Kind() Kind { return InvalidKind }
-
-//TODO- func (t *InvalidType) check(c *ctx) {
-//TODO- 	if !t.enter(c, t) {
-//TODO- 		return
-//TODO- 	}
-//TODO-
-//TODO- 	defer t.exit()
-//TODO-
-//TODO- 	c.err(t, errorf("TODO %T", t))
-//TODO- }
 
 // PredefinedType represents a predefined type.
 type PredefinedType Kind
@@ -197,13 +186,8 @@ func (t PredefinedType) Source(full bool) []byte { return nil }
 // Kind implements Type.
 func (t PredefinedType) Kind() Kind { return Kind(t) }
 
-//TODO- func (t PredefinedType) check(c *ctx)          {}
-//TODO- func (t PredefinedType) enter(*ctx, Node) bool { return false }
-//TODO- func (t PredefinedType) exit()                 {}
-
 // ArrayType represents an array type.
 type ArrayType struct {
-	//TODO- guard
 	node *ArrayTypeNode
 	Elem Type
 	Len  int64
@@ -218,15 +202,32 @@ func (t *ArrayType) Position() (r token.Position) { return t.node.Position() }
 // Source implements Node.
 func (t *ArrayType) Source(full bool) []byte { return t.node.Source(full) }
 
-//TODO- func (t *ArrayType) check(c *ctx) {
-//TODO- 	if !t.enter(c, t) {
-//TODO- 		return
-//TODO- 	}
-//TODO-
-//TODO- 	defer t.exit()
-//TODO-
-//TODO- 	c.err(t, errorf("TODO %T", t))
-//TODO- }
+func (n *ArrayTypeNode) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	n.ArrayLength.check(c)
+	switch v := n.ArrayLength.Value(); v.Kind() {
+	case constant.Int:
+		tc := n.ElementType.(typeChecker)
+		tc.check(c)
+		sz, ok := constant.Int64Val(v)
+		if !ok || sz < 0 {
+			c.err(n.ElementType, "invalid array length: %s", n.ElementType.Source(false))
+			n.typ = Invalid
+			break
+		}
+
+		n.typ = &ArrayType{node: n, Elem: tc.Type(), Len: sz}
+	default:
+		c.err(n.ElementType, "invalid array length: %s", n.ElementType.Source(false))
+		n.typ = Invalid
+		break
+	}
+}
 
 // ChanDir represents a channel direction.
 type ChanDir int
@@ -240,7 +241,6 @@ const (
 
 // ChannelType represents a channel type.
 type ChannelType struct {
-	//TODO- guard
 	node *ChannelTypeNode
 	Dir  ChanDir
 	Elem Type
@@ -255,16 +255,6 @@ func (t *ChannelType) Position() (r token.Position) { return t.node.Position() }
 // Source implements Node.
 func (t *ChannelType) Source(full bool) []byte { return t.node.Source(full) }
 
-//TODO- func (t *ChannelType) check(c *ctx) {
-//TODO- 	if !t.enter(c, t) {
-//TODO- 		return
-//TODO- 	}
-//TODO-
-//TODO- 	defer t.exit()
-//TODO-
-//TODO- 	c.err(t, errorf("TODO %T", t))
-//TODO- }
-
 // Parameter represents a function input/output paramater.
 type Parameter struct {
 	typer
@@ -273,10 +263,9 @@ type Parameter struct {
 
 // FunctionType represents a channel type.
 type FunctionType struct {
-	//TODO- guard
 	node       *FunctionTypeNode
 	Parameters []*Parameter
-	Results    []Parameter
+	Results    []*Parameter
 }
 
 // Kind implements Type.
@@ -288,19 +277,8 @@ func (t *FunctionType) Position() (r token.Position) { return t.node.Position() 
 // Source implements Node.
 func (t *FunctionType) Source(full bool) []byte { return t.node.Source(full) }
 
-//TODO- func (t *FunctionType) check(c *ctx) {
-//TODO- 	if !t.enter(c, t) {
-//TODO- 		return
-//TODO- 	}
-//TODO-
-//TODO- 	defer t.exit()
-//TODO-
-//TODO- 	c.err(t, errorf("TODO %T", t))
-//TODO- }
-
 // InterfaceType represents an interface type.
 type InterfaceType struct {
-	//TODO- guard
 	node *InterfaceTypeNode
 	//TODO
 }
@@ -314,19 +292,8 @@ func (t *InterfaceType) Position() (r token.Position) { return t.node.Position()
 // Source implements Node.
 func (t *InterfaceType) Source(full bool) []byte { return t.node.Source(full) }
 
-//TODO- func (t *InterfaceType) check(c *ctx) {
-//TODO- 	if !t.enter(c, t) {
-//TODO- 		return
-//TODO- 	}
-//TODO-
-//TODO- 	defer t.exit()
-//TODO-
-//TODO- 	c.err(t, errorf("TODO %T", t))
-//TODO- }
-
 // MapType represents a map type.
 type MapType struct {
-	//TODO- guard
 	node *MapTypeNode
 	Elem Type
 	Key  Type
@@ -340,16 +307,6 @@ func (t *MapType) Position() (r token.Position) { return t.node.Position() }
 
 // Source implements Node.
 func (t *MapType) Source(full bool) []byte { return t.node.Source(full) }
-
-//TODO- func (t *MapType) check(c *ctx) {
-//TODO- 	if !t.enter(c, t) {
-//TODO- 		return
-//TODO- 	}
-//TODO-
-//TODO- 	defer t.exit()
-//TODO-
-//TODO- 	c.err(t, errorf("TODO %T", t))
-//TODO- }
 
 // PointerType represents a pointer type.
 type PointerType struct {
@@ -379,12 +336,10 @@ func (n *PointerTypeNode) check(c *ctx) {
 	c.check(n.BaseType)
 	et := n.BaseType.(typeChecker).Type()
 	n.typ = &PointerType{Elem: et, node: n}
-	c.err(n, errorf("TODO %T", n))
 }
 
 // SliceType represents a slice type.
 type SliceType struct {
-	//TODO- guard
 	node *SliceTypeNode
 	Elem Type
 }
@@ -398,27 +353,20 @@ func (t *SliceType) Position() (r token.Position) { return t.node.Position() }
 // Source implements Node.
 func (t *SliceType) Source(full bool) []byte { return t.node.Source(full) }
 
-//TODO- func (t *SliceType) check(c *ctx) {
-//TODO- 	if !t.enter(c, t) {
-//TODO- 		return
-//TODO- 	}
-//TODO-
-//TODO- 	defer t.exit()
-//TODO-
-//TODO- 	c.err(t, errorf("TODO %T", t))
-//TODO- }
-
 // Field represents a struct field.
 type Field struct {
 	typer
 	Name string
 }
 
+// NewFields returns a newly created struct field.
+func NewField(name string, typ Type) *Field { return &Field{typer: newTyper(typ), Name: name} }
+
 // StructType represents a struct type.
 type StructType struct {
-	//TODO- guard
 	node   *StructTypeNode
-	Fields []Field
+	Fields []*Field
+	m      map[string]*Field
 }
 
 // Kind implements Type.
@@ -430,20 +378,30 @@ func (t *StructType) Position() (r token.Position) { return t.node.Position() }
 // Source implements Node.
 func (t *StructType) Source(full bool) []byte { return t.node.Source(full) }
 
-//TODO- func (t *StructType) check(c *ctx) {
-//TODO- 	if !t.enter(c, t) {
-//TODO- 		return
-//TODO- 	}
-//TODO-
-//TODO- 	defer t.exit()
-//TODO-
-//TODO- 	c.err(t, errorf("TODO %T", t))
-//TODO- }
+// FieldByName returns the field named nm or nil, if such field does not exist.
+func (n *StructType) FieldByName(nm string) *Field {
+	if n.m == nil {
+		n.m = map[string]*Field{}
+		for _, f := range n.Fields {
+			if nm := f.Name; nm != "" && nm != "_" {
+				n.m[nm] = f
+			}
+		}
+	}
+	return n.m[nm]
+}
 
 func (n *StructTypeNode) check(c *ctx) {
 	t := &StructType{node: n}
 	for _, v := range n.FieldDecls {
 		switch x := v.(type) {
+		case *FieldDecl:
+			tc := x.Type.(typeChecker)
+			tc.check(c)
+			ft := newTyper(tc.Type())
+			for _, id := range x.IdentifierList {
+				t.Fields = append(t.Fields, &Field{typer: ft, Name: id.Ident.Src()})
+			}
 		default:
 			c.err(v, errorf("TODO %T", x))
 		}
@@ -453,7 +411,6 @@ func (n *StructTypeNode) check(c *ctx) {
 
 // AliasType represents an alias type.
 type AliasType struct {
-	//TODO- guard
 	typer
 	node *AliasDecl
 }
@@ -467,43 +424,29 @@ func (t *AliasType) Position() (r token.Position) { return t.node.Position() }
 // Source implements Node.
 func (t *AliasType) Source(full bool) []byte { return t.node.Source(full) }
 
-//TODO- func (t *AliasType) check(c *ctx) {
-//TODO- 	if !t.enter(c, t) {
-//TODO- 		return
-//TODO- 	}
-//TODO-
-//TODO- 	defer t.exit()
-//TODO-
-//TODO- 	c.err(t, errorf("TODO %T", t))
-//TODO- }
-
-// TypeName represents a defined type.
-type TypeName struct {
-	//TODO- guard
-	typer
-	node *TypeDef
-}
-
-// Kind implements Type.
-func (t *TypeName) Kind() Kind { return DefinedType }
-
-// Position implements Node.
-func (t *TypeName) Position() (r token.Position) { return t.node.Position() }
-
-// Source implements Node.
-func (t *TypeName) Source(full bool) []byte { return t.node.Source(full) }
-
-func (n *TypeNameNode) check(c *ctx) {
+func (n *AliasDecl) check(c *ctx) {
 	if !n.enter(c, n) {
 		return
 	}
 
 	defer n.exit()
 
-	switch {
-	case n.Name.PackageName.IsValid():
-		c.err(n, errorf("TODO %T", n))
-	default:
-		c.err(n, errorf("TODO %T", n))
-	}
+	c.pushNamed = true
+	c.check(n.Type)
+	n.typ = n.Type.(typeChecker).Type()
 }
+
+// DefinedType represents a defined type.
+type DefinedType struct {
+	typer
+	node *TypeDef
+}
+
+// Kind implements Type.
+func (t *DefinedType) Kind() Kind { return Defined }
+
+// Position implements Node.
+func (t *DefinedType) Position() (r token.Position) { return t.node.Position() }
+
+// Source implements Node.
+func (t *DefinedType) Source(full bool) []byte { return t.node.Source(full) }
