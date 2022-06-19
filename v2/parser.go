@@ -15,16 +15,18 @@ var (
 )
 
 type parser struct {
-	cfg       *ParseSourceFileConfig
-	loophacks []bool
-	s         *Scanner
+	cfg          *ParseSourceFileConfig
+	loophacks    []bool
+	s            *Scanner
+	lexicalScope *Scope
+	scopes       []*Scope
 
 	loophack bool
 }
 
 func newParser(cfg *ParseSourceFileConfig, s *Scanner) *parser {
 	s.Scan()
-	return &parser{cfg: cfg, s: s}
+	return &parser{cfg: cfg, s: s, lexicalScope: &cfg.PackageScope}
 }
 
 func (p *parser) Err() error                          { return p.s.Err() }
@@ -42,6 +44,17 @@ func (p *parser) errNode(n Node, msg string, args ...interface{}) {
 	p.s.errs.err(n.Position(), msg, args...)
 	if !p.cfg.AllErrors && len(p.s.errs) >= 10 {
 		p.s.close()
+	}
+}
+
+func (p *parser) pushScope(s *Scope) func() {
+	s.Parent = p.lexicalScope
+	p.scopes = append(p.scopes, p.lexicalScope)
+	p.lexicalScope = s
+	return func() {
+		n := len(p.scopes)
+		p.lexicalScope = p.scopes[n-1]
+		p.scopes = p.scopes[:n-1]
 	}
 }
 
@@ -279,7 +292,7 @@ func (p *parser) typeSpec(semi bool) (r Node) {
 		// identifier .
 		switch p.ch() {
 		case '=':
-			return &AliasDecl{Ident: id, Eq: p.shift(), Type: p.type1(), Semicolon: p.semi(semi)}
+			return &AliasDecl{Ident: id, Eq: p.shift(), TypeNode: p.type1(), Semicolon: p.semi(semi)}
 		case '[':
 			lbracket := p.shift()
 			// identifier "[" .
@@ -415,7 +428,9 @@ func (p *parser) functionDecl(f Token) (r *FunctionDecl) {
 
 // Block = "{" StatementList "}" .
 func (p *parser) block(semi bool) (r *Block) {
-	return &Block{LBrace: p.must('{'), StatementList: p.statementList(), RBrace: p.must('}'), Semicolon: p.semi(semi)}
+	var s Scope
+	defer p.pushScope(&s)()
+	return &Block{lexicalScoper: newLexicalScoper(&s), LBrace: p.must('{'), StatementList: p.statementList(), RBrace: p.must('}'), Semicolon: p.semi(semi)}
 }
 
 // Signature = Parameters Signature_1 .
@@ -536,11 +551,11 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 			case ELLIPSIS:
 				r = append(r, &ParameterDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, Ellipsis: p.shift(), Type: p.type1(), Comma: p.opt(',')})
 			case ',':
-				r = append(r, &ParameterDecl{Type: &Ident{Token: id}, Comma: p.shift()})
+				r = append(r, &ParameterDecl{Type: &Ident{lexicalScoper: newLexicalScoper(p.lexicalScope), Token: id}, Comma: p.shift()})
 			case ')':
-				return append(r, &ParameterDecl{Type: &Ident{Token: id}})
+				return append(r, &ParameterDecl{Type: &Ident{lexicalScoper: newLexicalScoper(p.lexicalScope), Token: id}})
 			case '.':
-				r = append(r, &ParameterDecl{Type: p.typeName2(&TypeNameNode{Name: &QualifiedIdent{PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}}), Comma: p.opt(',')})
+				r = append(r, &ParameterDecl{Type: p.typeName2(&TypeNameNode{Name: &QualifiedIdent{lexicalScoper: newLexicalScoper(p.lexicalScope), PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}}), Comma: p.opt(',')})
 			case '[':
 				lbracket := p.shift()
 				// identifier "[" .
@@ -564,7 +579,7 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 							switch p.ch() {
 							case ')':
 								// identifier "[" expression "]" . ")"
-								return append(r, &ParameterDecl{Type: &TypeNameNode{Name: &QualifiedIdent{Ident: id}, TypeArgs: &TypeArgs{LBracket: lbracket, TypeList: []*TypeListItem{{Type: x}}, RBracket: rbracket}}, Comma: p.opt(',')})
+								return append(r, &ParameterDecl{Type: &TypeNameNode{Name: &QualifiedIdent{lexicalScoper: newLexicalScoper(p.lexicalScope), Ident: id}, TypeArgs: &TypeArgs{LBracket: lbracket, TypeList: []*TypeListItem{{Type: x}}, RBracket: rbracket}}, Comma: p.opt(',')})
 							//                      Type
 							case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 								// identifier "[" expression "]" . Type
@@ -576,7 +591,7 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 							}
 						case ',':
 							// identifier "[" expression . ","
-							r = append(r, &ParameterDecl{Type: p.typeName2(&TypeNameNode{Name: &QualifiedIdent{Ident: id}, TypeArgs: p.typeArgs2(lbracket, x)})})
+							r = append(r, &ParameterDecl{Type: p.typeName2(&TypeNameNode{Name: &QualifiedIdent{lexicalScoper: newLexicalScoper(p.lexicalScope), Ident: id}, TypeArgs: p.typeArgs2(lbracket, x)})})
 						default:
 							p.err(errorf("TODO %v", p.ch().str()))
 							p.shift()
@@ -1581,10 +1596,10 @@ func (p *parser) fieldDecl() (r *FieldDecl) {
 			r = &FieldDecl{IdentifierList: p.identifierList2(id), Type: p.type1()}
 		case ';', '}':
 			//  identifier . ";"
-			r = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: &TypeNameNode{Name: &QualifiedIdent{Ident: id}}}}
+			r = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: &TypeNameNode{Name: &QualifiedIdent{lexicalScoper: newLexicalScoper(p.lexicalScope), Ident: id}}}}
 		case '.':
 			//  identifier . "."
-			r = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: p.typeName2(&TypeNameNode{Name: &QualifiedIdent{PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}})}}
+			r = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: p.typeName2(&TypeNameNode{Name: &QualifiedIdent{lexicalScoper: newLexicalScoper(p.lexicalScope), PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}})}}
 		case '[':
 			lbracket := p.shift()
 			//  identifier "[" .
@@ -1612,13 +1627,13 @@ func (p *parser) fieldDecl() (r *FieldDecl) {
 						switch p.ch() {
 						case ';', '}':
 							// . identifier "[" Expression "]" . ";"
-							r = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: &TypeNameNode{Name: &QualifiedIdent{Ident: id}, TypeArgs: &TypeArgs{LBracket: lbracket, TypeList: []*TypeListItem{{Type: x}}, RBracket: rbracket}}}}
+							r = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: &TypeNameNode{Name: &QualifiedIdent{lexicalScoper: newLexicalScoper(p.lexicalScope), Ident: id}, TypeArgs: &TypeArgs{LBracket: lbracket, TypeList: []*TypeListItem{{Type: x}}, RBracket: rbracket}}}}
 						default:
 							r = &FieldDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, Type: &ArrayTypeNode{LBracket: lbracket, ArrayLength: x.(Expression), RBracket: rbracket, ElementType: p.type1()}}
 						}
 					case ',':
 						// . identifier "[" Expression . ","
-						r = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: &TypeNameNode{Name: &QualifiedIdent{Ident: id}, TypeArgs: &TypeArgs{LBracket: lbracket, TypeList: p.typeList2(x), RBracket: p.must(']')}}}}
+						r = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: &TypeNameNode{Name: &QualifiedIdent{lexicalScoper: newLexicalScoper(p.lexicalScope), Ident: id}, TypeArgs: &TypeArgs{LBracket: lbracket, TypeList: p.typeList2(x), RBracket: p.must(']')}}}}
 					default:
 						p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 						p.shift()
@@ -1679,9 +1694,9 @@ func (p *parser) interfaceElems() (r []Node) {
 				r = append(r, p.typeElem2(&TypeTerm{Type: id}, true))
 			case '.':
 				// identifier . "."
-				r = append(r, p.typeElem2(&TypeTerm{Type: p.typeName2(&TypeNameNode{Name: &QualifiedIdent{PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}})}, true))
+				r = append(r, p.typeElem2(&TypeTerm{Type: p.typeName2(&TypeNameNode{Name: &QualifiedIdent{lexicalScoper: newLexicalScoper(p.lexicalScope), PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}})}, true))
 			case '[':
-				r = append(r, p.typeElem2(&TypeTerm{Type: p.typeName2(&TypeNameNode{Name: &QualifiedIdent{Ident: id}})}, true))
+				r = append(r, p.typeElem2(&TypeTerm{Type: p.typeName2(&TypeNameNode{Name: &QualifiedIdent{lexicalScoper: newLexicalScoper(p.lexicalScope), Ident: id}})}, true))
 			default:
 				p.err(errorf("TODO %v", p.ch().str()))
 				p.shift()
@@ -1764,9 +1779,9 @@ func (p *parser) typeName() (r *TypeNameNode) {
 		id := p.shift()
 		switch p.ch() {
 		case '.':
-			r = &TypeNameNode{Name: &QualifiedIdent{PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}}
+			r = &TypeNameNode{Name: &QualifiedIdent{lexicalScoper: newLexicalScoper(p.lexicalScope), PackageName: id, Dot: p.shift(), Ident: p.must(IDENTIFIER)}}
 		default:
-			r = &TypeNameNode{Name: &QualifiedIdent{Ident: id}}
+			r = &TypeNameNode{Name: &QualifiedIdent{lexicalScoper: newLexicalScoper(p.lexicalScope), Ident: id}}
 		}
 	default:
 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
@@ -1961,15 +1976,15 @@ func (p *parser) primaryExpression() (r Node) {
 		var typ Type
 		switch tok.Ch {
 		case FLOAT_LIT:
-			typ = untypedFloat
+			typ = UntypedFloatType
 		case INT_LIT:
-			typ = untypedInt
+			typ = UntypedIntType
 		case IMAG_LIT:
-			typ = untypedComplex
+			typ = UntypedComplexType
 		case RUNE_LIT:
-			typ = untypedInt
+			typ = UntypedIntType
 		case STRING_LIT:
-			typ = untypedString
+			typ = UntypedStringType
 		}
 		r = &BasicLit{typer: newTyper(typ), valuer: newValuer(v), Token: tok, guard: checked}
 	//                Conversion case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
@@ -2037,17 +2052,17 @@ func (p *parser) primaryExpression() (r Node) {
 			switch p.ch() {
 			case IDENTIFIER:
 				//  identifier "." . identifier
-				r = &QualifiedIdent{PackageName: id, Dot: dot, Ident: p.shift()}
+				r = &QualifiedIdent{lexicalScoper: newLexicalScoper(p.lexicalScope), PackageName: id, Dot: dot, Ident: p.shift()}
 			case '(':
 				lparen := p.shift()
 				//  identifier "." "(" .
 				switch p.ch() {
 				case TYPE:
 					//  identifier "." "(" . "type"
-					return &TypeSwitchGuard{PrimaryExpr: &Ident{Token: id}, Dot: dot, LParen: lparen, TypeToken: p.shift(), RParen: p.must(')')}
+					return &TypeSwitchGuard{PrimaryExpr: &Ident{lexicalScoper: newLexicalScoper(p.lexicalScope), Token: id}, Dot: dot, LParen: lparen, TypeToken: p.shift(), RParen: p.must(')')}
 				default:
 					//  identifier "." "(" . identifier
-					return p.primaryExpression2(&TypeAssertion{PrimaryExpr: &Ident{Token: id}, Dot: dot, LParen: lparen, AssertType: p.type1(), RParen: p.must(')')}, false)
+					return p.primaryExpression2(&TypeAssertion{PrimaryExpr: &Ident{lexicalScoper: newLexicalScoper(p.lexicalScope), Token: id}, Dot: dot, LParen: lparen, AssertType: p.type1(), RParen: p.must(')')}, false)
 				}
 			default:
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
@@ -2055,7 +2070,7 @@ func (p *parser) primaryExpression() (r Node) {
 				return invalidExpr
 			}
 		default:
-			r = &Ident{Token: id}
+			r = &Ident{lexicalScoper: newLexicalScoper(p.lexicalScope), Token: id}
 		}
 
 		// QualifiedIdent .
@@ -2373,16 +2388,16 @@ func (p *parser) exprOrType() (r Node) {
 			switch p.ch() {
 			case IDENTIFIER:
 				//  identifier "." identifier
-				r = &QualifiedIdent{PackageName: id, Dot: dot, Ident: p.shift()}
+				r = &QualifiedIdent{lexicalScoper: newLexicalScoper(p.lexicalScope), PackageName: id, Dot: dot, Ident: p.shift()}
 			case '(':
 				lparen := p.shift()
 				//  identifier "." "(" .
 				switch p.ch() {
 				case TYPE:
-					return &TypeSwitchGuard{PrimaryExpr: &Ident{Token: id}, Dot: dot, LParen: lparen, TypeToken: p.shift(), RParen: p.must(')')}
+					return &TypeSwitchGuard{PrimaryExpr: &Ident{lexicalScoper: newLexicalScoper(p.lexicalScope), Token: id}, Dot: dot, LParen: lparen, TypeToken: p.shift(), RParen: p.must(')')}
 				default:
 					//  identifier "." "(" . identifier
-					return p.expression(p.primaryExpression2(&TypeAssertion{PrimaryExpr: &Ident{Token: id}, Dot: dot, LParen: lparen, AssertType: p.type1(), RParen: p.must(')')}, false))
+					return p.expression(p.primaryExpression2(&TypeAssertion{PrimaryExpr: &Ident{lexicalScoper: newLexicalScoper(p.lexicalScope), Token: id}, Dot: dot, LParen: lparen, AssertType: p.type1(), RParen: p.must(')')}, false))
 				}
 			default:
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
@@ -2390,7 +2405,7 @@ func (p *parser) exprOrType() (r Node) {
 				return invalidExpr
 			}
 		default:
-			r = &Ident{Token: id}
+			r = &Ident{lexicalScoper: newLexicalScoper(p.lexicalScope), Token: id}
 		}
 		// QualifiedIdent .
 		switch p.ch() {
@@ -2420,9 +2435,9 @@ func (p *parser) exprOrType() (r Node) {
 						case *QualifiedIdent:
 							tn = &TypeNameNode{Name: y, TypeArgs: typeArgs}
 						case Token:
-							tn = &TypeNameNode{Name: &QualifiedIdent{Ident: y}, TypeArgs: typeArgs}
+							tn = &TypeNameNode{Name: &QualifiedIdent{lexicalScoper: newLexicalScoper(p.lexicalScope), Ident: y}, TypeArgs: typeArgs}
 						case *Ident:
-							tn = &TypeNameNode{Name: &QualifiedIdent{Ident: y.Token}, TypeArgs: typeArgs}
+							tn = &TypeNameNode{Name: &QualifiedIdent{lexicalScoper: newLexicalScoper(p.lexicalScope), Ident: y.Token}, TypeArgs: typeArgs}
 						default:
 							p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 							p.shift()

@@ -9,17 +9,15 @@ import (
 	"go/token"
 )
 
+// Singleton instances of compile-time only pseudo types.
 var (
-	// Invalid is a singleton representing an invalid/undetermined type.  Invalid
-	// is comparable.
-	Invalid Type = &InvalidType{}
-
-	untypedBool    = PredefinedType(UntypedBool)
-	untypedComplex = PredefinedType(UntypedComplex)
-	untypedFloat   = PredefinedType(UntypedFloat)
-	untypedInt     = PredefinedType(UntypedInt)
-	untypedString  = PredefinedType(UntypedString)
-	void           = PredefinedType(Void)
+	Invalid            Type = &InvalidType{}
+	UntypedBoolType    Type = PredefinedType(UntypedBool)
+	UntypedComplexType Type = PredefinedType(UntypedComplex)
+	UntypedFloatType   Type = PredefinedType(UntypedFloat)
+	UntypedIntType     Type = PredefinedType(UntypedInt)
+	UntypedStringType  Type = PredefinedType(UntypedString)
+	VoidType           Type = PredefinedType(Void)
 )
 
 var (
@@ -225,7 +223,6 @@ func (n *ArrayTypeNode) check(c *ctx) {
 	default:
 		c.err(n.ElementType, "invalid array length: %s", n.ElementType.Source(false))
 		n.typ = Invalid
-		break
 	}
 }
 
@@ -359,7 +356,7 @@ type Field struct {
 	Name string
 }
 
-// NewFields returns a newly created struct field.
+// NewField returns a newly created struct field.
 func NewField(name string, typ Type) *Field { return &Field{typer: newTyper(typ), Name: name} }
 
 // StructType represents a struct type.
@@ -379,16 +376,16 @@ func (t *StructType) Position() (r token.Position) { return t.node.Position() }
 func (t *StructType) Source(full bool) []byte { return t.node.Source(full) }
 
 // FieldByName returns the field named nm or nil, if such field does not exist.
-func (n *StructType) FieldByName(nm string) *Field {
-	if n.m == nil {
-		n.m = map[string]*Field{}
-		for _, f := range n.Fields {
+func (t *StructType) FieldByName(nm string) *Field {
+	if t.m == nil {
+		t.m = map[string]*Field{}
+		for _, f := range t.Fields {
 			if nm := f.Name; nm != "" && nm != "_" {
-				n.m[nm] = f
+				t.m[nm] = f
 			}
 		}
 	}
-	return n.m[nm]
+	return t.m[nm]
 }
 
 func (n *StructTypeNode) check(c *ctx) {
@@ -432,8 +429,8 @@ func (n *AliasDecl) check(c *ctx) {
 	defer n.exit()
 
 	c.pushNamed = true
-	c.check(n.Type)
-	n.typ = n.Type.(typeChecker).Type()
+	c.check(n.TypeNode)
+	n.typ = n.TypeNode.(typeChecker).Type()
 }
 
 // DefinedType represents a defined type.

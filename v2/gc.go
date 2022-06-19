@@ -12,7 +12,8 @@ type ParseSourceFileConfig struct {
 	// parsed. If Accept return a non-nil error the parsing stops and the error is
 	// returned.  Passing nil Accept is the same as passing a function that always
 	// returns nil
-	Accept func(*SourceFile) error
+	Accept       func(*SourceFile) error
+	PackageScope Scope
 
 	AllErrors bool
 }
@@ -31,7 +32,7 @@ func ParseSourceFile(cfg *ParseSourceFileConfig, name string, buf []byte) (r *So
 	switch p.ch() {
 	//       SourceFile
 	case PACKAGE:
-		r = &SourceFile{PackageClause: &PackageClause{Package: p.must(PACKAGE), PackageName: p.must(IDENTIFIER), Semicolon: p.must(';')}, ImportDecls: p.importDecls()}
+		r = &SourceFile{packageScope: &cfg.PackageScope, PackageClause: &PackageClause{Package: p.must(PACKAGE), PackageName: p.must(IDENTIFIER), Semicolon: p.must(';')}, ImportDecls: p.importDecls()}
 	default:
 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
@@ -63,14 +64,16 @@ func ParseSourceFile(cfg *ParseSourceFileConfig, name string, buf []byte) (r *So
 	return r, nil
 }
 
-// CheckConfig configures the type checker.
-type CheckConfig struct {
-	// PackageLoader returns a package by its import path or an error, if any.
-	PackageLoader func(pkg *Package, src *SourceFile, importPath string) (*Package, error)
-	// PackageResolver returns the import path for package 'qualifier', or an
-	// error, if any.
-	PackageResolver func(s *Scope, pkg *Package, src *SourceFile, qualifier string) (string, error)
-	// SymbolResolver returns type information about symbol 'ident' within package
-	// 'pkg'.
-	SymbolResolver func(s *Scope, pkg *Package, src *SourceFile, ident string) (Node, error)
+// PackageChecker provides the resolution API for (*Package).Check.
+type PackageChecker interface {
+	// PackageLoader returns a package by its import path or an error, if any. The
+	// type checker never calls PackageLoader for  certain packages.
+	PackageLoader(pkg *Package, src *SourceFile, importPath string) (*Package, error)
+	// SymbolResolver returns the node bound to 'ident' within package 'pkg', using
+	// currentScope and fileScope or an error, if any. The type checker never calls
+	// SymbolResolver for certain identifiers of some packages.
+	SymbolResolver(currentScope, fileScope *Scope, pkg *Package, ident string) (Node, error)
+	// CheckFunctions reports whether Check should type check function/method
+	// bodies.
+	CheckFunctions() bool
 }

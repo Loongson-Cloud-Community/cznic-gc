@@ -124,6 +124,15 @@ var (
 	}
 )
 
+type lexicalScoper struct {
+	lexicalScope *Scope
+}
+
+func newLexicalScoper(s *Scope) lexicalScoper { return lexicalScoper{s} }
+
+// LexicalScope returns the lexical scope n appears in.
+func (n lexicalScoper) LexicalScope() *Scope { return n.lexicalScope }
+
 type typeNode interface {
 	Node
 	isTypeNode()
@@ -209,6 +218,7 @@ type SourceFile struct {
 	TopLevelDecls []Node
 	EOF           Token
 	Scope         Scope
+	packageScope  *Scope
 }
 
 // Position implements Node.
@@ -443,6 +453,7 @@ func (n *ConstDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}
 //
 //  Block = "{" StatementList "}" .
 type Block struct {
+	lexicalScoper
 	LBrace        Token
 	StatementList []Node
 	RBrace        Token
@@ -602,6 +613,7 @@ func (n *TypeNameNode) check(c *ctx) {
 //  QualifiedIdent = PackageName "." identifier .
 type QualifiedIdent struct {
 	guard
+	lexicalScoper
 	typer
 	valuer
 	PackageName Token
@@ -958,6 +970,8 @@ func (n *KeyedElement) Source(full bool) []byte { return nodeSource(&bytes.Buffe
 //
 //  InterfaceTypeNode = "interface" "{" { InterfaceElem ";" } "}" .
 type InterfaceTypeNode struct {
+	guard
+	typer
 	typeNoder
 	Interface      Token
 	LBrace         Token
@@ -973,6 +987,16 @@ func (n *InterfaceTypeNode) Position() (r token.Position) {
 // Source implements Node.
 func (n *InterfaceTypeNode) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
+}
+
+func (n *InterfaceTypeNode) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
 }
 
 // ForStmt describes a for statement.
@@ -1581,7 +1605,7 @@ type AliasDecl struct {
 	typer
 	Ident     Token
 	Eq        Token
-	Type      Node
+	TypeNode  Node
 	Semicolon Token
 }
 
@@ -1870,9 +1894,9 @@ func (n *Constant) Source(full bool) []byte {
 type Variable struct {
 	guard
 	typer
-	Expr  Expression
-	Ident Token
-	Type  Node
+	Expr     Expression
+	Ident    Token
+	TypeNode Node
 }
 
 // Position implements Node.
@@ -1900,6 +1924,7 @@ func (n *BasicLit) Source(full bool) []byte { return n.Token.src() }
 // Ident represents an unqualified operand/type name.
 type Ident struct {
 	guard
+	lexicalScoper
 	typer
 	valuer
 	Token Token

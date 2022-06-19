@@ -4,8 +4,6 @@
 
 package gc // import "modernc.org/gc/v2"
 
-//TODO TestParserRoundtrip
-
 import (
 	"bytes"
 	"encoding/hex"
@@ -712,20 +710,14 @@ func testParser(p *parallel, t *testing.T, g *golden, root string) {
 				return err
 			}
 
-			loaderOK := true
-			cfg := &CheckConfig{
-				PackageLoader: func(pkg *Package, src *SourceFile, pth string) (*Package, error) {
-					loaderOK = false
-					return nil, fmt.Errorf("%s", errorf("TODO no loader"))
-				},
-			}
+			var checker testPackageChecker
 			pkg, err := NewPackage("", []*SourceFile{ast})
 			if err != nil {
 				return err
 			}
 
 			if *oTypecheck {
-				if err := pkg.Check(cfg); loaderOK && err != nil {
+				if err := pkg.Check(&checker); !checker.loadCalled && err != nil {
 					if pth := filepath.ToSlash(path); !strings.Contains(pth, "/test/") && !strings.Contains(pth, "/testdata/") {
 						return err
 					}
@@ -763,6 +755,27 @@ func testParser(p *parallel, t *testing.T, g *golden, root string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+type testPackageChecker struct {
+	loadCalled bool
+}
+
+func (c *testPackageChecker) PackageLoader(pkg *Package, src *SourceFile, importPath string) (*Package, error) {
+	c.loadCalled = true
+	return nil, fmt.Errorf("%s", errorf("TODO no loader"))
+}
+
+func (c *testPackageChecker) SymbolResolver(currentScope, fileScope *Scope, pkg *Package, ident string) (Node, error) {
+	panic(todo(""))
+}
+
+func (c *testPackageChecker) CheckFunctions() bool {
+	panic(todo(""))
+}
+
+func (c *testPackageChecker) CheckUnexported() bool {
+	panic(todo(""))
 }
 
 func dumpExpr(n Node) string {
