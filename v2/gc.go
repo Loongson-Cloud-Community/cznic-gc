@@ -76,4 +76,6 @@ type PackageChecker interface {
 	// CheckFunctions reports whether Check should type check function/method
 	// bodies.
 	CheckFunctions() bool
+	// GOARCH reports the target architecture, it returns the same values as runtime.GOARCH.
+	GOARCH() string
 }

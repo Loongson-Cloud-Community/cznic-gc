@@ -6,6 +6,7 @@ package gc // import "modernc.org/gc/v2"
 
 import (
 	"fmt"
+	"go/constant"
 	"go/token"
 	"sort"
 	"strconv"
@@ -371,18 +372,93 @@ func (n *Arguments) check(c *ctx) {
 	defer n.exit()
 
 	n.PrimaryExpr.check(c)
-	//TODO check arg list
-	switch pe := n.PrimaryExpr.Type().(type) {
+	for _, v := range n.ExpressionList {
+		v.Expression.check(c)
+	}
+	switch x := n.PrimaryExpr.Type().(type) {
 	case *InvalidType:
 		switch x := n.PrimaryExpr.(type) {
 		case *ParenExpr:
 			n.typ = x.ParenType()
-			n.convType.typ = n.Type()
+			n.isConversion = true
 		default:
 			c.err(n, errorf("TODO %T", x))
 		}
+	case PredefinedType:
+		n.isConversion = true
+		n.typ = x
+	case *PointerType:
+		n.isConversion = true
+		n.typ = x
+	case *FunctionType:
+		n.typ = x.Result
+		n.typ = x.Result
+		if len(x.Parameters) != len(n.ExpressionList) {
+			c.err(n, errorf("TODO %T", n))
+			return
+		}
+
+		if pkg := x.Pkg(); pkg != nil {
+			switch pkg.ImportPath {
+			case "unsafe":
+				if fd := x.node; fd != nil {
+					switch fd.FunctionName.Src() {
+					case "Alignof", "Offsetof", "Sizeof":
+						return
+					}
+				}
+			}
+		}
+
+		for i, expr := range n.ExpressionList {
+			et := expr.Expression.Type()
+			switch x := et.(type) {
+			case *TupleType:
+				if len(x.Types) != 1 {
+					c.err(n, errorf("TODO %T", n))
+					continue
+				}
+
+				et = x.Types[0]
+			}
+			pt := x.Parameters[i].Type()
+			if !c.assignable(expr, et, pt) {
+				c.err(n, errorf("TODO %T", n))
+				continue
+			}
+
+			c.convert(expr, expr.Expression.Value(), pt)
+		}
+		return
 	default:
-		c.err(n, errorf("TODO %T", pe))
+		// trc("%v: %T '%s'", n.Position(), pe, n.Source(false))
+		c.err(n, errorf("TODO %T", x))
+		return
+	}
+
+	// Conversion
+	if len(n.ExpressionList) != 1 {
+		c.err(n.LParen, "expected one argument")
+	}
+
+	n.v = c.convert(n.PrimaryExpr, n.ExpressionList[0].Expression.Value(), n.Type())
+}
+
+func (c *ctx) assignable(n Node, expr, to Type) bool {
+	if expr.Kind() == to.Kind() {
+		return true
+	}
+
+	switch expr.Kind() {
+	case UntypedInt, UntypedFloat, UntypedComplex:
+		return isArithmeticType(to)
+	case UntypedBool:
+		return to.Kind() == Bool
+	case UntypedString:
+		return to.Kind() == String
+	default:
+		c.err(n, errorf("TODO %s -> %s", expr, to))
+		return false
 	}
 }
 
@@ -403,7 +479,97 @@ func (n *BinaryExpression) check(c *ctx) {
 
 	defer n.exit()
 
-	c.err(n, errorf("TODO %T", n))
+	n.A.check(c)
+	n.B.check(c)
+	a, b := n.A.Type(), n.B.Type()
+	switch x := a.(type) {
+	case *TupleType:
+		if len(x.Types) != 1 {
+			c.err(n, errorf("TODO %v", n.Op.Ch.str()))
+			return
+		}
+
+		a = x.Types[0]
+	}
+	switch x := b.(type) {
+	case *TupleType:
+		if len(x.Types) != 1 {
+			c.err(n, errorf("TODO %v", n.Op.Ch.str()))
+			return
+		}
+
+		b = x.Types[0]
+	}
+	x, y := n.A.Value(), n.B.Value()
+	switch n.Op.Ch {
+	case SHL, SHR:
+		// The right operand in a shift expression must have integer type or be an
+		// untyped constant representable by a value of type uint.
+		switch {
+		case isIntegerType(b):
+			// ok
+		case y.Kind() != constant.Unknown:
+			c.err(n, errorf("TODO %v", n.Op.Ch.str()))
+			return
+		default:
+			c.err(n, errorf("TODO %v", n.Op.Ch.str()))
+			return
+		}
+
+		// If the left operand of a non-constant shift expression is an untyped
+		// constant, it is first implicitly converted to the type it would assume if
+		// the shift expression were replaced by its left operand alone.
+		switch {
+		case y.Kind() == constant.Unknown && x.Kind() != constant.Unknown:
+			c.err(n, errorf("TODO %v", n.Op.Ch.str()))
+			return
+		default:
+			n.typ = a
+			n.v = constant.BinaryOp(x, xlat[n.Op.Ch], y)
+		}
+	case LOR, LAND:
+		c.err(n, errorf("TODO %v", n.Op.Ch.str()))
+	case EQ, NE, '<', LE, '>', GE:
+		c.err(n, errorf("TODO %v", n.Op.Ch.str()))
+	default:
+		if !isArithmeticType(a) && !isUntypedArithmeticType(a) || !isArithmeticType(b) && !isUntypedArithmeticType(b) {
+			c.err(n, errorf("TODO %v %v", a, b))
+			break
+		}
+
+		// For other binary operators, the operand types must be identical unless the
+		// operation involves shifts or untyped constants.
+
+		// Except for shift operations, if one operand is an untyped constant and the
+		// other operand is not, the constant is implicitly converted to the type of
+		// the other operand.
+		switch {
+		case x.Kind() == constant.Unknown && y.Kind() == constant.Unknown:
+			if a.Kind() != b.Kind() {
+				c.err(n, errorf("TODO %v", n.Op.Ch.str()))
+				break
+			}
+
+			n.typ = a
+		case x.Kind() == constant.Unknown && y.Kind() != constant.Unknown:
+			c.convert(n, y, a)
+			n.typ = a
+		case x.Kind() != constant.Unknown && y.Kind() == constant.Unknown:
+			c.err(n, errorf("TODO %v", n.Op.Ch.str()))
+		default: // case x.Kind() != constant.Unknown && y.Kind() != constant.Unknown:
+			n.v = constant.BinaryOp(x, xlat[n.Op.Ch], y)
+			switch n.v.Kind() {
+			case constant.Int:
+				n.typ = UntypedIntType
+			case constant.Float:
+				n.typ = UntypedFloatType
+			case constant.Complex:
+				n.typ = UntypedComplexType
+			default:
+				c.err(n, errorf("TODO %v", n.Op.Ch.str()))
+			}
+		}
+	}
 }
 
 func (n *CompositeLit) check(c *ctx) {
@@ -526,7 +692,7 @@ func (n *ParenExpr) check(c *ctx) {
 	switch x := n.Expression.(type) {
 	case *UnaryExpr:
 		if t := x.UnaryExpr.Type(); t != Invalid && x.UnaryOp.Ch == '*' {
-			n.parenType.typ = &PointerType{Elem: t}
+			n.parenType.typ = newPointer(c.pkg, t)
 		}
 	}
 }
@@ -542,6 +708,9 @@ func (n *QualifiedIdent) check(c *ctx) {
 	case Type:
 		n.typ = x
 	case *TypeDef:
+		x.check(c)
+		n.typ = x.Type()
+	case *FunctionDecl:
 		x.check(c)
 		n.typ = x.Type()
 	default:
@@ -611,19 +780,49 @@ func (n *UnaryExpr) check(c *ctx) {
 
 	n.UnaryExpr.check(c)
 	t := n.UnaryExpr.Type()
+	switch x := t.(type) {
+	case *TupleType:
+		if len(x.Types) != 1 {
+			c.err(n, errorf("TODO %v", x))
+			return
+		}
+
+		t = x.Types[0]
+	}
 	if !n.UnaryOp.IsValid() {
 		n.typ = t
 		return
 	}
 
+	v := n.UnaryExpr.Value()
 	switch n.UnaryOp.Ch {
 	case '*':
 		switch x := t.(type) {
 		case *PointerType:
 			n.typ = x.Elem
 		}
+	case '&':
+		n.typ = newPointer(c.pkg, t)
+	case '-':
+		if !isArithmeticType(t) && !isUntypedArithmeticType(t) {
+			c.err(n, errorf("TODO %s %v", n.UnaryOp.Ch.str(), t))
+			return
+		}
+
+		n.typ = t
+		if v.Kind() == constant.Unknown {
+			break
+		}
+
+		w := constant.UnaryOp(xlat[n.UnaryOp.Ch], v, 0) //TODO prec
+		if w.Kind() == constant.Unknown {
+			c.err(n, errorf("TODO %s", n.UnaryOp.Ch.str()))
+			return
+		}
+
+		n.v = w
 	default:
-		c.err(n, errorf("TODO %s", n.UnaryOp.Ch))
+		c.err(n, errorf("TODO %s", n.UnaryOp.Ch.str()))
 	}
 }
 
@@ -656,7 +855,7 @@ func (n *FunctionDecl) check(c *ctx) {
 
 	defer n.exit()
 
-	n.typ = n.Signature.check(c)
+	n.typ = n.Signature.check(c, n)
 }
 
 func (n *MethodDecl) check(c *ctx) {

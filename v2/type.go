@@ -5,11 +5,13 @@
 package gc // import "modernc.org/gc/v2"
 
 import (
+	"fmt"
 	"go/constant"
 	"go/token"
+	"strings"
 )
 
-// Singleton instances of compile-time only pseudo types.
+// Singleton instances of some compile-time only pseudo types.
 var (
 	Invalid            Type = &InvalidType{}
 	UntypedBoolType    Type = PredefinedType(UntypedBool)
@@ -17,13 +19,13 @@ var (
 	UntypedFloatType   Type = PredefinedType(UntypedFloat)
 	UntypedIntType     Type = PredefinedType(UntypedInt)
 	UntypedStringType  Type = PredefinedType(UntypedString)
-	VoidType           Type = PredefinedType(Void)
 )
 
 var (
 	_ Type = (*AliasType)(nil)
 	_ Type = (*ArrayType)(nil)
 	_ Type = (*ChannelType)(nil)
+	_ Type = (*DefinedType)(nil)
 	_ Type = (*FunctionType)(nil)
 	_ Type = (*InterfaceType)(nil)
 	_ Type = (*InvalidType)(nil)
@@ -31,7 +33,7 @@ var (
 	_ Type = (*PointerType)(nil)
 	_ Type = (*SliceType)(nil)
 	_ Type = (*StructType)(nil)
-	_ Type = (*DefinedType)(nil)
+	_ Type = (*TupleType)(nil)
 	_ Type = PredefinedType(0)
 )
 
@@ -45,17 +47,29 @@ var (
 //	*FunctionType
 //	*InterfaceType
 //	*InvalidType
+//	*InvalidType
 //	*MapType
 //	*PointerType
-//	*PredefinedType
 //	*SliceType
 //	*StructType
 //	*TypeName
-//	InvalidType
+//	PredefinedType
+//	TupleType
 type Type interface {
+	fmt.Stringer
 	Node
+	// Kind returns the specific kind of a type.
 	Kind() Kind
+	Pkg() *Package
 }
+
+type packager struct{ pkg *Package }
+
+func newPackager(pkg *Package) packager { return packager{pkg} }
+
+// Pkg returns the originating package of a type. Predeclared and invalid types
+// return nil.
+func (p packager) Pkg() *Package { return p.pkg }
 
 type checker interface {
 	check(c *ctx)
@@ -132,6 +146,7 @@ const (
 	Slice          // slice
 	String         // string
 	Struct         // struct
+	Tuple          // tuple
 	Uint           // uint
 	Uint16         // uint16
 	Uint32         // uint32
@@ -143,12 +158,16 @@ const (
 	UntypedFloat   // untyped float
 	UntypedInt     // untyped int
 	UntypedString  // untyped string
-	Void           // void
 )
 
 type typer struct{ typ Type }
 
 func newTyper(t Type) typer { return typer{typ: t} }
+
+type noSourcer struct{}
+
+// Source implements Node. It returns nil.
+func (noSourcer) Source(bool) []byte { return nil }
 
 // Type returns the type of a node or an *Invalid type value, if the type is
 // unknown/undetermined.
@@ -161,31 +180,41 @@ func (t typer) Type() Type {
 }
 
 // InvalidType represents an invalid type.
-type InvalidType struct{}
+type InvalidType struct {
+	packager
+	noSourcer
+}
 
 // Position implements Node. Position returns a zero value.
 func (t *InvalidType) Position() (r token.Position) { return r }
 
-// Source implements Node. It return nil.
-func (t *InvalidType) Source(full bool) []byte { return nil }
-
 // Kind implements Type.
 func (t *InvalidType) Kind() Kind { return InvalidKind }
+
+func (t *InvalidType) String() string { return "<invalid-type>" }
 
 // PredefinedType represents a predefined type.
 type PredefinedType Kind
 
+// Pkg returns the originating package of a type. Predeclared and invalid types
+// return nil.
+func (t PredefinedType) Pkg() *Package { return nil }
+
 // Position implements Node. Position returns a zero value.
 func (t PredefinedType) Position() (r token.Position) { return r }
 
-// Source implements Node. It return nil.
+// Source implements Node. It returns nil.
 func (t PredefinedType) Source(full bool) []byte { return nil }
+
+func (t PredefinedType) String() string { return strings.ToLower(t.Kind().String()) }
 
 // Kind implements Type.
 func (t PredefinedType) Kind() Kind { return Kind(t) }
 
 // ArrayType represents an array type.
 type ArrayType struct {
+	noSourcer
+	packager
 	node *ArrayTypeNode
 	Elem Type
 	Len  int64
@@ -195,10 +224,9 @@ type ArrayType struct {
 func (t *ArrayType) Kind() Kind { return Array }
 
 // Position implements Node.
-func (t *ArrayType) Position() (r token.Position) { return t.node.Position() }
+func (t *ArrayType) Position() (r token.Position) { return position(t.node) }
 
-// Source implements Node.
-func (t *ArrayType) Source(full bool) []byte { return t.node.Source(full) }
+func (t *ArrayType) String() string { return fmt.Sprintf("[%v]%s", t.Len, t.Elem) }
 
 func (n *ArrayTypeNode) check(c *ctx) {
 	if !n.enter(c, n) {
@@ -219,7 +247,7 @@ func (n *ArrayTypeNode) check(c *ctx) {
 			break
 		}
 
-		n.typ = &ArrayType{node: n, Elem: tc.Type(), Len: sz}
+		n.typ = &ArrayType{packager: newPackager(c.pkg), node: n, Elem: tc.Type(), Len: sz}
 	default:
 		c.err(n.ElementType, "invalid array length: %s", n.ElementType.Source(false))
 		n.typ = Invalid
@@ -238,6 +266,8 @@ const (
 
 // ChannelType represents a channel type.
 type ChannelType struct {
+	noSourcer
+	packager
 	node *ChannelTypeNode
 	Dir  ChanDir
 	Elem Type
@@ -247,10 +277,20 @@ type ChannelType struct {
 func (t *ChannelType) Kind() Kind { return Chan }
 
 // Position implements Node.
-func (t *ChannelType) Position() (r token.Position) { return t.node.Position() }
+func (t *ChannelType) Position() (r token.Position) { return position(t.node) }
 
-// Source implements Node.
-func (t *ChannelType) Source(full bool) []byte { return t.node.Source(full) }
+func (t *ChannelType) String() string {
+	switch t.Dir {
+	case SendRecv:
+		return fmt.Sprintf("chan %s", t.Elem)
+	case SendOnly:
+		return fmt.Sprintf("chan<- %s", t.Elem)
+	case RecvOnly:
+		return fmt.Sprintf("<-chan %s", t.Elem)
+	default:
+		panic(todo("ChanDir(%d)", t.Dir))
+	}
+}
 
 // Parameter represents a function input/output paramater.
 type Parameter struct {
@@ -260,22 +300,28 @@ type Parameter struct {
 
 // FunctionType represents a channel type.
 type FunctionType struct {
-	node       *FunctionTypeNode
+	noSourcer
+	packager
+	node       *FunctionDecl
 	Parameters []*Parameter
 	Results    []*Parameter
+	Result     *TupleType
 }
 
 // Kind implements Type.
 func (t *FunctionType) Kind() Kind { return Function }
 
 // Position implements Node.
-func (t *FunctionType) Position() (r token.Position) { return t.node.Position() }
+func (t *FunctionType) Position() (r token.Position) { return position(t.node) }
 
-// Source implements Node.
-func (t *FunctionType) Source(full bool) []byte { return t.node.Source(full) }
+func (t *FunctionType) String() string {
+	panic(todo(""))
+}
 
 // InterfaceType represents an interface type.
 type InterfaceType struct {
+	noSourcer
+	packager
 	node *InterfaceTypeNode
 	//TODO
 }
@@ -284,13 +330,16 @@ type InterfaceType struct {
 func (t *InterfaceType) Kind() Kind { return Interface }
 
 // Position implements Node.
-func (t *InterfaceType) Position() (r token.Position) { return t.node.Position() }
+func (t *InterfaceType) Position() (r token.Position) { return position(t.node) }
 
-// Source implements Node.
-func (t *InterfaceType) Source(full bool) []byte { return t.node.Source(full) }
+func (t *InterfaceType) String() string {
+	panic(todo(""))
+}
 
 // MapType represents a map type.
 type MapType struct {
+	noSourcer
+	packager
 	node *MapTypeNode
 	Elem Type
 	Key  Type
@@ -300,25 +349,29 @@ type MapType struct {
 func (t *MapType) Kind() Kind { return Map }
 
 // Position implements Node.
-func (t *MapType) Position() (r token.Position) { return t.node.Position() }
+func (t *MapType) Position() (r token.Position) { return position(t.node) }
 
-// Source implements Node.
-func (t *MapType) Source(full bool) []byte { return t.node.Source(full) }
+func (t *MapType) String() string { return fmt.Sprintf("map[%s]%s", t.Key, t.Elem) }
 
 // PointerType represents a pointer type.
 type PointerType struct {
-	node *PointerTypeNode
+	noSourcer
+	packager
+	node Node
 	Elem Type
+}
+
+func newPointer(pkg *Package, t Type) *PointerType {
+	return &PointerType{packager: newPackager(pkg), node: t, Elem: t}
 }
 
 // Kind implements Type.
 func (t *PointerType) Kind() Kind { return Pointer }
 
 // Position implements Node.
-func (t *PointerType) Position() (r token.Position) { return t.node.Position() }
+func (t *PointerType) Position() (r token.Position) { return position(t.node) }
 
-// Source implements Node.
-func (t *PointerType) Source(full bool) []byte { return t.node.Source(full) }
+func (t *PointerType) String() string { return fmt.Sprintf("*%s", t.Elem) }
 
 func (n *PointerTypeNode) check(c *ctx) {
 	if !n.enter(c, n) {
@@ -337,6 +390,8 @@ func (n *PointerTypeNode) check(c *ctx) {
 
 // SliceType represents a slice type.
 type SliceType struct {
+	noSourcer
+	packager
 	node *SliceTypeNode
 	Elem Type
 }
@@ -345,10 +400,9 @@ type SliceType struct {
 func (t *SliceType) Kind() Kind { return Slice }
 
 // Position implements Node.
-func (t *SliceType) Position() (r token.Position) { return t.node.Position() }
+func (t *SliceType) Position() (r token.Position) { return position(t.node) }
 
-// Source implements Node.
-func (t *SliceType) Source(full bool) []byte { return t.node.Source(full) }
+func (t *SliceType) String() string { return fmt.Sprintf("[]%s", t.Elem) }
 
 // Field represents a struct field.
 type Field struct {
@@ -361,6 +415,8 @@ func NewField(name string, typ Type) *Field { return &Field{typer: newTyper(typ)
 
 // StructType represents a struct type.
 type StructType struct {
+	noSourcer
+	packager
 	node   *StructTypeNode
 	Fields []*Field
 	m      map[string]*Field
@@ -370,10 +426,20 @@ type StructType struct {
 func (t *StructType) Kind() Kind { return Struct }
 
 // Position implements Node.
-func (t *StructType) Position() (r token.Position) { return t.node.Position() }
+func (t *StructType) Position() (r token.Position) { return position(t.node) }
 
-// Source implements Node.
-func (t *StructType) Source(full bool) []byte { return t.node.Source(full) }
+func (t *StructType) String() string {
+	var b strings.Builder
+	b.WriteString("struct{")
+	for i, v := range t.Fields {
+		if i != 0 {
+			b.WriteString("; ")
+		}
+		fmt.Fprintf(&b, "%s %s", v.Name, v.Type())
+	}
+	b.WriteByte('}')
+	return b.String()
+}
 
 // FieldByName returns the field named nm or nil, if such field does not exist.
 func (t *StructType) FieldByName(nm string) *Field {
@@ -389,7 +455,7 @@ func (t *StructType) FieldByName(nm string) *Field {
 }
 
 func (n *StructTypeNode) check(c *ctx) {
-	t := &StructType{node: n}
+	t := &StructType{packager: newPackager(c.pkg), node: n}
 	for _, v := range n.FieldDecls {
 		switch x := v.(type) {
 		case *FieldDecl:
@@ -408,6 +474,8 @@ func (n *StructTypeNode) check(c *ctx) {
 
 // AliasType represents an alias type.
 type AliasType struct {
+	noSourcer
+	packager
 	typer
 	node *AliasDecl
 }
@@ -416,10 +484,9 @@ type AliasType struct {
 func (t *AliasType) Kind() Kind { return Alias }
 
 // Position implements Node.
-func (t *AliasType) Position() (r token.Position) { return t.node.Position() }
+func (t *AliasType) Position() (r token.Position) { return position(t.node) }
 
-// Source implements Node.
-func (t *AliasType) Source(full bool) []byte { return t.node.Source(full) }
+func (t *AliasType) String() string { return t.node.Ident.Src() }
 
 func (n *AliasDecl) check(c *ctx) {
 	if !n.enter(c, n) {
@@ -435,6 +502,8 @@ func (n *AliasDecl) check(c *ctx) {
 
 // DefinedType represents a defined type.
 type DefinedType struct {
+	noSourcer
+	packager
 	typer
 	node *TypeDef
 }
@@ -443,7 +512,34 @@ type DefinedType struct {
 func (t *DefinedType) Kind() Kind { return Defined }
 
 // Position implements Node.
-func (t *DefinedType) Position() (r token.Position) { return t.node.Position() }
+func (t *DefinedType) Position() (r token.Position) { return position(t.node) }
 
-// Source implements Node.
-func (t *DefinedType) Source(full bool) []byte { return t.node.Source(full) }
+func (t *DefinedType) String() string { return t.node.Ident.Src() }
+
+// TupleType represents an ordered list of types.
+type TupleType struct {
+	packager
+	Types []Type
+}
+
+// Kind implements Type.
+func (t *TupleType) Kind() Kind { return Tuple }
+
+// Position implements Node.
+func (t *TupleType) Position() (r token.Position) {
+	if len(t.Types) != 0 {
+		r = t.Types[0].Position()
+	}
+	return r
+}
+
+// Source implements Node. It returns nil.
+func (t *TupleType) Source(bool) []byte { return nil }
+
+func (t *TupleType) String() string {
+	var a []string
+	for _, v := range t.Types {
+		a = append(a, v.String())
+	}
+	return fmt.Sprintf("(%s)", strings.Join(a, ", "))
+}

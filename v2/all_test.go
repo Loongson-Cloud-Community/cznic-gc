@@ -778,6 +778,10 @@ func (c *testPackageChecker) CheckUnexported() bool {
 	panic(todo(""))
 }
 
+func (c *testPackageChecker) GOARCH() string {
+	panic(todo(""))
+}
+
 func dumpExpr(n Node) string {
 	var b strings.Builder
 	dumpExpr0(&b, n)

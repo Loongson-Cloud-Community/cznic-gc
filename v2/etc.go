@@ -7,6 +7,7 @@ package gc // import "modernc.org/gc/v2"
 import (
 	"bytes"
 	"fmt"
+	"go/token"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -209,4 +210,51 @@ func nodeSource(b *bytes.Buffer, n interface{}, full bool) *bytes.Buffer {
 		}
 	}
 	return b
+}
+
+func position(n Node) (r token.Position) {
+	if n != nil {
+		r = n.Position()
+	}
+	return r
+}
+
+func isIntegerType(t Type) bool {
+	switch t.Kind() {
+	case Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64:
+		return true
+	default:
+		return false
+	}
+}
+
+func isFloatType(t Type) bool {
+	switch t.Kind() {
+	case Float32, Float64:
+		return true
+	default:
+		return false
+	}
+}
+
+func isComplexType(t Type) bool {
+	switch t.Kind() {
+	case Complex64, Complex128:
+		return true
+	default:
+		return false
+	}
+}
+
+func isArithmeticType(t Type) bool {
+	return isIntegerType(t) || isFloatType(t) || isComplexType(t)
+}
+
+func isUntypedArithmeticType(t Type) bool {
+	switch t.Kind() {
+	case UntypedInt, UntypedFloat, UntypedComplex:
+		return true
+	default:
+		return false
+	}
 }

@@ -268,16 +268,19 @@ func (n *Signature) Position() (r token.Position) {
 // Source implements Node.
 func (n *Signature) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
-func (n *Signature) check(c *ctx) (r *FunctionType) {
-	r = &FunctionType{Parameters: params(c, n.Parameters.ParameterList)}
+func (n *Signature) check(c *ctx, fd *FunctionDecl) (r *FunctionType) {
+	r = &FunctionType{packager: newPackager(c.pkg), node: fd, Parameters: params(c, n.Parameters.ParameterList), Result: &TupleType{packager: newPackager(c.pkg)}}
 	switch x := n.Result.(type) {
 	case *TypeNameNode:
 		x.check(c)
 		r.Results = []*Parameter{{typer: newTyper(x.Type())}}
+		r.Result.Types = append(r.Result.Types, x.Type())
 	case nil:
 		// ok
 	case *Parameters:
-		r.Parameters = params(c, x.ParameterList)
+		for _, v := range params(c, x.ParameterList) {
+			r.Result.Types = append(r.Result.Types, v.Type())
+		}
 	default:
 		c.err(x, errorf("TODO %T", x))
 	}
@@ -813,12 +816,11 @@ type Arguments struct {
 	Comma2         Token
 	RParen         Token
 
-	convType typer
+	isConversion bool
 }
 
-// ConversionType reports the conversion type when n could be interpreted as a
-// conversion.
-func (n *Arguments) ConversionType() Type { return n.convType.Type() }
+// IsConversion reports whether n is not a call but a conversion.
+func (n *Arguments) IsConversion() bool { return n.isConversion }
 
 // Position implements Node.
 func (n *Arguments) Position() (r token.Position) {
