@@ -70,7 +70,7 @@ func (n *invalidExprType) check(c *ctx)                 {}
 func (n *invalidExprType) Position() (r token.Position) { return r }
 func (n *invalidExprType) Source(full bool) []byte      { return []byte("<invalid expression>") }
 
-func (c *ctx) convert(n Node, v constant.Value, to Type) constant.Value {
+func (c *ctx) convertValue(n Node, v constant.Value, to Type) (r constant.Value) {
 	if v.Kind() == constant.Unknown {
 		return unknown
 	}
@@ -95,9 +95,8 @@ func (c *ctx) convert(n Node, v constant.Value, to Type) constant.Value {
 				c.err(n, "value %s overflows %s", v, to)
 				return unknown
 			}
-		default:
-			return w
 		}
+		return w
 	case Int8:
 		w := constant.ToInt(v)
 		if w.Kind() == constant.Unknown {
@@ -168,7 +167,7 @@ func (c *ctx) convert(n Node, v constant.Value, to Type) constant.Value {
 		}
 
 		return w
-	case Uint:
+	case Uint, Uintptr:
 		w := constant.ToInt(v)
 		if w.Kind() == constant.Unknown {
 			c.err(n, "cannot convert %s to %s", v, to)
@@ -187,9 +186,8 @@ func (c *ctx) convert(n Node, v constant.Value, to Type) constant.Value {
 				c.err(n, "value %s overflows %s", v, to)
 				return unknown
 			}
-		default:
-			return w
 		}
+		return w
 	case Uint8:
 		w := constant.ToInt(v)
 		if w.Kind() == constant.Unknown {
@@ -267,4 +265,18 @@ func (c *ctx) convert(n Node, v constant.Value, to Type) constant.Value {
 		return unknown
 	}
 	panic(todo(""))
+}
+
+func (c *ctx) convertType(n Node, from, to Type) {
+	switch from.Kind() {
+	case UnsafePointer:
+		switch to.Kind() {
+		case Pointer, UnsafePointer, Uintptr:
+			// ok
+		default:
+			c.err(n, errorf("cannot convert %s to %s", from, to))
+		}
+	default:
+		c.err(n, errorf("TODO %v -> %v", from.Kind(), to.Kind()))
+	}
 }

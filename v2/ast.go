@@ -32,7 +32,6 @@ var (
 		(*ContinueStmt)(nil),
 		(*Conversion)(nil),
 		(*DeferStmt)(nil),
-		(*DefinedType)(nil),
 		(*EmbeddedField)(nil),
 		(*EmptyStmt)(nil),
 		(*ExprCaseClause)(nil),
@@ -269,7 +268,7 @@ func (n *Signature) Position() (r token.Position) {
 func (n *Signature) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
 func (n *Signature) check(c *ctx, fd *FunctionDecl) (r *FunctionType) {
-	r = &FunctionType{packager: newPackager(c.pkg), node: fd, Parameters: params(c, n.Parameters.ParameterList), Result: &TupleType{packager: newPackager(c.pkg)}}
+	r = &FunctionType{node: fd, Parameters: params(c, n.Parameters.ParameterList), Result: &TupleType{}}
 	switch x := n.Result.(type) {
 	case *TypeNameNode:
 		x.check(c)
@@ -368,9 +367,16 @@ func (n *TypeDef) check(c *ctx) {
 
 	defer n.exit()
 
-	t := n.TypeNode.(typeChecker)
-	t.check(c)
-	n.typ = t.Type()
+	switch c.pkg.ImportPath {
+	case "unsafe":
+		switch n.Ident.Src() {
+		case "Pointer":
+			n.typ = PredefinedType(UnsafePointer)
+			return
+		}
+	}
+
+	n.typ = c.check(n.TypeNode)
 }
 
 // ParameterDecl describes a parameter declaration.
@@ -622,7 +628,15 @@ type QualifiedIdent struct {
 	PackageName Token
 	Dot         Token
 	Ident       Token
+	resolvedIn  *Package
+	resolvedTo  Node
 }
+
+// ResolvedIn returns the package n refers to. Valid after type checking.
+func (n *QualifiedIdent) ResolvedIn() *Package { return n.resolvedIn }
+
+// ResolvedTo returns the node n refers to. Valid after type checking.
+func (n *QualifiedIdent) ResolvedTo() Node { return n.resolvedTo }
 
 // Position implements Node.
 func (n *QualifiedIdent) Position() (r token.Position) {
@@ -1860,10 +1874,12 @@ func (n *ParenExpr) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}
 //
 // ParenType = "(" Type ")" .
 type ParenType struct {
+	guard
+	typer
 	typeNoder
-	LParen Token
-	Type   Node
-	RParen Token
+	LParen   Token
+	TypeNode Node
+	RParen   Token
 }
 
 // Position implements Node.
@@ -1929,8 +1945,12 @@ type Ident struct {
 	lexicalScoper
 	typer
 	valuer
-	Token Token
+	Token      Token
+	resolvedTo Node
 }
+
+// ResolvedTo returns the node n refers to. Valid after type checking.
+func (n *Ident) ResolvedTo() Node { return n.resolvedTo }
 
 // Position implements Node.
 func (n *Ident) Position() (r token.Position) { return n.Token.Position() }

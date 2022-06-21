@@ -221,7 +221,7 @@ func position(n Node) (r token.Position) {
 
 func isIntegerType(t Type) bool {
 	switch t.Kind() {
-	case Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64:
+	case Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
 		return true
 	default:
 		return false

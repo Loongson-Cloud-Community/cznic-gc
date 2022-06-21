@@ -18,6 +18,7 @@ var (
 	UntypedComplexType Type = PredefinedType(UntypedComplex)
 	UntypedFloatType   Type = PredefinedType(UntypedFloat)
 	UntypedIntType     Type = PredefinedType(UntypedInt)
+	UntypedNilType     Type = PredefinedType(UntypedNil)
 	UntypedStringType  Type = PredefinedType(UntypedString)
 )
 
@@ -25,7 +26,6 @@ var (
 	_ Type = (*AliasType)(nil)
 	_ Type = (*ArrayType)(nil)
 	_ Type = (*ChannelType)(nil)
-	_ Type = (*DefinedType)(nil)
 	_ Type = (*FunctionType)(nil)
 	_ Type = (*InterfaceType)(nil)
 	_ Type = (*InvalidType)(nil)
@@ -52,24 +52,15 @@ var (
 //	*PointerType
 //	*SliceType
 //	*StructType
+//	*TupleType
 //	*TypeName
 //	PredefinedType
-//	TupleType
 type Type interface {
 	fmt.Stringer
 	Node
 	// Kind returns the specific kind of a type.
 	Kind() Kind
-	Pkg() *Package
 }
-
-type packager struct{ pkg *Package }
-
-func newPackager(pkg *Package) packager { return packager{pkg} }
-
-// Pkg returns the originating package of a type. Predeclared and invalid types
-// return nil.
-func (p packager) Pkg() *Package { return p.pkg }
 
 type checker interface {
 	check(c *ctx)
@@ -153,10 +144,12 @@ const (
 	Uint64         // uint64
 	Uint8          // uint8
 	Uintptr        // uintptr
+	UnsafePointer  // unsafe.Pointer
 	UntypedBool    // untyped bool
 	UntypedComplex // untyped complex
 	UntypedFloat   // untyped float
 	UntypedInt     // untyped int
+	UntypedNil     // untyped nil
 	UntypedString  // untyped string
 )
 
@@ -181,7 +174,6 @@ func (t typer) Type() Type {
 
 // InvalidType represents an invalid type.
 type InvalidType struct {
-	packager
 	noSourcer
 }
 
@@ -195,10 +187,6 @@ func (t *InvalidType) String() string { return "<invalid-type>" }
 
 // PredefinedType represents a predefined type.
 type PredefinedType Kind
-
-// Pkg returns the originating package of a type. Predeclared and invalid types
-// return nil.
-func (t PredefinedType) Pkg() *Package { return nil }
 
 // Position implements Node. Position returns a zero value.
 func (t PredefinedType) Position() (r token.Position) { return r }
@@ -214,7 +202,6 @@ func (t PredefinedType) Kind() Kind { return Kind(t) }
 // ArrayType represents an array type.
 type ArrayType struct {
 	noSourcer
-	packager
 	node *ArrayTypeNode
 	Elem Type
 	Len  int64
@@ -247,7 +234,7 @@ func (n *ArrayTypeNode) check(c *ctx) {
 			break
 		}
 
-		n.typ = &ArrayType{packager: newPackager(c.pkg), node: n, Elem: tc.Type(), Len: sz}
+		n.typ = &ArrayType{node: n, Elem: tc.Type(), Len: sz}
 	default:
 		c.err(n.ElementType, "invalid array length: %s", n.ElementType.Source(false))
 		n.typ = Invalid
@@ -267,7 +254,6 @@ const (
 // ChannelType represents a channel type.
 type ChannelType struct {
 	noSourcer
-	packager
 	node *ChannelTypeNode
 	Dir  ChanDir
 	Elem Type
@@ -301,7 +287,6 @@ type Parameter struct {
 // FunctionType represents a channel type.
 type FunctionType struct {
 	noSourcer
-	packager
 	node       *FunctionDecl
 	Parameters []*Parameter
 	Results    []*Parameter
@@ -321,7 +306,6 @@ func (t *FunctionType) String() string {
 // InterfaceType represents an interface type.
 type InterfaceType struct {
 	noSourcer
-	packager
 	node *InterfaceTypeNode
 	//TODO
 }
@@ -339,7 +323,6 @@ func (t *InterfaceType) String() string {
 // MapType represents a map type.
 type MapType struct {
 	noSourcer
-	packager
 	node *MapTypeNode
 	Elem Type
 	Key  Type
@@ -356,13 +339,12 @@ func (t *MapType) String() string { return fmt.Sprintf("map[%s]%s", t.Key, t.Ele
 // PointerType represents a pointer type.
 type PointerType struct {
 	noSourcer
-	packager
 	node Node
 	Elem Type
 }
 
 func newPointer(pkg *Package, t Type) *PointerType {
-	return &PointerType{packager: newPackager(pkg), node: t, Elem: t}
+	return &PointerType{node: t, Elem: t}
 }
 
 // Kind implements Type.
@@ -391,7 +373,6 @@ func (n *PointerTypeNode) check(c *ctx) {
 // SliceType represents a slice type.
 type SliceType struct {
 	noSourcer
-	packager
 	node *SliceTypeNode
 	Elem Type
 }
@@ -416,7 +397,6 @@ func NewField(name string, typ Type) *Field { return &Field{typer: newTyper(typ)
 // StructType represents a struct type.
 type StructType struct {
 	noSourcer
-	packager
 	node   *StructTypeNode
 	Fields []*Field
 	m      map[string]*Field
@@ -455,7 +435,7 @@ func (t *StructType) FieldByName(nm string) *Field {
 }
 
 func (n *StructTypeNode) check(c *ctx) {
-	t := &StructType{packager: newPackager(c.pkg), node: n}
+	t := &StructType{node: n}
 	for _, v := range n.FieldDecls {
 		switch x := v.(type) {
 		case *FieldDecl:
@@ -475,7 +455,6 @@ func (n *StructTypeNode) check(c *ctx) {
 // AliasType represents an alias type.
 type AliasType struct {
 	noSourcer
-	packager
 	typer
 	node *AliasDecl
 }
@@ -500,25 +479,8 @@ func (n *AliasDecl) check(c *ctx) {
 	n.typ = n.TypeNode.(typeChecker).Type()
 }
 
-// DefinedType represents a defined type.
-type DefinedType struct {
-	noSourcer
-	packager
-	typer
-	node *TypeDef
-}
-
-// Kind implements Type.
-func (t *DefinedType) Kind() Kind { return Defined }
-
-// Position implements Node.
-func (t *DefinedType) Position() (r token.Position) { return position(t.node) }
-
-func (t *DefinedType) String() string { return t.node.Ident.Src() }
-
 // TupleType represents an ordered list of types.
 type TupleType struct {
-	packager
 	Types []Type
 }
 

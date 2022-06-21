@@ -16,6 +16,7 @@ var (
 	universe = Scope{
 		Nodes: map[string]Node{
 			"bool":       PredefinedType(Bool),
+			"byte":       PredefinedType(Uint8),
 			"complex128": PredefinedType(Complex128),
 			"complex64":  PredefinedType(Complex64),
 			"float32":    PredefinedType(Float32),
@@ -25,6 +26,8 @@ var (
 			"int32":      PredefinedType(Int32),
 			"int64":      PredefinedType(Int64),
 			"int8":       PredefinedType(Int8),
+			"nil":        PredefinedType(UntypedNil),
+			"rune":       PredefinedType(Int32),
 			"string":     PredefinedType(String),
 			"uint":       PredefinedType(Uint),
 			"uint16":     PredefinedType(Uint16),
@@ -142,6 +145,18 @@ func (c *ctx) symbolResolver(scope *Scope, pkg *Package, ident Token, passFileSc
 	return r
 }
 
+func (c *ctx) symbol(expr Expression) Node {
+	for {
+		switch x := expr.(type) {
+		case *QualifiedIdent:
+			return x
+		default:
+			c.err(expr, errorf("TODO %T", x))
+			return nil
+		}
+	}
+}
+
 func (c *ctx) check(n Node) Type {
 	switch x := n.(type) {
 	case typeChecker:
@@ -175,8 +190,14 @@ func (c *ctx) resolveQualifiedIdent(n *QualifiedIdent) (r Node) {
 		case nil:
 			return nil
 		case *Package:
+			n.resolvedIn = x
 			return c.symbolResolver(x.Scope, x, n.Ident, false)
+		case *Variable:
+			n.resolvedIn = c.pkg
+			x.check(c)
+			return c.selector(n, x.Type(), n.Ident)
 		default:
+			trc("%v: %T '%s'", n.Position(), x, n.Source(false))
 			c.err(n, errorf("TODO %T", x))
 			return nil
 		}
@@ -392,20 +413,30 @@ func (n *Arguments) check(c *ctx) {
 		n.typ = x
 	case *FunctionType:
 		n.typ = x.Result
-		n.typ = x.Result
 		if len(x.Parameters) != len(n.ExpressionList) {
 			c.err(n, errorf("TODO %T", n))
 			return
 		}
 
-		if pkg := x.Pkg(); pkg != nil {
-			switch pkg.ImportPath {
+		var resolvedIn *Package
+		var resolvedTo Node
+		switch x := c.symbol(n.PrimaryExpr).(type) {
+		case *QualifiedIdent:
+			resolvedIn, resolvedTo = x.ResolvedIn(), x.ResolvedTo()
+		default:
+			c.err(n, errorf("TODO %T", x))
+		}
+		if resolvedIn != nil {
+			switch resolvedIn.ImportPath {
 			case "unsafe":
-				if fd := x.node; fd != nil {
-					switch fd.FunctionName.Src() {
+				switch y := resolvedTo.(type) {
+				case *FunctionDecl:
+					switch y.FunctionName.Src() {
 					case "Alignof", "Offsetof", "Sizeof":
 						return
 					}
+				default:
+					c.err(n, errorf("TODO %T", y))
 				}
 			}
 		}
@@ -423,11 +454,12 @@ func (n *Arguments) check(c *ctx) {
 			}
 			pt := x.Parameters[i].Type()
 			if !c.assignable(expr, et, pt) {
+				trc("%v: et %s, pt %s, expr '%s'", n.Position(), et, pt, expr.Source(false))
 				c.err(n, errorf("TODO %T", n))
 				continue
 			}
 
-			c.convert(expr, expr.Expression.Value(), pt)
+			c.convertValue(expr, expr.Expression.Value(), pt)
 		}
 		return
 	default:
@@ -441,7 +473,7 @@ func (n *Arguments) check(c *ctx) {
 		c.err(n.LParen, "expected one argument")
 	}
 
-	n.v = c.convert(n.PrimaryExpr, n.ExpressionList[0].Expression.Value(), n.Type())
+	n.v = c.convertValue(n.PrimaryExpr, n.ExpressionList[0].Expression.Value(), n.Type())
 }
 
 func (c *ctx) assignable(n Node, expr, to Type) bool {
@@ -456,6 +488,13 @@ func (c *ctx) assignable(n Node, expr, to Type) bool {
 		return to.Kind() == Bool
 	case UntypedString:
 		return to.Kind() == String
+	case UntypedNil:
+		switch to.Kind() {
+		case Pointer, Slice, Map, Function, Interface, Chan:
+			return true
+		default:
+			return false
+		}
 	default:
 		c.err(n, errorf("TODO %s -> %s", expr, to))
 		return false
@@ -552,10 +591,11 @@ func (n *BinaryExpression) check(c *ctx) {
 
 			n.typ = a
 		case x.Kind() == constant.Unknown && y.Kind() != constant.Unknown:
-			c.convert(n, y, a)
+			c.convertValue(n, y, a)
 			n.typ = a
 		case x.Kind() != constant.Unknown && y.Kind() == constant.Unknown:
-			c.err(n, errorf("TODO %v", n.Op.Ch.str()))
+			c.convertValue(n, x, b)
+			n.typ = b
 		default: // case x.Kind() != constant.Unknown && y.Kind() != constant.Unknown:
 			n.v = constant.BinaryOp(x, xlat[n.Op.Ch], y)
 			switch n.v.Kind() {
@@ -579,9 +619,7 @@ func (n *CompositeLit) check(c *ctx) {
 
 	defer n.exit()
 
-	tc := n.LiteralType.(typeChecker)
-	tc.check(c)
-	n.typ = tc.Type()
+	n.typ = c.check(n.LiteralType)
 	//TODO check n.LiteralValue
 }
 
@@ -608,7 +646,21 @@ func (n *Conversion) check(c *ctx) {
 
 	defer n.exit()
 
-	c.err(n, errorf("TODO %T", n))
+	n.typ = c.check(n.ConvertType)
+	n.Expression.check(c)
+	if n.Type().Kind() != InvalidKind && n.Expression.Type().Kind() != InvalidKind {
+		c.convertType(n.Expression, n.Expression.Type(), n.Type())
+	}
+}
+
+func (n *ParenType) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	n.typ = c.check(n.TypeNode)
 }
 
 func (n *FunctionLit) check(c *ctx) {
@@ -638,7 +690,7 @@ func (n *Ident) check(c *ctx) {
 
 	defer n.exit()
 
-	switch x := c.symbolResolver(n.lexicalScope, c.pkg, n.Token, true).(type) {
+	switch n.resolvedTo = c.symbolResolver(n.lexicalScope, c.pkg, n.Token, true); x := n.ResolvedTo().(type) {
 	case Type:
 		n.typ = x
 	case *TypeDef:
@@ -689,6 +741,7 @@ func (n *ParenExpr) check(c *ctx) {
 	defer n.exit()
 
 	n.Expression.check(c)
+	n.typ = n.Expression.Type()
 	switch x := n.Expression.(type) {
 	case *UnaryExpr:
 		if t := x.UnaryExpr.Type(); t != Invalid && x.UnaryOp.Ch == '*' {
@@ -704,7 +757,7 @@ func (n *QualifiedIdent) check(c *ctx) {
 
 	defer n.exit()
 
-	switch x := c.resolveQualifiedIdent(n).(type) {
+	switch n.resolvedTo = c.resolveQualifiedIdent(n); x := n.ResolvedTo().(type) {
 	case Type:
 		n.typ = x
 	case *TypeDef:
@@ -726,19 +779,28 @@ func (n *Selector) check(c *ctx) {
 	defer n.exit()
 
 	n.PrimaryExpr.check(c)
-	switch x := n.PrimaryExpr.Type().(type) {
+	n.typ = c.selector(n, n.PrimaryExpr.Type(), n.Ident)
+}
+
+func (c *ctx) selector(n Node, t Type, field Token) Type {
+	switch x := t.(type) {
 	case *PointerType:
 		switch y := x.Elem.(type) {
 		case *StructType:
-			if f := y.FieldByName(n.Ident.Src()); f != nil {
-				n.typ = f.Type()
+			if f := y.FieldByName(field.Src()); f != nil {
+				return f.Type()
 			}
 		default:
-			c.err(n, errorf("TODO %T %T", n, y))
+			c.err(n, errorf("TODO %T %T", x, y))
+		}
+	case *StructType:
+		if f := x.FieldByName(field.Src()); f != nil {
+			return f.Type()
 		}
 	default:
-		c.err(n, errorf("TODO %T %s", n, n.Source(false)))
+		c.err(n, errorf("TODO %T", x))
 	}
+	return Invalid
 }
 
 func (n *SliceExpr) check(c *ctx) {
@@ -803,7 +865,7 @@ func (n *UnaryExpr) check(c *ctx) {
 		}
 	case '&':
 		n.typ = newPointer(c.pkg, t)
-	case '-':
+	case '-', '+':
 		if !isArithmeticType(t) && !isUntypedArithmeticType(t) {
 			c.err(n, errorf("TODO %s %v", n.UnaryOp.Ch.str(), t))
 			return
@@ -840,9 +902,7 @@ func (n *Variable) check(c *ctx) {
 		n.Expr.check(c)
 		n.typ = n.Expr.Type()
 	case n.TypeNode != nil && n.Expr == nil:
-		tc := n.TypeNode.(typeChecker)
-		tc.check(c)
-		n.typ = tc.Type()
+		n.typ = c.check(n.TypeNode)
 	default: //case n.Type != nil && n.Expr != nil:
 		c.err(n, errorf("TODO %T", n))
 	}

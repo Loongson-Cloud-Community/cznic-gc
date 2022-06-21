@@ -1497,7 +1497,7 @@ func (p *parser) type1() (r Node) {
 	//                      Type case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 	switch p.ch() {
 	case '(':
-		return &ParenType{LParen: p.shift(), Type: p.type1(), RParen: p.must(')')}
+		return &ParenType{LParen: p.shift(), TypeNode: p.type1(), RParen: p.must(')')}
 	case '*':
 		return &PointerTypeNode{Star: p.shift(), BaseType: p.type1()}
 	case '[':
@@ -1993,7 +1993,7 @@ func (p *parser) primaryExpression() (r Node) {
 		lparen := p.shift()
 		switch x := p.exprOrType().(type) {
 		case typeNode:
-			r = &ParenType{LParen: lparen, Type: x, RParen: p.must(')')}
+			r = &ParenType{LParen: lparen, TypeNode: x, RParen: p.must(')')}
 			switch p.ch() {
 			case '(', '.':
 				// ok
@@ -2304,7 +2304,7 @@ func (p *parser) exprOrType() (r Node) {
 			// "(" Type .
 			switch p.ch() {
 			case ')':
-				r = &ParenType{LParen: lparen, Type: x, RParen: p.shift()}
+				r = &ParenType{LParen: lparen, TypeNode: x, RParen: p.shift()}
 				switch p.ch() {
 				case '(':
 					return p.expression(p.primaryExpression2(r, false))
