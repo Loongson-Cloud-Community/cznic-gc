@@ -63,7 +63,7 @@ type Type interface {
 }
 
 type checker interface {
-	check(c *ctx)
+	check(c *ctx) Node
 	enter(*ctx, Node) bool
 	exit()
 }
@@ -215,9 +215,9 @@ func (t *ArrayType) Position() (r token.Position) { return position(t.node) }
 
 func (t *ArrayType) String() string { return fmt.Sprintf("[%v]%s", t.Len, t.Elem) }
 
-func (n *ArrayTypeNode) check(c *ctx) {
+func (n *ArrayTypeNode) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
@@ -239,6 +239,7 @@ func (n *ArrayTypeNode) check(c *ctx) {
 		c.err(n.ElementType, "invalid array length: %s", n.ElementType.Source(false))
 		n.typ = Invalid
 	}
+	return n
 }
 
 // ChanDir represents a channel direction.
@@ -300,7 +301,31 @@ func (t *FunctionType) Kind() Kind { return Function }
 func (t *FunctionType) Position() (r token.Position) { return position(t.node) }
 
 func (t *FunctionType) String() string {
-	panic(todo(""))
+	var b strings.Builder
+	b.WriteString("func(")
+	for i, v := range t.Parameters {
+		if i != 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "%s", v.Type())
+	}
+	b.WriteByte(')')
+	if t.Result != nil {
+		b.WriteByte(' ')
+		if len(t.Result.Types) > 1 {
+			b.WriteByte('(')
+		}
+		for i, v := range t.Result.Types {
+			if i != 0 {
+				b.WriteString(", ")
+			}
+			fmt.Fprintf(&b, "%s", v)
+		}
+		if len(t.Result.Types) > 1 {
+			b.WriteByte(')')
+		}
+	}
+	return b.String()
 }
 
 // InterfaceType represents an interface type.
@@ -355,9 +380,9 @@ func (t *PointerType) Position() (r token.Position) { return position(t.node) }
 
 func (t *PointerType) String() string { return fmt.Sprintf("*%s", t.Elem) }
 
-func (n *PointerTypeNode) check(c *ctx) {
+func (n *PointerTypeNode) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
@@ -368,6 +393,7 @@ func (n *PointerTypeNode) check(c *ctx) {
 	c.check(n.BaseType)
 	et := n.BaseType.(typeChecker).Type()
 	n.typ = &PointerType{Elem: et, node: n}
+	return n
 }
 
 // SliceType represents a slice type.
@@ -434,7 +460,7 @@ func (t *StructType) FieldByName(nm string) *Field {
 	return t.m[nm]
 }
 
-func (n *StructTypeNode) check(c *ctx) {
+func (n *StructTypeNode) check(c *ctx) Node {
 	t := &StructType{node: n}
 	for _, v := range n.FieldDecls {
 		switch x := v.(type) {
@@ -450,6 +476,7 @@ func (n *StructTypeNode) check(c *ctx) {
 		}
 	}
 	n.typ = t
+	return n
 }
 
 // AliasType represents an alias type.
@@ -467,16 +494,16 @@ func (t *AliasType) Position() (r token.Position) { return position(t.node) }
 
 func (t *AliasType) String() string { return t.node.Ident.Src() }
 
-func (n *AliasDecl) check(c *ctx) {
+func (n *AliasDecl) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
-	c.pushNamed = true
-	c.check(n.TypeNode)
+	c.setPushNamed().check(n.TypeNode)
 	n.typ = n.TypeNode.(typeChecker).Type()
+	return n
 }
 
 // TupleType represents an ordered list of types.

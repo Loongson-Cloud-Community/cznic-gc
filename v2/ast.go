@@ -289,7 +289,7 @@ func (n *Signature) check(c *ctx, fd *FunctionDecl) (r *FunctionType) {
 
 func params(c *ctx, a []*ParameterDecl) (r []*Parameter) {
 	for _, v := range a {
-		t := newTyper(c.check(v.Type))
+		t := newTyper(c.checkType(v.Type))
 		if len(v.IdentifierList) == 0 {
 			r = append(r, &Parameter{typer: t})
 			continue
@@ -360,9 +360,9 @@ func (n *TypeDef) Position() (r token.Position) {
 // Source implements Node.
 func (n *TypeDef) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
-func (n *TypeDef) check(c *ctx) {
+func (n *TypeDef) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
@@ -372,11 +372,12 @@ func (n *TypeDef) check(c *ctx) {
 		switch n.Ident.Src() {
 		case "Pointer":
 			n.typ = PredefinedType(UnsafePointer)
-			return
+			return n
 		}
 	}
 
-	n.typ = c.check(n.TypeNode)
+	n.typ = c.checkType(n.TypeNode)
+	return n
 }
 
 // ParameterDecl describes a parameter declaration.
@@ -607,14 +608,15 @@ func (n *TypeNameNode) Position() (r token.Position) {
 // Source implements Node.
 func (n *TypeNameNode) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
-func (n *TypeNameNode) check(c *ctx) {
+func (n *TypeNameNode) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
-	n.typ = c.resolveQualifiedType(n.Name)
+	n.typ = c.checkType(n.Name)
+	return n
 }
 
 // QualifiedIdent describes an optionally qualified identifier.
@@ -829,12 +831,7 @@ type Arguments struct {
 	Ellipsis       Token
 	Comma2         Token
 	RParen         Token
-
-	isConversion bool
 }
-
-// IsConversion reports whether n is not a call but a conversion.
-func (n *Arguments) IsConversion() bool { return n.isConversion }
 
 // Position implements Node.
 func (n *Arguments) Position() (r token.Position) {
@@ -1005,14 +1002,15 @@ func (n *InterfaceTypeNode) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
 
-func (n *InterfaceTypeNode) check(c *ctx) {
+func (n *InterfaceTypeNode) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
 	c.err(n, errorf("TODO %T", n))
+	return n
 }
 
 // ForStmt describes a for statement.
@@ -1855,12 +1853,7 @@ type ParenExpr struct {
 	LParen     Token
 	Expression Expression
 	RParen     Token
-	parenType  typer
 }
-
-// ParenType returns type of n if interpreted as a parenthesized type, if
-// applicable.
-func (n *ParenExpr) ParenType() Type { return n.parenType.Type() }
 
 // Position implements Node.
 func (n *ParenExpr) Position() (r token.Position) {
@@ -1912,6 +1905,7 @@ func (n *Constant) Source(full bool) []byte {
 type Variable struct {
 	guard
 	typer
+	valuer
 	Expr     Expression
 	Ident    Token
 	TypeNode Node

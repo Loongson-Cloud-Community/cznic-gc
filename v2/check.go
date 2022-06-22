@@ -76,12 +76,16 @@ type packagesKey struct {
 	importPath string
 }
 
-type ctx struct {
+type ctx0 struct {
 	checker  PackageChecker
 	errors   errList
 	packages map[packagesKey]*Package
 	pkg      *Package
 	stack    []Node
+}
+
+type ctx struct {
+	*ctx0
 
 	iota int64
 
@@ -90,10 +94,24 @@ type ctx struct {
 
 func newCtx(checker PackageChecker, pkg *Package) *ctx {
 	return &ctx{
-		checker:  checker,
-		packages: map[packagesKey]*Package{},
-		pkg:      pkg,
+		ctx0: &ctx0{
+			checker:  checker,
+			packages: map[packagesKey]*Package{},
+			pkg:      pkg,
+		},
 	}
+}
+
+func (c *ctx) setIota(n int64) *ctx {
+	r := *c
+	r.iota = n
+	return &r
+}
+
+func (c *ctx) setPushNamed() *ctx {
+	r := *c
+	r.pushNamed = true
+	return &r
 }
 
 func (c *ctx) err(n Node, s string, args ...interface{}) {
@@ -157,10 +175,31 @@ func (c *ctx) symbol(expr Expression) Node {
 	}
 }
 
-func (c *ctx) check(n Node) Type {
+func (c *ctx) check(n Node) Node {
 	switch x := n.(type) {
 	case typeChecker:
-		x.check(c)
+		return x.check(c)
+	default:
+		c.err(n, errorf("TODO %T", x))
+		return Invalid
+	}
+}
+
+func (c *ctx) checkType(n Node) Type {
+	switch x := c.check(n).(type) {
+	case Type:
+		return x
+	case *StructTypeNode:
+		return x.Type()
+	case *TypeNameNode:
+		return x.Type()
+	case *Ident:
+		return x.Type()
+	case *PointerTypeNode:
+		return x.Type()
+	case *ArrayTypeNode:
+		return x.Type()
+	case *QualifiedIdent:
 		return x.Type()
 	default:
 		c.err(n, errorf("TODO %T", x))
@@ -168,42 +207,32 @@ func (c *ctx) check(n Node) Type {
 	}
 }
 
-func (c *ctx) resolveQualifiedType(n *QualifiedIdent) Type {
-	switch x := c.resolveQualifiedIdent(n).(type) {
-	case *TypeDef:
-		x.check(c)
-		return x.Type()
-	case Type:
+func (c *ctx) checkExpr(n Expression) Expression {
+	switch x := c.check(n).(type) {
+	case Expression:
 		return x
-	case *AliasDecl:
-		x.check(c)
-		return x.Type()
 	default:
 		c.err(n, errorf("TODO %T", x))
-		return nil
+		return n
 	}
 }
 
 func (c *ctx) resolveQualifiedIdent(n *QualifiedIdent) (r Node) {
 	if n.PackageName.IsValid() {
 		switch x := c.symbolResolver(n.lexicalScope, c.pkg, n.PackageName, true).(type) {
-		case nil:
-			return nil
 		case *Package:
 			n.resolvedIn = x
-			return c.symbolResolver(x.Scope, x, n.Ident, false)
-		case *Variable:
-			n.resolvedIn = c.pkg
-			x.check(c)
-			return c.selector(n, x.Type(), n.Ident)
+			n.resolvedTo = c.symbolResolver(x.Scope, x, n.Ident, false)
+			return n.ResolvedTo()
 		default:
-			trc("%v: %T '%s'", n.Position(), x, n.Source(false))
 			c.err(n, errorf("TODO %T", x))
 			return nil
 		}
 	}
 
-	return c.symbolResolver(n.lexicalScope, c.pkg, n.Ident, true)
+	n.resolvedIn = c.pkg
+	n.resolvedTo = c.symbolResolver(n.lexicalScope, c.pkg, n.Ident, true)
+	return n.ResolvedTo()
 }
 
 func (n *SourceFile) check(c *ctx) {
@@ -385,95 +414,88 @@ func (n *Package) checkDeclarations(c *ctx) {
 	}
 }
 
-func (n *Arguments) check(c *ctx) {
+func (n *Arguments) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
-	n.PrimaryExpr.check(c)
-	for _, v := range n.ExpressionList {
-		v.Expression.check(c)
-	}
-	switch x := n.PrimaryExpr.Type().(type) {
-	case *InvalidType:
-		switch x := n.PrimaryExpr.(type) {
-		case *ParenExpr:
-			n.typ = x.ParenType()
-			n.isConversion = true
-		default:
+	var resolvedTo Node
+	var resolvedIn *Package
+	switch x := n.PrimaryExpr.check(c).(type) {
+	case *Ident:
+		resolvedTo = x.ResolvedTo()
+	case *QualifiedIdent:
+		resolvedIn = x.ResolvedIn()
+		resolvedTo = x.ResolvedTo()
+	case *ParenType:
+		if len(n.ExpressionList) != 1 {
 			c.err(n, errorf("TODO %T", x))
-		}
-	case PredefinedType:
-		n.isConversion = true
-		n.typ = x
-	case *PointerType:
-		n.isConversion = true
-		n.typ = x
-	case *FunctionType:
-		n.typ = x.Result
-		if len(x.Parameters) != len(n.ExpressionList) {
-			c.err(n, errorf("TODO %T", n))
-			return
+			return n
 		}
 
-		var resolvedIn *Package
-		var resolvedTo Node
-		switch x := c.symbol(n.PrimaryExpr).(type) {
-		case *QualifiedIdent:
-			resolvedIn, resolvedTo = x.ResolvedIn(), x.ResolvedTo()
-		default:
+		return (&Conversion{ConvertType: x, LParen: n.LParen, Expression: n.ExpressionList[0].Expression, Comma: n.ExpressionList[0].Comma, RParen: n.RParen}).check(c)
+	default:
+		c.err(n, errorf("TODO %T", x))
+		return n
+	}
+
+	switch x := resolvedTo.(type) {
+	case
+		*AliasDecl,
+		*TypeDef,
+		PredefinedType:
+
+		if len(n.ExpressionList) != 1 {
 			c.err(n, errorf("TODO %T", x))
+			return n
 		}
+
+		return (&Conversion{ConvertType: n.PrimaryExpr, LParen: n.LParen, Expression: n.ExpressionList[0].Expression, Comma: n.ExpressionList[0].Comma, RParen: n.RParen}).check(c)
+	case *FunctionDecl:
+		ft, ok := x.Type().(*FunctionType)
+		if !ok {
+			return n
+		}
+
+		switch len(ft.Result.Types) {
+		case 1:
+			n.typ = ft.Result.Types[0]
+		default:
+			n.typ = ft.Result
+		}
+		if len(ft.Parameters) != len(n.ExpressionList) {
+			c.err(n, errorf("TODO %T", n))
+			return n
+		}
+
 		if resolvedIn != nil {
 			switch resolvedIn.ImportPath {
 			case "unsafe":
-				switch y := resolvedTo.(type) {
-				case *FunctionDecl:
-					switch y.FunctionName.Src() {
-					case "Alignof", "Offsetof", "Sizeof":
-						return
-					}
-				default:
-					c.err(n, errorf("TODO %T", y))
+				switch x.FunctionName.Src() {
+				case "Alignof", "Offsetof", "Sizeof":
+					return n
 				}
 			}
 		}
 
-		for i, expr := range n.ExpressionList {
-			et := expr.Expression.Type()
-			switch x := et.(type) {
-			case *TupleType:
-				if len(x.Types) != 1 {
-					c.err(n, errorf("TODO %T", n))
-					continue
-				}
-
-				et = x.Types[0]
-			}
-			pt := x.Parameters[i].Type()
-			if !c.assignable(expr, et, pt) {
-				trc("%v: et %s, pt %s, expr '%s'", n.Position(), et, pt, expr.Source(false))
+		for i, exprItem := range n.ExpressionList {
+			exprItem.Expression = c.checkExpr(exprItem.Expression)
+			et := c.singleType(exprItem.Expression, exprItem.Expression.Type())
+			pt := ft.Parameters[i].Type()
+			if !c.assignable(exprItem, et, pt) {
 				c.err(n, errorf("TODO %T", n))
 				continue
 			}
 
-			c.convertValue(expr, expr.Expression.Value(), pt)
+			c.convertValue(exprItem, exprItem.Expression.Value(), pt)
 		}
-		return
+		return n
 	default:
-		// trc("%v: %T '%s'", n.Position(), pe, n.Source(false))
 		c.err(n, errorf("TODO %T", x))
-		return
+		return n
 	}
-
-	// Conversion
-	if len(n.ExpressionList) != 1 {
-		c.err(n.LParen, "expected one argument")
-	}
-
-	n.v = c.convertValue(n.PrimaryExpr, n.ExpressionList[0].Expression.Value(), n.Type())
 }
 
 func (c *ctx) assignable(n Node, expr, to Type) bool {
@@ -501,44 +523,27 @@ func (c *ctx) assignable(n Node, expr, to Type) bool {
 	}
 }
 
-func (n *BasicLit) check(c *ctx) {
+func (n *BasicLit) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
 	c.err(n, errorf("internal error: %T %T %T", n, n.Type(), n.Value()))
+	return n
 }
 
-func (n *BinaryExpression) check(c *ctx) {
+func (n *BinaryExpression) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
-	n.A.check(c)
-	n.B.check(c)
-	a, b := n.A.Type(), n.B.Type()
-	switch x := a.(type) {
-	case *TupleType:
-		if len(x.Types) != 1 {
-			c.err(n, errorf("TODO %v", n.Op.Ch.str()))
-			return
-		}
-
-		a = x.Types[0]
-	}
-	switch x := b.(type) {
-	case *TupleType:
-		if len(x.Types) != 1 {
-			c.err(n, errorf("TODO %v", n.Op.Ch.str()))
-			return
-		}
-
-		b = x.Types[0]
-	}
+	n.A = c.checkExpr(n.A)
+	n.B = c.checkExpr(n.B)
+	a, b := c.singleType(n.A, n.A.Type()), c.singleType(n.B, n.B.Type())
 	x, y := n.A.Value(), n.B.Value()
 	switch n.Op.Ch {
 	case SHL, SHR:
@@ -549,10 +554,10 @@ func (n *BinaryExpression) check(c *ctx) {
 			// ok
 		case y.Kind() != constant.Unknown:
 			c.err(n, errorf("TODO %v", n.Op.Ch.str()))
-			return
+			return n
 		default:
 			c.err(n, errorf("TODO %v", n.Op.Ch.str()))
-			return
+			return n
 		}
 
 		// If the left operand of a non-constant shift expression is an untyped
@@ -561,7 +566,7 @@ func (n *BinaryExpression) check(c *ctx) {
 		switch {
 		case y.Kind() == constant.Unknown && x.Kind() != constant.Unknown:
 			c.err(n, errorf("TODO %v", n.Op.Ch.str()))
-			return
+			return n
 		default:
 			n.typ = a
 			n.v = constant.BinaryOp(x, xlat[n.Op.Ch], y)
@@ -610,82 +615,120 @@ func (n *BinaryExpression) check(c *ctx) {
 			}
 		}
 	}
+	return n
 }
 
-func (n *CompositeLit) check(c *ctx) {
+func (n *CompositeLit) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
-	n.typ = c.check(n.LiteralType)
+	n.typ = c.checkType(n.LiteralType)
 	//TODO check n.LiteralValue
+	return n
 }
 
-func (n *Constant) check(c *ctx) {
+func (n *Constant) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
-	iota := c.iota
-	c.iota = n.node.iota
-	defer func() { c.iota = iota }()
-
-	n.Expr.check(c)
-	n.typ = n.Expr.Type()
-	n.v = n.Expr.Value()
+	switch x := n.Expr.check(c.setIota(n.node.iota)).(type) {
+	case Expression:
+		n.typ = x.Type()
+		n.v = x.Value()
+	default:
+		c.err(n, errorf("TODO %T", x))
+	}
+	return n
 }
 
-func (n *Conversion) check(c *ctx) {
+func (n *Conversion) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
-	n.typ = c.check(n.ConvertType)
-	n.Expression.check(c)
+	switch x := c.check(n.ConvertType).(type) {
+	case *Ident:
+		switch y := x.ResolvedTo().(type) {
+		case PredefinedType:
+			n.typ = y
+		case *AliasDecl:
+			n.typ = y.Type()
+		default:
+			c.err(n, errorf("TODO %T %T", x, y))
+			return n
+		}
+	case *QualifiedIdent:
+		switch y := x.ResolvedTo().(type) {
+		case *TypeDef:
+			n.typ = x.Type()
+		default:
+			c.err(n, errorf("TODO %T %T", x, y))
+			return n
+		}
+	case *ParenType:
+		n.typ = x.Type()
+	case *TypeDef:
+		n.typ = x.Type()
+	default:
+		c.err(n, errorf("TODO %T", x))
+		return n
+	}
+
+	n.Expression = c.checkExpr(n.Expression)
 	if n.Type().Kind() != InvalidKind && n.Expression.Type().Kind() != InvalidKind {
-		c.convertType(n.Expression, n.Expression.Type(), n.Type())
+		n.v = c.convert(n.Expression, n.Type())
 	}
+	return n
 }
 
-func (n *ParenType) check(c *ctx) {
+func (n *ParenType) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
-	}
-
-	defer n.exit()
-
-	n.typ = c.check(n.TypeNode)
-}
-
-func (n *FunctionLit) check(c *ctx) {
-	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
-	c.err(n, errorf("TODO %T", n))
+	n.typ = c.checkType(n.TypeNode)
+	return n
 }
 
-func (n *GenericOperand) check(c *ctx) {
+func (n *FunctionLit) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
 	c.err(n, errorf("TODO %T", n))
+	return n
+
+	//TODO c.err(n, errorf("TODO %T", n))
 }
 
-func (n *Ident) check(c *ctx) {
+func (n *GenericOperand) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+	return n
+
+	//TODO c.err(n, errorf("TODO %T", n))
+}
+
+func (n *Ident) check(c *ctx) Node {
+	if !n.enter(c, n) {
+		return n
 	}
 
 	defer n.exit()
@@ -711,167 +754,213 @@ func (n *Ident) check(c *ctx) {
 		panic(todo("%v: %T %s", n.Position(), x, x.Source(false)))
 		c.err(n, errorf("TODO %T", x))
 	}
+	return n
 }
 
-func (n *Index) check(c *ctx) {
+func (n *Index) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
 	c.err(n, errorf("TODO %T", n))
+	return n
+
+	//TODO c.err(n, errorf("TODO %T", n))
 }
 
-func (n *MethodExpr) check(c *ctx) {
+func (n *MethodExpr) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
 	c.err(n, errorf("TODO %T", n))
+	return n
+
+	//TODO c.err(n, errorf("TODO %T", n))
 }
 
-func (n *ParenExpr) check(c *ctx) {
+func (n *ParenExpr) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
-	n.Expression.check(c)
-	n.typ = n.Expression.Type()
-	switch x := n.Expression.(type) {
-	case *UnaryExpr:
-		if t := x.UnaryExpr.Type(); t != Invalid && x.UnaryOp.Ch == '*' {
-			n.parenType.typ = newPointer(c.pkg, t)
-		}
-	}
-}
-
-func (n *QualifiedIdent) check(c *ctx) {
-	if !n.enter(c, n) {
-		return
-	}
-
-	defer n.exit()
-
-	switch n.resolvedTo = c.resolveQualifiedIdent(n); x := n.ResolvedTo().(type) {
-	case Type:
-		n.typ = x
-	case *TypeDef:
-		x.check(c)
-		n.typ = x.Type()
-	case *FunctionDecl:
-		x.check(c)
-		n.typ = x.Type()
-	default:
-		c.err(n, errorf("TODO %T", x))
-	}
-}
-
-func (n *Selector) check(c *ctx) {
-	if !n.enter(c, n) {
-		return
-	}
-
-	defer n.exit()
-
-	n.PrimaryExpr.check(c)
-	n.typ = c.selector(n, n.PrimaryExpr.Type(), n.Ident)
-}
-
-func (c *ctx) selector(n Node, t Type, field Token) Type {
-	switch x := t.(type) {
-	case *PointerType:
-		switch y := x.Elem.(type) {
-		case *StructType:
-			if f := y.FieldByName(field.Src()); f != nil {
-				return f.Type()
-			}
+	switch x := n.Expression.check(c).(type) {
+	case *PointerTypeNode:
+		return (&ParenType{LParen: n.LParen, TypeNode: x, RParen: n.RParen}).check(c)
+	case *Ident:
+		switch y := x.ResolvedTo().(type) {
+		case *Variable:
+			n.typ = y.Type()
 		default:
 			c.err(n, errorf("TODO %T %T", x, y))
 		}
-	case *StructType:
-		if f := x.FieldByName(field.Src()); f != nil {
-			return f.Type()
-		}
+	case *BinaryExpression:
+		n.Expression = x
+		n.typ = x.Type()
 	default:
 		c.err(n, errorf("TODO %T", x))
 	}
-	return Invalid
+	return n
 }
 
-func (n *SliceExpr) check(c *ctx) {
+func (n *QualifiedIdent) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
-	c.err(n, errorf("TODO %T", n))
+	switch x := c.resolveQualifiedIdent(n).(type) {
+	case PredefinedType:
+		n.typ = x
+	case *TypeDef:
+		n.typ = x.Type()
+	case *FunctionDecl:
+		n.typ = x.Type()
+	case *AliasDecl:
+		n.typ = x.Type()
+	default:
+		c.err(n, errorf("TODO %T", x))
+	}
+	return n
 }
 
-func (n *TypeAssertion) check(c *ctx) {
+func (n *Selector) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
-	c.err(n, errorf("TODO %T", n))
-}
-
-func (n *TypeSwitchGuard) check(c *ctx) {
-	if !n.enter(c, n) {
-		return
+	var t Type
+	switch x := n.PrimaryExpr.check(c).(type) {
+	case *Conversion:
+		t = x.Type()
+	default:
+		c.err(n, errorf("TODO %T", x))
+		return n
 	}
 
-	defer n.exit()
-
-	c.err(n, errorf("TODO %T", n))
-}
-
-func (n *UnaryExpr) check(c *ctx) {
-	if !n.enter(c, n) {
-		return
+	if x, ok := t.(*PointerType); ok {
+		t = x.Elem
 	}
-
-	defer n.exit()
-
-	n.UnaryExpr.check(c)
-	t := n.UnaryExpr.Type()
-	switch x := t.(type) {
-	case *TupleType:
-		if len(x.Types) != 1 {
-			c.err(n, errorf("TODO %v", x))
-			return
+	if x, ok := t.(*StructType); ok {
+		if f := x.FieldByName(n.Ident.Src()); f != nil {
+			n.typ = f.Type()
+			return n
 		}
-
-		t = x.Types[0]
 	}
+
+	c.err(n, errorf("TODO %T", n))
+	return n
+}
+
+func (n *SliceExpr) check(c *ctx) Node {
+	if !n.enter(c, n) {
+		return n
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+	return n
+
+	//TODO c.err(n, errorf("TODO %T", n))
+}
+
+func (n *TypeAssertion) check(c *ctx) Node {
+	if !n.enter(c, n) {
+		return n
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+	return n
+
+	//TODO c.err(n, errorf("TODO %T", n))
+}
+
+func (n *TypeSwitchGuard) check(c *ctx) Node {
+	if !n.enter(c, n) {
+		return n
+	}
+
+	defer n.exit()
+
+	c.err(n, errorf("TODO %T", n))
+	return n
+
+	//TODO c.err(n, errorf("TODO %T", n))
+}
+
+func (n *UnaryExpr) check(c *ctx) Node {
+	if !n.enter(c, n) {
+		return n
+	}
+
+	defer n.exit()
+
+	var resolvedTo Node
+	switch x := n.UnaryExpr.check(c).(type) {
+	case *QualifiedIdent:
+		resolvedTo = x.ResolvedTo()
+	case *Ident:
+		resolvedTo = x.ResolvedTo()
+	case
+		*Arguments,
+		*BasicLit,
+		*ParenExpr:
+
+		// ok
+	case *Conversion:
+		n.UnaryExpr = x
+	default:
+		c.err(n, errorf("TODO %T", x))
+		return n
+	}
+
+	switch x := resolvedTo.(type) {
+	case nil:
+		// ok
+	case *TypeDef:
+		switch n.UnaryOp.Ch {
+		case '*':
+			return (&PointerTypeNode{Star: n.UnaryOp, BaseType: x}).check(c)
+		default:
+			c.err(n, errorf("TODO %T", x))
+			return n
+		}
+	case *Variable:
+		// ok
+	default:
+		c.err(n, errorf("TODO %T", x))
+		return n
+	}
+
+	t := c.singleType(n.UnaryExpr, n.UnaryExpr.Type())
+	n.typ = t
+	n.v = n.UnaryExpr.Value()
 	if !n.UnaryOp.IsValid() {
-		n.typ = t
-		return
+		return n
 	}
 
-	v := n.UnaryExpr.Value()
+	v := n.Value()
 	switch n.UnaryOp.Ch {
-	case '*':
-		switch x := t.(type) {
-		case *PointerType:
-			n.typ = x.Elem
-		}
 	case '&':
 		n.typ = newPointer(c.pkg, t)
 	case '-', '+':
 		if !isArithmeticType(t) && !isUntypedArithmeticType(t) {
 			c.err(n, errorf("TODO %s %v", n.UnaryOp.Ch.str(), t))
-			return
+			break
 		}
 
-		n.typ = t
 		if v.Kind() == constant.Unknown {
 			break
 		}
@@ -879,51 +968,109 @@ func (n *UnaryExpr) check(c *ctx) {
 		w := constant.UnaryOp(xlat[n.UnaryOp.Ch], v, 0) //TODO prec
 		if w.Kind() == constant.Unknown {
 			c.err(n, errorf("TODO %s", n.UnaryOp.Ch.str()))
-			return
+			break
 		}
 
 		n.v = w
 	default:
-		c.err(n, errorf("TODO %s", n.UnaryOp.Ch.str()))
+		c.err(n, errorf("TODO %T %s", n, n.UnaryOp.Ch.str()))
 	}
+	return n
+
+	//TODO n.UnaryExpr.check(c)
+	//TODO t := n.UnaryExpr.Type()
+	//TODO switch x := t.(type) {
+	//TODO case *TupleType:
+	//TODO 	if len(x.Types) != 1 {
+	//TODO 		c.err(n, errorf("TODO %v", x))
+	//TODO 		return
+	//TODO 	}
+
+	//TODO 	t = x.Types[0]
+	//TODO }
+	//TODO if !n.UnaryOp.IsValid() {
+	//TODO 	n.typ = t
+	//TODO 	return
+	//TODO }
+
+	//TODO v := n.UnaryExpr.Value()
+	//TODO switch n.UnaryOp.Ch {
+	//TODO case '*':
+	//TODO 	switch x := t.(type) {
+	//TODO 	case *PointerType:
+	//TODO 		n.typ = x.Elem
+	//TODO 	}
+	//TODO case '&':
+	//TODO 	n.typ = newPointer(c.pkg, t)
+	//TODO case '-', '+':
+	//TODO 	if !isArithmeticType(t) && !isUntypedArithmeticType(t) {
+	//TODO 		c.err(n, errorf("TODO %s %v", n.UnaryOp.Ch.str(), t))
+	//TODO 		return
+	//TODO 	}
+
+	//TODO 	n.typ = t
+	//TODO 	if v.Kind() == constant.Unknown {
+	//TODO 		break
+	//TODO 	}
+
+	//TODO 	w := constant.UnaryOp(xlat[n.UnaryOp.Ch], v, 0) //TODO prec
+	//TODO 	if w.Kind() == constant.Unknown {
+	//TODO 		c.err(n, errorf("TODO %s", n.UnaryOp.Ch.str()))
+	//TODO 		return
+	//TODO 	}
+
+	//TODO 	n.v = w
+	//TODO default:
+	//TODO 	c.err(n, errorf("TODO %s", n.UnaryOp.Ch.str()))
+	//TODO }
 }
 
-func (n *Variable) check(c *ctx) {
+func (n *Variable) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
+	if n.TypeNode != nil {
+		n.typ = c.checkType(n.TypeNode)
+	}
+	if n.Expr != nil {
+		n.Expr = c.checkExpr(n.Expr)
+	}
 	switch {
 	case n.TypeNode == nil && n.Expr == nil:
 		c.err(n, errorf("TODO %T", n))
 	case n.TypeNode == nil && n.Expr != nil:
-		n.Expr.check(c)
-		n.typ = n.Expr.Type()
+		n.typ = c.defaultType(n.Expr.Type())
 	case n.TypeNode != nil && n.Expr == nil:
-		n.typ = c.check(n.TypeNode)
+		// nop
 	default: //case n.Type != nil && n.Expr != nil:
 		c.err(n, errorf("TODO %T", n))
 	}
+	return n
 }
 
-func (n *FunctionDecl) check(c *ctx) {
+func (n *FunctionDecl) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
 	n.typ = n.Signature.check(c, n)
+	return n
 }
 
-func (n *MethodDecl) check(c *ctx) {
+func (n *MethodDecl) check(c *ctx) Node {
 	if !n.enter(c, n) {
-		return
+		return n
 	}
 
 	defer n.exit()
 
 	c.err(n, errorf("TODO %T", n))
+	return n
+
+	//TODO c.err(n, errorf("TODO %T", n))
 }

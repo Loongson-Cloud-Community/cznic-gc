@@ -30,6 +30,7 @@ var (
 		(*TypeAssertion)(nil),
 		(*TypeSwitchGuard)(nil),
 		(*UnaryExpr)(nil),
+		(*Variable)(nil),
 		(*invalidExprType)(nil),
 	}
 )
@@ -66,7 +67,7 @@ type invalidExprType struct {
 }
 
 func (n *invalidExprType) Kind() Kind                   { return InvalidKind }
-func (n *invalidExprType) check(c *ctx)                 {}
+func (n *invalidExprType) check(c *ctx) Node            { return n }
 func (n *invalidExprType) Position() (r token.Position) { return r }
 func (n *invalidExprType) Source(full bool) []byte      { return []byte("<invalid expression>") }
 
@@ -268,6 +269,10 @@ func (c *ctx) convertValue(n Node, v constant.Value, to Type) (r constant.Value)
 }
 
 func (c *ctx) convertType(n Node, from, to Type) {
+	if isArithmeticType(from) && isArithmeticType(to) {
+		return
+	}
+
 	switch from.Kind() {
 	case UnsafePointer:
 		switch to.Kind() {
@@ -276,7 +281,57 @@ func (c *ctx) convertType(n Node, from, to Type) {
 		default:
 			c.err(n, errorf("cannot convert %s to %s", from, to))
 		}
+	case UntypedInt, UntypedFloat, UntypedComplex:
+		switch {
+		case isArithmeticType(to):
+			// ok
+		default:
+			c.err(n, errorf("cannot convert %s to %s", from, to))
+		}
+	case Pointer:
+		switch to.Kind() {
+		case UnsafePointer:
+			// ok
+		default:
+			c.err(n, errorf("cannot convert %s to %s", from, to))
+		}
 	default:
 		c.err(n, errorf("TODO %v -> %v", from.Kind(), to.Kind()))
+	}
+}
+
+func (c *ctx) convert(expr Expression, to Type) constant.Value {
+	c.convertType(expr, expr.Type(), to)
+	return c.convertValue(expr, expr.Value(), to)
+}
+
+func (c *ctx) defaultType(t Type) Type {
+	switch t.Kind() {
+	case UntypedInt:
+		return PredefinedType(Int)
+	case UntypedFloat:
+		return PredefinedType(Float64)
+	case UntypedBool:
+		return PredefinedType(Bool)
+	case UntypedString:
+		return PredefinedType(String)
+	case UntypedComplex:
+		return PredefinedType(Complex128)
+	default:
+		return t
+	}
+}
+
+func (c *ctx) singleType(n Node, t Type) Type {
+	switch x := t.(type) {
+	case *TupleType:
+		if len(x.Types) != 1 {
+			c.err(n, errorf("expected a single expression"))
+			return Invalid
+		}
+
+		return x.Types[0]
+	default:
+		return t
 	}
 }
