@@ -18,7 +18,7 @@ var (
 		(*ArrayTypeNode)(nil),
 		(*Assignment)(nil),
 		(*BasicLit)(nil),
-		(*BinaryExpression)(nil),
+		(*BinaryExpr)(nil),
 		(*Block)(nil),
 		(*BreakStmt)(nil),
 		(*ChannelType)(nil),
@@ -254,6 +254,7 @@ func (n *FunctionDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffe
 //
 //  Signature = Parameters [ Result ] .
 type Signature struct {
+	guard
 	typer
 	Parameters *Parameters
 	Result     Node
@@ -267,13 +268,13 @@ func (n *Signature) Position() (r token.Position) {
 // Source implements Node.
 func (n *Signature) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
-func (n *Signature) check(c *ctx, fd *FunctionDecl) (r *FunctionType) {
-	r = &FunctionType{node: fd, Parameters: params(c, n.Parameters.ParameterList), Result: &TupleType{}}
+func (n *Signature) check(c *ctx) Node {
+	r := &FunctionType{Parameters: params(c, n.Parameters.ParameterList), Result: &TupleType{}}
 	switch x := n.Result.(type) {
 	case *TypeNameNode:
-		x.check(c)
-		r.Results = []*Parameter{{typer: newTyper(x.Type())}}
-		r.Result.Types = append(r.Result.Types, x.Type())
+		t := c.checkType(x)
+		r.Results = []*Parameter{{typer: newTyper(t)}}
+		r.Result.Types = append(r.Result.Types, t)
 	case nil:
 		// ok
 	case *Parameters:
@@ -284,7 +285,7 @@ func (n *Signature) check(c *ctx, fd *FunctionDecl) (r *FunctionType) {
 		c.err(x, errorf("TODO %T", x))
 	}
 	n.typ = r
-	return r
+	return n
 }
 
 func params(c *ctx, a []*ParameterDecl) (r []*Parameter) {
@@ -351,6 +352,11 @@ type TypeDef struct {
 	TypeNode       Node
 	Semicolon      Token
 }
+
+// Kind implements Type.
+func (t *TypeDef) Kind() Kind { return t.Type().Kind() }
+
+func (t *TypeDef) String() string { return t.Ident.Src() }
 
 // Position implements Node.
 func (n *TypeDef) Position() (r token.Position) {
@@ -551,7 +557,7 @@ type VarSpec struct {
 	IdentifierList []*IdentifierListItem
 	Type           Node
 	Eq             Token
-	ExpressionList []*ExpressionListItem
+	ExprList       []*ExpressionListItem
 	Semicolon      Token
 }
 
@@ -661,10 +667,10 @@ type ConstSpec struct {
 	IdentifierList []*IdentifierListItem
 	Type           Node
 	Eq             Token
-	ExpressionList []*ExpressionListItem
+	ExprList       []*ExpressionListItem
 	Semicolon      Token
 	iota           int64
-	expressionList []*ExpressionListItem
+	exprList       []*ExpressionListItem
 	typ            Node
 }
 
@@ -684,13 +690,13 @@ func (n *ConstSpec) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}
 //
 // ExpressionList = Expression { "," Expression } .
 type ExpressionListItem struct {
-	Expression Expression
-	Comma      Token
+	Expr  Expression
+	Comma Token
 }
 
 // Position implements Node.
 func (n *ExpressionListItem) Position() (r token.Position) {
-	return n.Expression.Position()
+	return n.Expr.Position()
 }
 
 // Source implements Node.
@@ -701,13 +707,13 @@ func (n *ExpressionListItem) Source(full bool) []byte {
 // ExpressionStmt describes an expression statement.
 //
 type ExpressionStmt struct {
-	Expression Expression
-	Semicolon  Token
+	Expr      Expression
+	Semicolon Token
 }
 
 // Position implements Node.
 func (n *ExpressionStmt) Position() (r token.Position) {
-	return n.Expression.Position()
+	return n.Expr.Position()
 }
 
 // Source implements Node.
@@ -715,9 +721,9 @@ func (n *ExpressionStmt) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
 
-// BinaryExpression describes a binary expression.
+// BinaryExpr describes a binary expression.
 //
-type BinaryExpression struct {
+type BinaryExpr struct {
 	guard
 	typer
 	valuer
@@ -727,12 +733,12 @@ type BinaryExpression struct {
 }
 
 // Position implements Node.
-func (n *BinaryExpression) Position() (r token.Position) {
+func (n *BinaryExpr) Position() (r token.Position) {
 	return n.A.Position()
 }
 
 // Source implements Node.
-func (n *BinaryExpression) Source(full bool) []byte {
+func (n *BinaryExpr) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
 
@@ -743,7 +749,7 @@ type ShortVarDecl struct {
 	simpleStmter
 	IdentifierList []*IdentifierListItem
 	Define         Token
-	ExpressionList []*ExpressionListItem
+	ExprList       []*ExpressionListItem
 	Semicolon      Token
 }
 
@@ -783,9 +789,9 @@ func (n *MethodDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{
 //
 //  ReturnStmt = "return" [ ExpressionList ] .
 type ReturnStmt struct {
-	Return         Token
-	ExpressionList []*ExpressionListItem
-	Semicolon      Token
+	Return    Token
+	ExprList  []*ExpressionListItem
+	Semicolon Token
 }
 
 // Position implements Node.
@@ -823,14 +829,14 @@ type Arguments struct {
 	guard
 	typer
 	valuer
-	PrimaryExpr    Expression
-	LParen         Token
-	TypeArg        Node
-	Comma          Token
-	ExpressionList []*ExpressionListItem
-	Ellipsis       Token
-	Comma2         Token
-	RParen         Token
+	PrimaryExpr Expression
+	LParen      Token
+	TypeArg     Node
+	Comma       Token
+	ExprList    []*ExpressionListItem
+	Ellipsis    Token
+	Comma2      Token
+	RParen      Token
 }
 
 // Position implements Node.
@@ -848,7 +854,7 @@ type IfStmt struct {
 	If         Token
 	SimpleStmt Node
 	Semicolon  Token
-	Expression Expression
+	Expr       Expression
 	Block      *Block
 	Else       Token
 	ElsePart   Node
@@ -909,13 +915,13 @@ type UnaryExpr struct {
 	guard
 	typer
 	valuer
-	UnaryOp   Token
-	UnaryExpr Expression
+	Op   Token
+	Expr Expression
 }
 
 // Position implements Node.
 func (n *UnaryExpr) Position() (r token.Position) {
-	return n.UnaryOp.Position()
+	return n.Op.Position()
 }
 
 // Source implements Node.
@@ -1059,15 +1065,15 @@ func (n *ForClause) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}
 //
 //  RangeClause = [ ExpressionList "=" | IdentifierList ":=" ] "range" Expression .
 type RangeClause struct {
-	ExpressionList []*ExpressionListItem
-	Assign         Token
-	Range          Token
-	Expression     Expression
+	ExprList []*ExpressionListItem
+	Assign   Token
+	Range    Token
+	Expr     Expression
 }
 
 // Position implements Node.
 func (n *RangeClause) Position() (r token.Position) {
-	return n.ExpressionList[0].Position()
+	return n.ExprList[0].Position()
 }
 
 // Source implements Node.
@@ -1201,7 +1207,7 @@ type Index struct {
 	valuer
 	PrimaryExpr Expression
 	LBracket    Token
-	Expression  Expression
+	Expr        Expression
 	RBracket    Token
 }
 
@@ -1217,9 +1223,9 @@ func (n *Index) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n,
 //
 //  DeferStmt = "defer" Expression .
 type DeferStmt struct {
-	Defer      Token
-	Expression Expression
-	Semicolon  Token
+	Defer     Token
+	Expr      Expression
+	Semicolon Token
 }
 
 // Position implements Node.
@@ -1272,7 +1278,7 @@ type ExpressionSwitchStmt struct {
 	Switch          Token
 	SimpleStmt      Node
 	Semicolon       Token
-	Expression      Expression
+	Expr            Expression
 	LBrace          Token
 	ExprCaseClauses []*ExprCaseClause
 	RBrace          Token
@@ -1458,8 +1464,8 @@ func (n *ExprCaseClause) Source(full bool) []byte {
 //
 //  ExprSwitchCase = "case" ExpressionList | "default" .
 type ExprSwitchCase struct {
-	CaseOrDefault  Token
-	ExpressionList []*ExpressionListItem
+	CaseOrDefault Token
+	ExprList      []*ExpressionListItem
 }
 
 // Position implements Node.
@@ -1481,11 +1487,11 @@ type SliceExpr struct {
 	valuer
 	PrimaryExpr Expression
 	LBracket    Token
-	Expression  Expression
+	Expr        Expression
 	Colon       Token
-	Expression2 Expression
+	Expr2       Expression
 	Colon2      Token
-	Expression3 Expression
+	Expr3       Expression
 	RBracket    Token
 }
 
@@ -1521,10 +1527,10 @@ func (n *SelectStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{
 //  SendStmt = Channel "<-" Expression .
 type SendStmt struct {
 	simpleStmter
-	Channel    Node
-	Arrow      Token
-	Expression Expression
-	Semicolon  Token
+	Channel   Node
+	Arrow     Token
+	Expr      Expression
+	Semicolon Token
 }
 
 // Position implements Node.
@@ -1598,7 +1604,7 @@ type Conversion struct {
 	valuer
 	ConvertType Node
 	LParen      Token
-	Expression  Expression
+	Expr        Expression
 	Comma       Token
 	RParen      Token
 }
@@ -1722,9 +1728,9 @@ func (n *MapTypeNode) Source(full bool) []byte { return nodeSource(&bytes.Buffer
 //
 // GoStmt = "go" Expression .
 type GoStmt struct {
-	Go         Token
-	Expression Expression
-	Semicolon  Token
+	Go        Token
+	Expr      Expression
+	Semicolon Token
 }
 
 // Position implements Node.
@@ -1828,14 +1834,14 @@ func (n *TypeListItem) Source(full bool) []byte { return nodeSource(&bytes.Buffe
 //  IncDecStmt = Expression ( "++" | "--" ) .
 type IncDecStmt struct {
 	simpleStmter
-	Expression Expression
-	Op         Token
-	Semicolon  Token
+	Expr      Expression
+	Op        Token
+	Semicolon Token
 }
 
 // Position implements Node.
 func (n *IncDecStmt) Position() (r token.Position) {
-	return n.Expression.Position()
+	return n.Expr.Position()
 }
 
 // Source implements Node.
@@ -1850,9 +1856,9 @@ type ParenExpr struct {
 	guard
 	typer
 	valuer
-	LParen     Token
-	Expression Expression
-	RParen     Token
+	LParen Token
+	Expr   Expression
+	RParen Token
 }
 
 // Position implements Node.

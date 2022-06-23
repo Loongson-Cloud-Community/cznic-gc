@@ -14,7 +14,7 @@ var (
 	_ = []Expression{
 		(*Arguments)(nil),
 		(*BasicLit)(nil),
-		(*BinaryExpression)(nil),
+		(*BinaryExpr)(nil),
 		(*CompositeLit)(nil),
 		(*Constant)(nil),
 		(*Conversion)(nil),
@@ -48,16 +48,16 @@ type Expression interface {
 	checker
 }
 
-type valuer struct{ v constant.Value }
+type valuer struct{ val constant.Value }
 
 func newValuer(v constant.Value) valuer { return valuer{v} }
 
 func (v valuer) Value() constant.Value {
-	if v.v == nil {
+	if v.val == nil {
 		return unknown
 	}
 
-	return v.v
+	return v.val
 }
 
 type invalidExprType struct {

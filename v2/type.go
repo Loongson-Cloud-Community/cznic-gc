@@ -68,11 +68,6 @@ type checker interface {
 	exit()
 }
 
-type typeChecker interface {
-	checker
-	Type() Type
-}
-
 type guard byte
 
 const (
@@ -188,6 +183,10 @@ func (t *InvalidType) String() string { return "<invalid-type>" }
 // PredefinedType represents a predefined type.
 type PredefinedType Kind
 
+func (n PredefinedType) check(c *ctx) Node     { return n }
+func (n PredefinedType) enter(*ctx, Node) bool { return false }
+func (n PredefinedType) exit()                 {}
+
 // Position implements Node. Position returns a zero value.
 func (t PredefinedType) Position() (r token.Position) { return r }
 
@@ -222,11 +221,10 @@ func (n *ArrayTypeNode) check(c *ctx) Node {
 
 	defer n.exit()
 
-	n.ArrayLength.check(c)
+	c.checkExpr(&n.ArrayLength)
 	switch v := n.ArrayLength.Value(); v.Kind() {
 	case constant.Int:
-		tc := n.ElementType.(typeChecker)
-		tc.check(c)
+		et := c.checkType(n.ElementType)
 		sz, ok := constant.Int64Val(v)
 		if !ok || sz < 0 {
 			c.err(n.ElementType, "invalid array length: %s", n.ElementType.Source(false))
@@ -234,7 +232,7 @@ func (n *ArrayTypeNode) check(c *ctx) Node {
 			break
 		}
 
-		n.typ = &ArrayType{node: n, Elem: tc.Type(), Len: sz}
+		n.typ = &ArrayType{node: n, Elem: et, Len: sz}
 	default:
 		c.err(n.ElementType, "invalid array length: %s", n.ElementType.Source(false))
 		n.typ = Invalid
@@ -390,9 +388,7 @@ func (n *PointerTypeNode) check(c *ctx) Node {
 	pushNamed := c.pushNamed
 	defer func() { c.pushNamed = pushNamed }()
 	c.pushNamed = true
-	c.check(n.BaseType)
-	et := n.BaseType.(typeChecker).Type()
-	n.typ = &PointerType{Elem: et, node: n}
+	n.typ = &PointerType{Elem: c.checkType(n.BaseType), node: n}
 	return n
 }
 
@@ -465,9 +461,7 @@ func (n *StructTypeNode) check(c *ctx) Node {
 	for _, v := range n.FieldDecls {
 		switch x := v.(type) {
 		case *FieldDecl:
-			tc := x.Type.(typeChecker)
-			tc.check(c)
-			ft := newTyper(tc.Type())
+			ft := newTyper(c.checkType(x.Type))
 			for _, id := range x.IdentifierList {
 				t.Fields = append(t.Fields, &Field{typer: ft, Name: id.Ident.Src()})
 			}
@@ -501,8 +495,7 @@ func (n *AliasDecl) check(c *ctx) Node {
 
 	defer n.exit()
 
-	c.setPushNamed().check(n.TypeNode)
-	n.typ = n.TypeNode.(typeChecker).Type()
+	n.typ = c.setPushNamed().checkType(n.TypeNode)
 	return n
 }
 

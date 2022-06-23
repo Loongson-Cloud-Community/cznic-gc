@@ -790,7 +790,7 @@ func dumpExpr(n Node) string {
 
 func dumpExpr0(b *strings.Builder, n Node) {
 	switch x := n.(type) {
-	case *BinaryExpression:
+	case *BinaryExpr:
 		b.WriteByte('(')
 		dumpExpr0(b, x.A)
 		b.WriteString(x.Op.Src())
