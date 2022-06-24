@@ -68,13 +68,37 @@ type checker interface {
 	exit()
 }
 
-type guard byte
-
 const (
 	unchecked guard = iota
 	checking
 	checked
 )
+
+type typer struct {
+	guard
+	typ Type
+}
+
+func newTyper(t Type) typer { return typer{typ: t} }
+
+// Type returns the type of a node or Invalid if the type is
+// unknown/undetermined.
+func (t typer) Type() Type {
+	if t.typ != nil {
+		return t.typ
+	}
+
+	switch t.guard {
+	case unchecked:
+		panic(todo("missed type check"))
+	case checking:
+		panic(todo("internal error: guard == %s", t.guard))
+	default:
+		return Invalid
+	}
+}
+
+type guard byte
 
 func (g *guard) enter(c *ctx, n Node) bool {
 	if n == nil {
@@ -148,24 +172,10 @@ const (
 	UntypedString  // untyped string
 )
 
-type typer struct{ typ Type }
-
-func newTyper(t Type) typer { return typer{typ: t} }
-
 type noSourcer struct{}
 
 // Source implements Node. It returns nil.
 func (noSourcer) Source(bool) []byte { return nil }
-
-// Type returns the type of a node or an *Invalid type value, if the type is
-// unknown/undetermined.
-func (t typer) Type() Type {
-	if t.typ != nil {
-		return t.typ
-	}
-
-	return Invalid
-}
 
 // InvalidType represents an invalid type.
 type InvalidType struct {
@@ -287,8 +297,7 @@ type Parameter struct {
 type FunctionType struct {
 	noSourcer
 	node       *FunctionDecl
-	Parameters []*Parameter
-	Results    []*Parameter
+	Parameters *TupleType
 	Result     *TupleType
 }
 
@@ -301,11 +310,11 @@ func (t *FunctionType) Position() (r token.Position) { return position(t.node) }
 func (t *FunctionType) String() string {
 	var b strings.Builder
 	b.WriteString("func(")
-	for i, v := range t.Parameters {
+	for i, v := range t.Parameters.Types {
 		if i != 0 {
 			b.WriteString(", ")
 		}
-		fmt.Fprintf(&b, "%s", v.Type())
+		fmt.Fprintf(&b, "%s", v)
 	}
 	b.WriteByte(')')
 	if t.Result != nil {

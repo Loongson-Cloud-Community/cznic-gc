@@ -430,7 +430,7 @@ func (p *parser) functionDecl(f Token) (r *FunctionDecl) {
 func (p *parser) block(semi bool) (r *Block) {
 	var s Scope
 	defer p.pushScope(&s)()
-	return &Block{lexicalScoper: newLexicalScoper(&s), LBrace: p.must('{'), StatementList: p.statementList(), RBrace: p.must('}'), Semicolon: p.semi(semi)}
+	return &Block{Scope: s, LBrace: p.must('{'), StatementList: p.statementList(), RBrace: p.must('}'), Semicolon: p.semi(semi)}
 }
 
 // Signature = Parameters Signature_1 .
@@ -1986,7 +1986,9 @@ func (p *parser) primaryExpression() (r Node) {
 		case STRING_LIT:
 			typ = UntypedStringType
 		}
-		r = &BasicLit{typer: newTyper(typ), valuer: newValuer(v), Token: tok, guard: checked}
+		lit := &BasicLit{typer: newTyper(typ), valuer: newValuer(v), Token: tok}
+		lit.guard = checked
+		r = lit
 	//                Conversion case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 	//                MethodExpr case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 	case '(':

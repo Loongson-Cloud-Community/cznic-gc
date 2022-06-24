@@ -99,10 +99,14 @@ type Token struct { // 24 bytes on 64 bit arch
 	sepOff int32
 }
 
+// Offset reports n's offset, in bytes, within its source file.
+func (n *Token) Offset() int { return int(n.off) }
+
 // Position implements Node.
 func (n Token) Position() (r token.Position) {
 	if n.IsValid() {
-		return token.Position(n.source.file.PositionFor(mtoken.Pos(n.off+1), true))
+		s := n.source
+		return token.Position(s.file.PositionFor(mtoken.Pos(s.base+n.off), true))
 	}
 
 	return r
@@ -130,36 +134,59 @@ func (n Token) Sep() string { return string(n.sep()) }
 // Src returns the textual form of n.
 func (n Token) Src() string { return string(n.src()) }
 
-func (n Token) sep() []byte { return n.source.buf[n.sepOff:n.off] }
-func (n Token) src() []byte { return n.source.buf[n.off:n.next] }
+func (n Token) sep() []byte {
+	if p := n.source.patches[n.off]; p != nil {
+		return p.b[:p.off]
+	}
+
+	return n.source.buf[n.sepOff:n.off]
+}
+
+func (n Token) src() []byte {
+	if p := n.source.patches[n.off]; p != nil {
+		return p.b[p.off:]
+	}
+
+	return n.source.buf[n.off:n.next]
+}
 
 // Set sets the result of n.Sep to be sep and n.Src() to be src.
 // Set will allocate at least len(sep+src) bytes of additional memory.
 func (n *Token) Set(sep, src string) { n.set([]byte(sep+src), len(sep)) }
 
 // SetSep sets the result of n.Sep to be sep.  SetSep will allocate at least
-// len(sep+n.Src()) bytes of additional memory. Using Set is more effective
-// when bot the results of .Sep() and .Src() should be altered.
+// len(sep+n.Src()) bytes of additional memory.
 func (n *Token) SetSep(sep string) { n.Set(sep, n.Src()) }
 
 // SetSrc sets the result of n.Src to be src.  SetSrc will allocate at least
-// len(n.Sep()+src()) bytes of additional memory. Using Set is more effective
-// when bot the results of .Sep() and .Src() should be altered.
+// len(n.Sep()+src()) bytes of additional memory.
 func (n *Token) SetSrc(src string) { n.Set(n.Sep(), src) }
 
 // set sets the result of n.Sep to be s[:srcOff] and n.Src() to be s[srcOff:].
 // set will allocate at least len(s) bytes of additional memory.
-func (n *Token) set(s []byte, srcOff int) {
-	off := int32(len(n.source.buf))
-	n.source.buf = append(n.source.buf, s...)
-	n.sepOff = off
-	n.off = off + int32(srcOff)
-	n.next = int32(len(n.source.buf))
+func (n *Token) set(s []byte, srcOff int) { n.source.patches[n.off] = &patch{int32(srcOff), s} }
+
+type patch struct {
+	off int32
+	b   []byte
 }
 
 type source struct {
-	buf  []byte
-	file *mtoken.File
+	buf     []byte
+	file    *mtoken.File
+	patches map[int32]*patch // Token.off: patch
+
+	base int32
+}
+
+func newSource(name string, buf []byte) *source {
+	file := mtoken.NewFile(name, len(buf))
+	return &source{
+		buf:     buf,
+		file:    file,
+		base:    int32(file.Base()),
+		patches: map[int32]*patch{},
+	}
 }
 
 // Scanner provides lexical analysis of its buffer.
@@ -184,23 +211,22 @@ type Scanner struct {
 // are reported as if buf is coming from a file named name. The buffer becomes
 // owned by the scanner and must not be modified after calling NewScanner.
 func NewScanner(name string, buf []byte) (*Scanner, error) {
-	r := &Scanner{
-		source: &source{buf: buf, file: mtoken.NewFile(name, len(buf))},
-	}
+	r := &Scanner{source: newSource(name, buf)}
 	switch {
 	case len(buf) == 0:
 		r.eof = true
+		r.Tok.Ch = EOF
 	default:
 		r.c = buf[0]
 		if r.c == '\n' {
-			r.file.AddLine(int(r.off) + 1)
+			r.file.AddLine(int(r.base + r.off))
 		}
 	}
 	return r, nil
 }
 
 func (s *Scanner) position() token.Position {
-	return token.Position(s.source.file.PositionFor(mtoken.Pos(s.off+1), true))
+	return token.Position(s.source.file.PositionFor(mtoken.Pos(s.base+s.off), true))
 }
 
 // Err reports any errors the scanner encountered during .Scan() invocations.
@@ -208,7 +234,7 @@ func (s *Scanner) position() token.Position {
 func (s *Scanner) Err() error { return s.errs.Err() }
 
 func (s *Scanner) pos(off int32) token.Position {
-	return token.Position(s.file.PositionFor(mtoken.Pos(off+1), true))
+	return token.Position(s.file.PositionFor(mtoken.Pos(s.base+off), true))
 }
 
 func (s *Scanner) err(off int32, msg string, args ...interface{}) {
@@ -220,10 +246,9 @@ func (s *Scanner) close() {
 		return
 	}
 
-	s.Tok.Ch = EOF
-	s.Tok.next = s.off
-	s.Tok.off = s.off
 	s.Tok.source = s.source
+	s.Tok.Ch = EOF
+	s.eof = true
 	s.isClosed = true
 }
 
@@ -239,10 +264,14 @@ func isIDNext(c byte) bool     { return isIDFirst(c) || isDigit(c) }
 func isOctalDigit(c byte) bool { return c >= '0' && c <= '7' }
 
 func (s *Scanner) next() {
-	if int(s.off) == len(s.buf)-1 {
+	if s.eof {
+		return
+	}
+
+	if int(s.off) >= len(s.buf)-1 {
 		s.c = 0
+		s.Tok.next = int32(len(s.buf))
 		s.eof = true
-		s.Tok.next = s.off + 1
 		return
 	}
 
@@ -250,15 +279,15 @@ func (s *Scanner) next() {
 	s.Tok.next = s.off
 	s.c = s.buf[s.off]
 	if s.c == '\n' {
-		s.file.AddLine(int(s.off) + 1)
+		s.file.AddLine(int(s.base + s.off))
 	}
 }
 
 func (s *Scanner) nextN(n int) {
 	if int(s.off) == len(s.buf)-n {
 		s.c = 0
-		s.eof = true
 		s.Tok.next = s.off + int32(n)
+		s.eof = true
 		return
 	}
 
@@ -266,7 +295,7 @@ func (s *Scanner) nextN(n int) {
 	s.Tok.next = s.off
 	s.c = s.buf[s.off]
 	if s.c == '\n' {
-		s.file.AddLine(int(s.off) + 1)
+		s.file.AddLine(int(s.base + s.off))
 	}
 }
 
@@ -286,6 +315,7 @@ func (s *Scanner) Scan() (r bool) {
 	}
 
 	s.cnt++
+	s.off = s.Tok.next
 	s.last = s.Tok.Ch
 	s.Tok.sepOff = s.off
 	s.Tok.source = s.source
@@ -298,8 +328,7 @@ func (s *Scanner) Scan() (r bool) {
 }
 
 func (s *Scanner) scan() (r bool) {
-	s.Tok.off = s.off
-	s.Tok.next = s.off
+	s.Tok.off = s.Tok.next
 	switch s.c {
 	case ' ', '\t', '\r', '\n':
 		// White space, formed from spaces (U+0020), horizontal tabs (U+0009), carriage
@@ -322,19 +351,13 @@ func (s *Scanner) scan() (r bool) {
 			// Line comments start with the character sequence // and stop at the end of
 			// the line.
 			s.next()
-			if s.lineComment(off) {
-				return true
-			}
-
+			s.lineComment(off)
 			return true
 		case '*':
 			// General comments start with the character sequence /* and stop with the
 			// first subsequent character sequence */.
 			s.next()
-			if s.generalComment(off) {
-				return true
-			}
-
+			s.generalComment(off)
 			return true
 		default:
 			s.Tok.Ch = '/'
@@ -648,7 +671,7 @@ more:
 			}
 
 			if s.hexadecimals() == 0 {
-				s.err(s.off+1, "hexadecimal literal has no digits")
+				s.err(s.base+s.off, "hexadecimal literal has no digits")
 				return
 			}
 
@@ -763,7 +786,7 @@ func (s *Scanner) octalLiteral() {
 		default:
 			switch {
 			case !ok:
-				s.err(s.off+1, "octal literal has no digits")
+				s.err(s.base+s.off, "octal literal has no digits")
 			case invalidOff > 0:
 				s.err(invalidOff, "invalid digit '%c' in octal literal", invalidDigit)
 			}
@@ -904,7 +927,7 @@ func (s *Scanner) binaryLiteral() {
 
 			switch {
 			case !ok:
-				s.err(s.off+1, "binary literal has no digits")
+				s.err(s.base+s.off, "binary literal has no digits")
 			case invalidOff > 0:
 				s.err(invalidOff, "invalid digit '%c' in binary literal", invalidDigit)
 			}
@@ -925,7 +948,7 @@ func (s *Scanner) exponent() {
 		s.next()
 	}
 	if !isDigit(s.c) {
-		s.err(s.off+1, "exponent has no digits")
+		s.err(s.base+s.off, "exponent has no digits")
 		return
 	}
 
@@ -974,7 +997,7 @@ func (s *Scanner) runeLiteral(off int32) {
 			default:
 				switch {
 				case s.eof:
-					s.err(s.off+1, "escape sequence not terminated")
+					s.err(s.base+s.off, "escape sequence not terminated")
 					return
 				case isOctalDigit(s.c):
 					for i := 0; i < 3; i++ {
@@ -1012,7 +1035,7 @@ func (s *Scanner) runeLiteral(off int32) {
 				case ok != 0:
 					s.err(expOff, "rune literal not terminated")
 				default:
-					s.err(s.off+1, "rune literal not terminated")
+					s.err(s.base+s.off, "rune literal not terminated")
 				}
 				return
 			case s.c == 0:
@@ -1151,7 +1174,7 @@ func (s *Scanner) u(n int) (r rune) {
 		default:
 			switch {
 			case s.eof:
-				s.err(s.off+1, "escape sequence not terminated")
+				s.err(s.base+s.off, "escape sequence not terminated")
 			default:
 				s.err(s.off, "illegal character %#U in escape sequence", s.c)
 			}

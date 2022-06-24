@@ -364,7 +364,7 @@ func noGoLit(c Ch) bool {
 }
 
 func TestScanner(t *testing.T) {
-	p := newParallel()
+	p := newParallel(*oFailNow)
 	t.Run("states", func(t *testing.T) { testScanStates(t) })
 	t.Run(".", func(t *testing.T) { testScan(p, t, ".", "") })
 	t.Run("GOROOT", func(t *testing.T) { testScan(p, t, runtime.GOROOT(), "/test/") })
@@ -545,6 +545,7 @@ func BenchmarkGoScanner(b *testing.B) {
 
 func TestTokenSet(t *testing.T) {
 	for itest, test := range []string{
+		"",
 		"a",
 		"a b",
 		"a b c",
@@ -561,10 +562,27 @@ func TestTokenSet(t *testing.T) {
 
 			var toks []Token
 			var seps, srcs []string
-			for s.Scan() {
+			for s.Scan() || len(toks) == 0 {
 				toks = append(toks, s.Tok)
 				seps = append(seps, s.Tok.Sep())
 				srcs = append(srcs, s.Tok.Src())
+			}
+
+			for i, v := range toks {
+				max := int32(len(v.source.buf))
+				if v.sepOff > max || v.sepOff > v.off ||
+					v.off < v.sepOff || v.off > max || v.off > v.next ||
+					v.next < v.off || v.next > max {
+					t.Errorf("token has invalid data: sepOff %d, off %d, next %d, len(source) %d", v.sepOff, v.off, v.next, max)
+				}
+				if i != 0 {
+					prev := toks[i-1]
+					if v.sepOff < prev.next {
+						t.Errorf("token has invalid data: sepOff %d, off %d, next %d, len(source) %d; prev: sepOff %d off %d next %d",
+							v.sepOff, v.off, v.next, max, prev.sepOff, prev.off, prev.next,
+						)
+					}
+				}
 			}
 
 			for j, v := range []struct{ sep, src string }{
@@ -610,7 +628,7 @@ func TestParser(t *testing.T) {
 
 	defer g.close()
 
-	p := newParallel()
+	p := newParallel(*oFailNow)
 	t.Run("cd", func(t *testing.T) { testParser(p, t, g, ".") })
 	t.Run("goroot", func(t *testing.T) { testParser(p, t, g, runtime.GOROOT()) })
 	if err := p.wait(); err != nil {
@@ -725,8 +743,8 @@ func testParser(p *parallel, t *testing.T, g *golden, root string) {
 			}
 
 			b2 := ast.Source(true)
-			got := strings.TrimRight(string(b2), "\n\r \t")
-			exp := strings.TrimRight(string(b), "\n\r \t")
+			got := string(b2)
+			exp := string(b)
 			if got != exp {
 				diff := difflib.UnifiedDiff{
 					A:        difflib.SplitLines(exp),
@@ -740,7 +758,7 @@ func testParser(p *parallel, t *testing.T, g *golden, root string) {
 					return fmt.Errorf("%v: %v", path, err)
 				}
 
-				return fmt.Errorf("%v\ngot\n%s\nexp\n%s\ngot\n%s\nexp\n%s", s, got, exp, hex.Dump([]byte(got)), hex.Dump([]byte(exp)))
+				return fmt.Errorf("%v\ngot\n%s\nexp\n%s\ngot\n%s\nexp\n%s", s, got, exp, hex.Dump(b2), hex.Dump(b))
 			}
 
 			p.ok()
@@ -766,7 +784,7 @@ func (c *testPackageChecker) PackageLoader(pkg *Package, src *SourceFile, import
 	return nil, fmt.Errorf("%s", errorf("TODO no loader"))
 }
 
-func (c *testPackageChecker) SymbolResolver(currentScope, fileScope *Scope, pkg *Package, ident string) (Node, error) {
+func (c *testPackageChecker) SymbolResolver(currentScope, fileScope *Scope, pkg *Package, ident Token) (Node, error) {
 	panic(todo(""))
 }
 
@@ -873,7 +891,7 @@ func benchmarkGoParserSerial(b *testing.B, names []string, files map[string][]by
 }
 
 func benchmarkParserParalel(b *testing.B, names []string, files map[string][]byte, bytes int64) {
-	p := newParallel()
+	p := newParallel(*oFailNow)
 	sink = make([]interface{}, 0, len(names)*b.N)
 	cfg := &ParseSourceFileConfig{}
 	b.ReportAllocs()
@@ -893,7 +911,7 @@ func benchmarkParserParalel(b *testing.B, names []string, files map[string][]byt
 }
 
 func benchmarkGoParserParalel(b *testing.B, names []string, files map[string][]byte, bytes int64) {
-	p := newParallel()
+	p := newParallel(*oFailNow)
 	sink = make([]interface{}, 0, len(names)*b.N)
 	b.ReportAllocs()
 	fs := token.NewFileSet()

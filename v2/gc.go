@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:generate stringer -output stringer.go -linecomment -type=Ch
+//go:generate stringer -output stringer.go -linecomment -type=Ch,Kind
 
 package gc // import "modernc.org/gc/v2"
 
@@ -72,7 +72,7 @@ type PackageChecker interface {
 	// SymbolResolver returns the node bound to 'ident' within package 'pkg', using
 	// currentScope and fileScope or an error, if any. The type checker never calls
 	// SymbolResolver for certain identifiers of some packages.
-	SymbolResolver(currentScope, fileScope *Scope, pkg *Package, ident string) (Node, error)
+	SymbolResolver(currentScope, fileScope *Scope, pkg *Package, ident Token) (Node, error)
 	// CheckFunctions reports whether Check should type check function/method
 	// bodies.
 	CheckFunctions() bool

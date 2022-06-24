@@ -15,7 +15,7 @@ edit:
 	@if [ -f "Session.vim" ]; then gvim -S & else gvim -p Makefile *.go & fi
 
 editor:
-	stringer -output stringer.go -linecomment -type=Ch,Kind
+	go generate
 	gofmt -l -s -w *.go
 	go test -c -o /dev/null
 	go install -v | tee log-editor

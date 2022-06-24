@@ -232,7 +232,6 @@ func (n *SourceFile) Source(full bool) []byte { return nodeSource(&bytes.Buffer{
 //
 //  FunctionDecl = "func" FunctionName [ TypeParameters ] Signature [ FunctionBody ] .
 type FunctionDecl struct {
-	guard
 	typer
 	Func           Token
 	FunctionName   Token
@@ -254,7 +253,6 @@ func (n *FunctionDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffe
 //
 //  Signature = Parameters [ Result ] .
 type Signature struct {
-	guard
 	typer
 	Parameters *Parameters
 	Result     Node
@@ -267,41 +265,6 @@ func (n *Signature) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *Signature) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
-
-func (n *Signature) check(c *ctx) Node {
-	r := &FunctionType{Parameters: params(c, n.Parameters.ParameterList), Result: &TupleType{}}
-	switch x := n.Result.(type) {
-	case *TypeNameNode:
-		t := c.checkType(x)
-		r.Results = []*Parameter{{typer: newTyper(t)}}
-		r.Result.Types = append(r.Result.Types, t)
-	case nil:
-		// ok
-	case *Parameters:
-		for _, v := range params(c, x.ParameterList) {
-			r.Result.Types = append(r.Result.Types, v.Type())
-		}
-	default:
-		c.err(x, errorf("TODO %T", x))
-	}
-	n.typ = r
-	return n
-}
-
-func params(c *ctx, a []*ParameterDecl) (r []*Parameter) {
-	for _, v := range a {
-		t := newTyper(c.checkType(v.Type))
-		if len(v.IdentifierList) == 0 {
-			r = append(r, &Parameter{typer: t})
-			continue
-		}
-
-		for _, w := range v.IdentifierList {
-			r = append(r, &Parameter{Name: w.Ident.Src(), typer: t})
-		}
-	}
-	return r
-}
 
 // Parameters describes function parameters or a function result.
 //
@@ -345,7 +308,6 @@ func (n *TypeDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{},
 //
 //  TypeDef = identifier [ TypeParameters ] Type .
 type TypeDef struct {
-	guard
 	typer
 	Ident          Token
 	TypeParameters *TypeParameters
@@ -469,11 +431,11 @@ func (n *ConstDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}
 //
 //  Block = "{" StatementList "}" .
 type Block struct {
-	lexicalScoper
 	LBrace        Token
 	StatementList []Node
 	RBrace        Token
 	Semicolon     Token
+	Scope         Scope
 }
 
 // Position implements Node.
@@ -488,7 +450,6 @@ func (n *Block) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n,
 //
 //  StructTyp = "struct" "{" { FieldDecl ";" } "}" .
 type StructTypeNode struct {
-	guard
 	typer
 	typeNoder
 	Struct     Token
@@ -577,7 +538,6 @@ func (n *VarSpec) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, 
 //
 //  PointerTypeNode = "*" BaseType .
 type PointerTypeNode struct {
-	guard
 	typer
 	typeNoder
 	Star     Token
@@ -599,7 +559,6 @@ func (n *PointerTypeNode) Source(full bool) []byte {
 //  TypeNameNode = QualifiedIdent [ TypeArgs ]
 //  	| identifier [ TypeArgs ] .
 type TypeNameNode struct {
-	guard
 	typer
 	typeNoder
 	Name     *QualifiedIdent
@@ -629,7 +588,6 @@ func (n *TypeNameNode) check(c *ctx) Node {
 //
 //  QualifiedIdent = PackageName "." identifier .
 type QualifiedIdent struct {
-	guard
 	lexicalScoper
 	typer
 	valuer
@@ -724,7 +682,6 @@ func (n *ExpressionStmt) Source(full bool) []byte {
 // BinaryExpr describes a binary expression.
 //
 type BinaryExpr struct {
-	guard
 	typer
 	valuer
 	A  Expression
@@ -767,7 +724,6 @@ func (n *ShortVarDecl) semi(p *parser) { n.Semicolon = p.semi(true) }
 //
 //  MethodDecl = "func" Receiver MethodName Signature [ FunctionBody ] .
 type MethodDecl struct {
-	guard
 	typer
 	Func         Token
 	Receiver     *Parameters
@@ -806,7 +762,6 @@ func (n *ReturnStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{
 //
 //  Selector = PrimaryExpr "." identifier .
 type Selector struct {
-	guard
 	typer
 	valuer
 	PrimaryExpr Expression
@@ -826,7 +781,6 @@ func (n *Selector) Source(full bool) []byte { return nodeSource(&bytes.Buffer{},
 //
 //  Arguments = PrimaryExpr "(" [ ( ExpressionList | Type [ "," ExpressionList ] ) [ "..." ] [ "," ] ] ")" .
 type Arguments struct {
-	guard
 	typer
 	valuer
 	PrimaryExpr Expression
@@ -912,7 +866,6 @@ func (n *Assignment) semi(p *parser) { n.Semicolon = p.semi(true) }
 //
 //  UnaryExpr = PrimaryExpr | unary_op UnaryExpr .
 type UnaryExpr struct {
-	guard
 	typer
 	valuer
 	Op   Token
@@ -931,7 +884,6 @@ func (n *UnaryExpr) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}
 //
 //  CompositeLit = LiteralType LiteralValue .
 type CompositeLit struct {
-	guard
 	typer
 	valuer
 	LiteralType  Node
@@ -989,7 +941,6 @@ func (n *KeyedElement) Source(full bool) []byte { return nodeSource(&bytes.Buffe
 //
 //  InterfaceTypeNode = "interface" "{" { InterfaceElem ";" } "}" .
 type InterfaceTypeNode struct {
-	guard
 	typer
 	typeNoder
 	Interface      Token
@@ -1100,7 +1051,6 @@ func (n *MethodElem) Source(full bool) []byte { return nodeSource(&bytes.Buffer{
 //
 //  MethodExpr    = ReceiverType "." MethodName .
 type MethodExpr struct {
-	guard
 	typer
 	valuer
 	Receiver Node
@@ -1202,7 +1152,6 @@ func (n *TypeTerm) Source(full bool) []byte { return nodeSource(&bytes.Buffer{},
 //
 //  Index = "[" Expression "]" .
 type Index struct {
-	guard
 	typer
 	valuer
 	PrimaryExpr Expression
@@ -1255,7 +1204,6 @@ func (n *EmptyStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}
 //
 //  FunctionLit = "func" Signature FunctionBody .
 type FunctionLit struct {
-	guard
 	typer
 	valuer
 	Func         Token
@@ -1323,7 +1271,6 @@ func (n *TypeSwitchStmt) Source(full bool) []byte {
 //
 //  TypeSwitchGuard = [ identifier ":=" ] PrimaryExpr "." "(" "type" ")" .
 type TypeSwitchGuard struct {
-	guard
 	typer
 	valuer
 	Ident       Token
@@ -1390,7 +1337,6 @@ func (n *TypeSwitchCase) Source(full bool) []byte {
 //
 //  TypeAssertion = PrimaryExpr "." "(" Type ")" .
 type TypeAssertion struct {
-	guard
 	typer
 	valuer
 	PrimaryExpr Expression
@@ -1482,7 +1428,6 @@ func (n *ExprSwitchCase) Source(full bool) []byte {
 //
 //  SliceExpr = "[" [ Expression ] ":" [ Expression ] "]" | "[" [ Expression ] ":" Expression ":" Expression "]" .
 type SliceExpr struct {
-	guard
 	typer
 	valuer
 	PrimaryExpr Expression
@@ -1599,7 +1544,6 @@ func (n *FallthroughStmt) Source(full bool) []byte {
 //
 //  Conversion = Type "(" Expression [ "," ] ")" .
 type Conversion struct {
-	guard
 	typer
 	valuer
 	ConvertType Node
@@ -1621,7 +1565,6 @@ func (n *Conversion) Source(full bool) []byte { return nodeSource(&bytes.Buffer{
 //
 //  AliasDecl = identifier "=" Type .
 type AliasDecl struct {
-	guard
 	typer
 	Ident     Token
 	Eq        Token
@@ -1642,7 +1585,6 @@ func (n *AliasDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}
 //  ArrayType   = "[" ArrayLength "]" ElementType .
 //  ArrayLength = Expression | "..."
 type ArrayTypeNode struct {
-	guard
 	typer
 	typeNoder
 	LBracket    Token
@@ -1745,7 +1687,6 @@ func (n *GoStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n
 //
 // GenericOperand = OperandName TypeArgs .
 type GenericOperand struct {
-	guard
 	typer
 	valuer
 	OperandName Node
@@ -1853,7 +1794,6 @@ func (n *IncDecStmt) semi(p *parser) { n.Semicolon = p.semi(true) }
 //
 // ParenExpr = "(" Expression ")" .
 type ParenExpr struct {
-	guard
 	typer
 	valuer
 	LParen Token
@@ -1873,7 +1813,6 @@ func (n *ParenExpr) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}
 //
 // ParenType = "(" Type ")" .
 type ParenType struct {
-	guard
 	typer
 	typeNoder
 	LParen   Token
@@ -1891,7 +1830,6 @@ func (n *ParenType) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}
 
 // Constant represents a Go constant.
 type Constant struct {
-	guard
 	node *ConstSpec
 	typer
 	valuer
@@ -1909,7 +1847,6 @@ func (n *Constant) Source(full bool) []byte {
 
 // Variable represents a Go variable.
 type Variable struct {
-	guard
 	typer
 	valuer
 	Expr     Expression
@@ -1927,7 +1864,6 @@ func (n *Variable) Source(full bool) []byte {
 
 // BasicLit represents a basic literal.
 type BasicLit struct {
-	guard
 	typer
 	valuer
 	Token Token
@@ -1941,7 +1877,6 @@ func (n *BasicLit) Source(full bool) []byte { return n.Token.src() }
 
 // Ident represents an unqualified operand/type name.
 type Ident struct {
-	guard
 	lexicalScoper
 	typer
 	valuer

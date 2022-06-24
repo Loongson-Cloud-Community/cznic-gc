@@ -14,43 +14,51 @@ import (
 
 var (
 	universe = Scope{
-		Nodes: map[string]Node{
-			"bool":       PredefinedType(Bool),
-			"byte":       PredefinedType(Uint8),
-			"complex128": PredefinedType(Complex128),
-			"complex64":  PredefinedType(Complex64),
-			"float32":    PredefinedType(Float32),
-			"float64":    PredefinedType(Float64),
-			"int":        PredefinedType(Int),
-			"int16":      PredefinedType(Int16),
-			"int32":      PredefinedType(Int32),
-			"int64":      PredefinedType(Int64),
-			"int8":       PredefinedType(Int8),
-			"nil":        PredefinedType(UntypedNil),
-			"rune":       PredefinedType(Int32),
-			"string":     PredefinedType(String),
-			"uint":       PredefinedType(Uint),
-			"uint16":     PredefinedType(Uint16),
-			"uint32":     PredefinedType(Uint32),
-			"uint64":     PredefinedType(Uint64),
-			"uint8":      PredefinedType(Uint8),
-			"uintptr":    PredefinedType(Uintptr),
+		Nodes: map[string]Scoped{
+			"bool":       {Node: PredefinedType(Bool)},
+			"byte":       {Node: PredefinedType(Uint8)},
+			"complex128": {Node: PredefinedType(Complex128)},
+			"complex64":  {Node: PredefinedType(Complex64)},
+			"float32":    {Node: PredefinedType(Float32)},
+			"float64":    {Node: PredefinedType(Float64)},
+			"int":        {Node: PredefinedType(Int)},
+			"int16":      {Node: PredefinedType(Int16)},
+			"int32":      {Node: PredefinedType(Int32)},
+			"int64":      {Node: PredefinedType(Int64)},
+			"int8":       {Node: PredefinedType(Int8)},
+			"nil":        {Node: PredefinedType(UntypedNil)},
+			"rune":       {Node: PredefinedType(Int32)},
+			"string":     {Node: PredefinedType(String)},
+			"uint":       {Node: PredefinedType(Uint)},
+			"uint16":     {Node: PredefinedType(Uint16)},
+			"uint32":     {Node: PredefinedType(Uint32)},
+			"uint64":     {Node: PredefinedType(Uint64)},
+			"uint8":      {Node: PredefinedType(Uint8)},
+			"uintptr":    {Node: PredefinedType(Uintptr)},
 		},
 	}
 
 	noScope = &Scope{}
 )
 
+// Scoped represents a node bound to a name and the offset where the visibility
+// starts.  Declarations outside of a function/method reports their visibility
+// starts at zero.
+type Scoped struct {
+	Node        Node
+	VisibleFrom int
+}
+
 // Scope binds names to nodes.
 type Scope struct {
-	Nodes  map[string]Node
+	Nodes  map[string]Scoped
 	Parent *Scope
 }
 
 // IsPackage reports whether s is a package scope.
 func (s *Scope) IsPackage() bool { return s.Parent != nil && s.Parent.Parent == nil }
 
-func (s *Scope) add(c *ctx, nm string, n Node) {
+func (s *Scope) add(c *ctx, nm string, visibileFrom int, n Node) {
 	if nm == "_" {
 		if s.IsPackage() {
 			c.pkg.Blanks = append(c.pkg.Blanks, n)
@@ -59,15 +67,15 @@ func (s *Scope) add(c *ctx, nm string, n Node) {
 	}
 
 	if s.Nodes == nil {
-		s.Nodes = map[string]Node{}
+		s.Nodes = map[string]Scoped{}
 	}
 	if x, ok := s.Nodes[nm]; ok {
 		// trc("%v: %q (%v: %v: %v:)", n.Position(), nm, origin(4), origin(3), origin(2))
-		c.err(n, "%s redeclared, previous declaration at %v:", nm, x.Position())
+		c.err(n, "%s redeclared, previous declaration at %v:", nm, x.Node.Position())
 		return
 	}
 
-	s.Nodes[nm] = n
+	s.Nodes[nm] = Scoped{n, visibileFrom}
 }
 
 type packagesKey struct {
@@ -148,14 +156,13 @@ func (c *ctx) packageLoader(pkg *Package, src *SourceFile, importPath Token) (r 
 }
 
 func (c *ctx) symbolResolver(scope *Scope, pkg *Package, ident Token, passFileScope bool) (r Node) {
-	nm := ident.Src()
 	fileScope := noScope
 	if passFileScope {
 		file := pkg.sourceFiles[ident.source]
 		fileScope = &file.Scope
 	}
 	var err error
-	if r, err = c.checker.SymbolResolver(scope, fileScope, pkg, nm); err != nil {
+	if r, err = c.checker.SymbolResolver(scope, fileScope, pkg, ident); err != nil {
 		c.err(ident, errorf("%s", err))
 		return nil
 	}
@@ -228,13 +235,15 @@ func (c *ctx) checkType(n Node) Type {
 	}
 }
 
-func (c *ctx) checkExpr(p *Expression) {
+func (c *ctx) checkExpr(p *Expression) (constant.Value, Type) {
 	n := *p
 	switch x := n.check(c).(type) {
 	case Expression:
 		*p = x
+		return x.Value(), x.Type()
 	default:
 		c.err(n, errorf("TODO %T", x))
+		return unknown, Invalid
 	}
 }
 
@@ -286,7 +295,7 @@ func (n *SourceFile) collectTLDs(c *ctx) {
 		case *ConstDecl:
 			for _, cs := range x.ConstSpecs {
 				for i, id := range cs.IdentifierList {
-					c.pkg.Scope.add(c, id.Ident.Src(), &Constant{node: cs, Expr: cs.exprList[i].Expr, Ident: id.Ident})
+					c.pkg.Scope.add(c, id.Ident.Src(), 0, &Constant{node: cs, Expr: cs.exprList[i].Expr, Ident: id.Ident})
 				}
 			}
 		case *FunctionDecl:
@@ -294,7 +303,7 @@ func (n *SourceFile) collectTLDs(c *ctx) {
 			case "init":
 				c.pkg.Inits = append(c.pkg.Inits, x)
 			default:
-				c.pkg.Scope.add(c, x.FunctionName.Src(), x)
+				c.pkg.Scope.add(c, x.FunctionName.Src(), 0, x)
 			}
 		case *MethodDecl:
 			if len(x.Receiver.ParameterList) == 0 {
@@ -311,7 +320,7 @@ func (n *SourceFile) collectTLDs(c *ctx) {
 						break
 					}
 
-					c.pkg.Scope.add(c, fmt.Sprintf("%s.%s", t.Name.Ident.Src(), x.MethodName.Src()), x)
+					c.pkg.Scope.add(c, fmt.Sprintf("%s.%s", t.Name.Ident.Src(), x.MethodName.Src()), 0, x)
 				default:
 					c.err(x, errorf("TODO %T", t))
 				}
@@ -321,9 +330,9 @@ func (n *SourceFile) collectTLDs(c *ctx) {
 					break
 				}
 
-				c.pkg.Scope.add(c, fmt.Sprintf("%s.%s", rx.Name.Ident.Src(), x.MethodName.Src()), x)
+				c.pkg.Scope.add(c, fmt.Sprintf("%s.%s", rx.Name.Ident.Src(), x.MethodName.Src()), 0, x)
 			case Token:
-				c.pkg.Scope.add(c, fmt.Sprintf("%s.%s", rx.Src(), x.MethodName.Src()), x)
+				c.pkg.Scope.add(c, fmt.Sprintf("%s.%s", rx.Src(), x.MethodName.Src()), 0, x)
 			default:
 				c.err(x, errorf("TODO %T", rx))
 			}
@@ -331,9 +340,9 @@ func (n *SourceFile) collectTLDs(c *ctx) {
 			for _, ts := range x.TypeSpecs {
 				switch y := ts.(type) {
 				case *AliasDecl:
-					c.pkg.Scope.add(c, y.Ident.Src(), ts)
+					c.pkg.Scope.add(c, y.Ident.Src(), 0, ts)
 				case *TypeDef:
-					c.pkg.Scope.add(c, y.Ident.Src(), ts)
+					c.pkg.Scope.add(c, y.Ident.Src(), 0, ts)
 				default:
 					c.err(y, errorf("TODO %T", y))
 				}
@@ -345,7 +354,7 @@ func (n *SourceFile) collectTLDs(c *ctx) {
 					if i < len(vs.ExprList) {
 						expr = vs.ExprList[i].Expr
 					}
-					c.pkg.Scope.add(c, id.Ident.Src(), &Variable{Expr: expr, Ident: id.Ident, TypeNode: vs.Type})
+					c.pkg.Scope.add(c, id.Ident.Src(), 0, &Variable{Expr: expr, Ident: id.Ident, TypeNode: vs.Type})
 				}
 			}
 		default:
@@ -366,9 +375,9 @@ func (n *SourceFile) checkImports(c *ctx) {
 			if is.Qualifier.IsValid() {
 				qualifier = is.Qualifier.Src()
 			}
-			n.Scope.add(c, qualifier, pkg)
+			n.Scope.add(c, qualifier, 0, pkg)
 			if _, ok := c.pkg.Scope.Nodes[qualifier]; !ok {
-				c.pkg.Scope.add(c, qualifier, pkg)
+				c.pkg.Scope.add(c, qualifier, 0, pkg)
 			}
 		}
 	}
@@ -419,8 +428,28 @@ func (n *Package) Check(checker PackageChecker) error {
 		file.check(c)
 	}
 	n.checkDeclarations(c)
-	//TODO check func/method bodies
+	n.checkFunctionBodies(c)
 	return c.errors.Err()
+}
+
+func (n *Package) checkFunctionBodies(c *ctx) {
+	if !c.checker.CheckFunctions() {
+		return
+	}
+
+	var tldNames []string
+	for tldName := range n.Scope.Nodes {
+		tldNames = append(tldNames, tldName)
+	}
+	sort.Strings(tldNames)
+	for _, tldName := range tldNames {
+		switch x := n.Scope.Nodes[tldName].Node.(type) {
+		case *FunctionDecl:
+			x.checkBody(c)
+		case *MethodDecl:
+			c.err(x, errorf("TODO %T", x))
+		}
+	}
 }
 
 func (n *Package) checkDeclarations(c *ctx) {
@@ -430,7 +459,7 @@ func (n *Package) checkDeclarations(c *ctx) {
 	}
 	sort.Strings(tldNames)
 	for _, tldName := range tldNames {
-		switch x := n.Scope.Nodes[tldName].(type) {
+		switch x := n.Scope.Nodes[tldName].Node.(type) {
 		case checker:
 			x.check(c)
 		case *Package:
@@ -496,7 +525,7 @@ func (n *Arguments) check(c *ctx) Node {
 		default:
 			n.typ = ft.Result
 		}
-		if len(ft.Parameters) != len(n.ExprList) {
+		if len(ft.Parameters.Types) != len(n.ExprList) {
 			c.err(n, errorf("TODO %T", n))
 			return n
 		}
@@ -512,9 +541,9 @@ func (n *Arguments) check(c *ctx) Node {
 		}
 
 		for i, exprItem := range n.ExprList {
-			c.checkExpr(&exprItem.Expr)
-			et := c.singleType(exprItem.Expr, exprItem.Expr.Type())
-			pt := ft.Parameters[i].Type()
+			_, et := c.checkExpr(&exprItem.Expr)
+			et = c.singleType(exprItem.Expr, et)
+			pt := ft.Parameters.Types[i]
 			if !c.assignable(exprItem, et, pt) {
 				c.err(n, errorf("TODO %T", n))
 				continue
@@ -572,10 +601,8 @@ func (n *BinaryExpr) check(c *ctx) Node {
 
 	defer n.exit()
 
-	c.checkExpr(&n.A)
-	c.checkExpr(&n.B)
-	a, b := c.singleType(n.A, n.A.Type()), c.singleType(n.B, n.B.Type())
-	x, y := n.A.Value(), n.B.Value()
+	x, a := c.checkExpr(&n.A)
+	y, b := c.checkExpr(&n.B)
 	switch n.Op.Ch {
 	case SHL, SHR:
 		// The right operand in a shift expression must have integer type or be an
@@ -668,9 +695,7 @@ func (n *Constant) check(c *ctx) Node {
 
 	defer n.exit()
 
-	c.checkExpr(&n.Expr)
-	n.typ = n.Expr.Type()
-	n.val = n.Expr.Value()
+	n.val, n.typ = c.checkExpr(&n.Expr)
 	return n
 }
 
@@ -853,8 +878,7 @@ func (n *Selector) check(c *ctx) Node {
 
 	defer n.exit()
 
-	c.checkExpr(&n.PrimaryExpr)
-	t := n.PrimaryExpr.Type()
+	_, t := c.checkExpr(&n.PrimaryExpr)
 	if x, ok := t.(*TypeDef); ok {
 		t = x.Type()
 	}
@@ -1028,6 +1052,36 @@ func (n *Variable) check(c *ctx) Node {
 	return n
 }
 
+func (n *Signature) check(c *ctx) Node {
+	if !n.enter(c, n) {
+		return n
+	}
+
+	defer n.exit()
+
+	r := &FunctionType{Parameters: tuple(c, n.Parameters.ParameterList), Result: &TupleType{}}
+	switch x := n.Result.(type) {
+	case *TypeNameNode:
+		r.Result.Types = append(r.Result.Types, c.checkType(x))
+	case nil:
+		// ok
+	case *Parameters:
+		r.Result = tuple(c, x.ParameterList)
+	default:
+		c.err(x, errorf("TODO %T", x))
+	}
+	n.typ = r
+	return n
+}
+
+func tuple(c *ctx, a []*ParameterDecl) (r *TupleType) {
+	r = &TupleType{}
+	for _, v := range a {
+		r.Types = append(r.Types, c.checkType(v.Type))
+	}
+	return r
+}
+
 func (n *FunctionDecl) check(c *ctx) Node {
 	if !n.enter(c, n) {
 		return n
@@ -1041,6 +1095,50 @@ func (n *FunctionDecl) check(c *ctx) Node {
 		n.typ = ft
 	}
 	return n
+}
+
+func (n *FunctionDecl) checkBody(c *ctx) {
+	body := n.FunctionBody
+	if body == nil {
+		return
+	}
+
+	s := &body.Scope
+	vis := body.LBrace.Offset()
+	ft, ok := n.Type().(*FunctionType)
+	if !ok {
+		return
+	}
+
+	types := ft.Parameters.Types
+	for _, v := range n.Signature.Parameters.ParameterList {
+		for _, w := range v.IdentifierList {
+			id := w.Ident
+			v := &Variable{Ident: id}
+			v.typ = types[0]
+			types = types[1:]
+			v.guard = checked
+			s.add(c, id.Src(), vis, v)
+		}
+	}
+	types = ft.Result.Types
+	switch x := n.Signature.Result.(type) {
+	case *Parameters:
+		for _, v := range x.ParameterList {
+			for _, w := range v.IdentifierList {
+				id := w.Ident
+				v := &Variable{Ident: id}
+				v.typ = types[0]
+				types = types[1:]
+				v.guard = checked
+				s.add(c, id.Src(), vis, v)
+			}
+		}
+	case nil:
+		// ok
+	default:
+		c.err(n, errorf("TODO %T", x))
+	}
 }
 
 func (n *MethodDecl) check(c *ctx) Node {

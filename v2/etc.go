@@ -103,11 +103,14 @@ type parallel struct {
 	files int32
 	oks   int32
 	skips int32
+
+	failFast bool
 }
 
-func newParallel() *parallel {
+func newParallel(failFast bool) *parallel {
 	return &parallel{
-		limit: make(chan struct{}, runtime.GOMAXPROCS(0)),
+		failFast: failFast,
+		limit:    make(chan struct{}, runtime.GOMAXPROCS(0)),
 	}
 }
 
@@ -119,6 +122,10 @@ func (p *parallel) skip() { atomic.AddInt32(&p.skips, 1) }
 func (p *parallel) err(err error) {
 	if err == nil {
 		return
+	}
+
+	if p.failFast {
+		panic(err)
 	}
 
 	s := err.Error()
