@@ -288,7 +288,7 @@ func (c *ctx) convertType(n Node, from, to Type) {
 		default:
 			c.err(n, errorf("cannot convert %s to %s", from, to))
 		}
-	case Pointer:
+	case Pointer, Uintptr:
 		switch to.Kind() {
 		case UnsafePointer:
 			// ok

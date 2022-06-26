@@ -135,7 +135,6 @@ type Kind int
 const (
 	InvalidKind Kind = iota // <invalid type>
 
-	Alias          // alias
 	Array          // array
 	Bool           // bool
 	Chan           // chan
@@ -296,9 +295,11 @@ type Parameter struct {
 // FunctionType represents a channel type.
 type FunctionType struct {
 	noSourcer
-	node       *FunctionDecl
+	node       Node
 	Parameters *TupleType
 	Result     *TupleType
+
+	IsVariadic bool
 }
 
 // Kind implements Type.
@@ -338,8 +339,8 @@ func (t *FunctionType) String() string {
 // InterfaceType represents an interface type.
 type InterfaceType struct {
 	noSourcer
-	node *InterfaceTypeNode
-	//TODO
+	node  *InterfaceTypeNode
+	Elems []Node //TODO
 }
 
 // Kind implements Type.
@@ -349,7 +350,32 @@ func (t *InterfaceType) Kind() Kind { return Interface }
 func (t *InterfaceType) Position() (r token.Position) { return position(t.node) }
 
 func (t *InterfaceType) String() string {
-	panic(todo(""))
+	var b strings.Builder
+	b.WriteString("interface{")
+	for i := range t.Elems {
+		if i != 0 {
+			b.WriteString(" ")
+		}
+		b.WriteString("/*TODO*/")
+	}
+	b.WriteByte('}')
+	return b.String()
+}
+
+func (n *InterfaceTypeNode) check(c *ctx) Node {
+	if !n.enter(c, n) {
+		return n
+	}
+
+	defer n.exit()
+
+	t := &InterfaceType{}
+	for _, v := range n.InterfaceElems {
+		_ = v
+		c.err(n, errorf("TODO %T", n))
+	}
+	n.typ = t
+	return n
 }
 
 // MapType represents a map type.
@@ -490,7 +516,7 @@ type AliasType struct {
 }
 
 // Kind implements Type.
-func (t *AliasType) Kind() Kind { return Alias }
+func (t *AliasType) Kind() Kind { return t.Type().Kind() }
 
 // Position implements Node.
 func (t *AliasType) Position() (r token.Position) { return position(t.node) }
@@ -533,4 +559,18 @@ func (t *TupleType) String() string {
 		a = append(a, v.String())
 	}
 	return fmt.Sprintf("(%s)", strings.Join(a, ", "))
+}
+
+func (t *TupleType) isAssignable(c *ctx, to *TupleType) bool {
+	if len(t.Types) != len(to.Types) {
+		return false
+	}
+
+	for i, v := range t.Types {
+		if !c.isAssignable(v, v, to.Types[i]) {
+			return false
+		}
+	}
+
+	return true
 }

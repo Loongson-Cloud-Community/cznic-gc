@@ -13,7 +13,7 @@ type ParseSourceFileConfig struct {
 	// returned.  Passing nil Accept is the same as passing a function that always
 	// returns nil
 	Accept       func(*SourceFile) error
-	PackageScope Scope
+	packageScope *Scope
 
 	AllErrors bool
 }
@@ -21,8 +21,13 @@ type ParseSourceFileConfig struct {
 // ParseSourceFile parses buf and returns a *SourceFile or an error, if any.
 // Positions are reported as if buf is coming from a file named name. The
 // buffer becomes owned by the *SourceFile and must not be modified after
-// calling ParseSourceFile.
+// calling ParseSourceFile. The same cfg argument must be used for all source
+// files within a package.  Distinct, new instances of the cfg arguments must
+// be used for distinct packages.
 func ParseSourceFile(cfg *ParseSourceFileConfig, name string, buf []byte) (r *SourceFile, err error) {
+	if cfg.packageScope == nil {
+		cfg.packageScope = &Scope{Parent: &universe}
+	}
 	s, err := NewScanner(name, buf)
 	if err != nil {
 		return nil, err
@@ -32,7 +37,7 @@ func ParseSourceFile(cfg *ParseSourceFileConfig, name string, buf []byte) (r *So
 	switch p.ch() {
 	//       SourceFile
 	case PACKAGE:
-		r = &SourceFile{packageScope: &cfg.PackageScope, PackageClause: &PackageClause{Package: p.must(PACKAGE), PackageName: p.must(IDENTIFIER), Semicolon: p.must(';')}, ImportDecls: p.importDecls()}
+		r = &SourceFile{Scope: &Scope{}, packageScope: cfg.packageScope, PackageClause: &PackageClause{Package: p.must(PACKAGE), PackageName: p.must(IDENTIFIER), Semicolon: p.must(';')}, ImportDecls: p.importDecls()}
 	default:
 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()

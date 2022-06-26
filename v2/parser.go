@@ -16,9 +16,10 @@ var (
 
 type parser struct {
 	cfg          *ParseSourceFileConfig
+	container    Node // *FunctionDecl or *MethodDecl or *FunctionLit
+	lexicalScope *Scope
 	loophacks    []bool
 	s            *Scanner
-	lexicalScope *Scope
 	scopes       []*Scope
 
 	loophack bool
@@ -26,7 +27,7 @@ type parser struct {
 
 func newParser(cfg *ParseSourceFileConfig, s *Scanner) *parser {
 	s.Scan()
-	return &parser{cfg: cfg, s: s, lexicalScope: &cfg.PackageScope}
+	return &parser{cfg: cfg, s: s, lexicalScope: cfg.packageScope}
 }
 
 func (p *parser) Err() error                          { return p.s.Err() }
@@ -195,7 +196,7 @@ func (p *parser) constDecl() (r *ConstDecl) {
 
 func (p *parser) constSpecs() (r []*ConstSpec) {
 	var iota int64
-	var el []*ExpressionListItem
+	var el []*ExprListItem
 	var typ Node
 	for p.ch() == IDENTIFIER {
 		n := p.constSpec(true)
@@ -363,7 +364,7 @@ func (p *parser) typeParameters2(lbracket, id Token) (r *TypeParameters) {
 	return &TypeParameters{LBracket: lbracket, TypeParamList: p.typeParamDecls2(p.identifierList2(id)), RBracket: p.must(']')}
 }
 
-func (p *parser) typeParamDecls2(il []*IdentifierListItem) (r []*TypeParamDecl) {
+func (p *parser) typeParamDecls2(il []*IdentListItem) (r []*TypeParamDecl) {
 	r = []*TypeParamDecl{{IdentifierList: il, TypeConstraint: p.typeElem(false), Comma: p.opt(',')}}
 	for {
 		switch p.ch() {
@@ -380,7 +381,9 @@ func (p *parser) typeParamDecls2(il []*IdentifierListItem) (r []*TypeParamDecl) 
 // MethodDecl_1 =
 // 	| FunctionBody .
 func (p *parser) methodDecl(f Token) (r *MethodDecl) {
+	defer func(n Node) { p.container = n }(p.container)
 	r = &MethodDecl{Func: f, Receiver: p.parameters(), MethodName: p.must(IDENTIFIER)}
+	p.container = r
 	switch p.ch() {
 	//                 Signature
 	case '(':
@@ -405,7 +408,10 @@ func (p *parser) methodDecl(f Token) (r *MethodDecl) {
 // FunctionDecl_2 =
 // 	| FunctionBody .
 func (p *parser) functionDecl(f Token) (r *FunctionDecl) {
+	defer func(n Node) { p.container = n }(p.container)
 	r = &FunctionDecl{Func: f, FunctionName: p.must(IDENTIFIER)}
+	p.container = r
+	// trc("%v: FUNC %q in scope %p(%v)", r.Position(), r.FunctionName.Src(), p.lexicalScope, p.lexicalScope.IsPackage())
 	switch p.ch() {
 	//                 Signature
 	case '(':
@@ -430,7 +436,7 @@ func (p *parser) functionDecl(f Token) (r *FunctionDecl) {
 func (p *parser) block(semi bool) (r *Block) {
 	var s Scope
 	defer p.pushScope(&s)()
-	return &Block{Scope: s, LBrace: p.must('{'), StatementList: p.statementList(), RBrace: p.must('}'), Semicolon: p.semi(semi)}
+	return &Block{Scope: &s, LBrace: p.must('{'), StatementList: p.statementList(), RBrace: p.must('}'), Semicolon: p.semi(semi)}
 }
 
 // Signature = Parameters Signature_1 .
@@ -505,7 +511,7 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 
 		pos := r[0]
 		var r2 []*ParameterDecl
-		var names []*IdentifierListItem
+		var names []*IdentListItem
 		var done bool
 		for len(r) != 0 {
 			pd := r[0]
@@ -518,9 +524,9 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 
 				switch x := pd.Type.(type) {
 				case Token:
-					names = append(names, &IdentifierListItem{Ident: x, Comma: pd.Comma})
+					names = append(names, &IdentListItem{Ident: x, Comma: pd.Comma})
 				case *Ident:
-					names = append(names, &IdentifierListItem{Ident: x.Token, Comma: pd.Comma})
+					names = append(names, &IdentListItem{Ident: x.Token, Comma: pd.Comma})
 				default:
 					p.errNode(x, errorf("TODO %T", x))
 				}
@@ -547,9 +553,9 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 			// identifier .
 			switch p.ch() {
 			case '(', '*', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
-				r = append(r, &ParameterDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, Type: p.type1(), Comma: p.opt(',')})
+				r = append(r, &ParameterDecl{IdentifierList: []*IdentListItem{{Ident: id}}, Type: p.type1(), Comma: p.opt(',')})
 			case ELLIPSIS:
-				r = append(r, &ParameterDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, Ellipsis: p.shift(), Type: p.type1(), Comma: p.opt(',')})
+				r = append(r, &ParameterDecl{IdentifierList: []*IdentListItem{{Ident: id}}, Ellipsis: p.shift(), Type: p.type1(), Comma: p.opt(',')})
 			case ',':
 				r = append(r, &ParameterDecl{Type: &Ident{lexicalScoper: newLexicalScoper(p.lexicalScope), Token: id}, Comma: p.shift()})
 			case ')':
@@ -562,7 +568,7 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 				switch p.ch() {
 				case ']':
 					// identifier "[" . "]"
-					r = append(r, &ParameterDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, Type: &SliceTypeNode{LBracket: lbracket, RBracket: p.must(']'), ElementType: p.type1()}, Comma: p.opt(',')})
+					r = append(r, &ParameterDecl{IdentifierList: []*IdentListItem{{Ident: id}}, Type: &SliceTypeNode{LBracket: lbracket, RBracket: p.must(']'), ElementType: p.type1()}, Comma: p.opt(',')})
 
 				default:
 					switch x := p.exprOrType().(type) {
@@ -583,7 +589,7 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 							//                      Type
 							case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 								// identifier "[" expression "]" . Type
-								r = append(r, &ParameterDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, Type: &ArrayTypeNode{LBracket: lbracket, ArrayLength: x.(Expression), RBracket: rbracket, ElementType: p.type1()}, Comma: p.opt(',')})
+								r = append(r, &ParameterDecl{IdentifierList: []*IdentListItem{{Ident: id}}, Type: &ArrayTypeNode{LBracket: lbracket, ArrayLength: x.(Expression), RBracket: rbracket, ElementType: p.type1()}, Comma: p.opt(',')})
 							default:
 								p.err(errorf("TODO %v", p.ch().str()))
 								p.shift()
@@ -624,10 +630,10 @@ func (p *parser) varDecl() (r *VarDecl) {
 	v := p.must(VAR)
 	switch p.ch() {
 	case '(':
-		return &VarDecl{Var: v, LParen: p.shift(), VarSpecs: p.varSpecs(), RParen: p.must(')'), Semicolon: p.semi(true)}
+		return &VarDecl{lexicalScoper: newLexicalScoper(p.lexicalScope), Var: v, LParen: p.shift(), VarSpecs: p.varSpecs(), RParen: p.must(')'), Semicolon: p.semi(true)}
 	//                   VarSpec
 	case IDENTIFIER:
-		return &VarDecl{Var: v, VarSpecs: []*VarSpec{p.varSpec(false)}, Semicolon: p.semi(true)}
+		return &VarDecl{lexicalScoper: newLexicalScoper(p.lexicalScope), Var: v, VarSpecs: []*VarSpec{p.varSpec(false)}, Semicolon: p.semi(true)}
 	default:
 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 		p.shift()
@@ -685,9 +691,9 @@ func (p *parser) varSpec(semi bool) (r *VarSpec) {
 // IdentifierList = identifier IdentifierList_1 .
 // IdentifierList_1 =
 // 	| IdentifierList_1 "," identifier .
-func (p *parser) identifierList() (r []*IdentifierListItem) {
+func (p *parser) identifierList() (r []*IdentListItem) {
 	for p.ch() == IDENTIFIER {
-		n := &IdentifierListItem{Ident: p.shift()}
+		n := &IdentListItem{Ident: p.shift()}
 		r = append(r, n)
 		switch p.ch() {
 		case ',':
@@ -700,8 +706,8 @@ func (p *parser) identifierList() (r []*IdentifierListItem) {
 }
 
 // identifier .
-func (p *parser) identifierList2(id Token) (r []*IdentifierListItem) {
-	n := &IdentifierListItem{Ident: id}
+func (p *parser) identifierList2(id Token) (r []*IdentListItem) {
+	n := &IdentListItem{Ident: id}
 	r = append(r, n)
 	if p.ch() != ',' {
 		return r
@@ -857,7 +863,7 @@ func (p *parser) statement2() (r Node) {
 	case IF:
 		return p.ifStmt(true)
 	case RETURN:
-		n := &ReturnStmt{Return: p.shift()}
+		n := &ReturnStmt{Return: p.shift(), container: p.container}
 		switch p.ch() {
 		//                Expression
 		case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
@@ -941,7 +947,9 @@ func (p *parser) forStmt() (r *ForStmt) {
 	//        Condition case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
 	//        ForClause case '!', '&', '(', '*', '+', '-', ';', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
 	//      RangeClause case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RANGE, RUNE_LIT, STRING_LIT, STRUCT:
-	r = &ForStmt{For: p.must(FOR)}
+	var s Scope
+	defer p.pushScope(&s)()
+	r = &ForStmt{For: p.must(FOR), Scope: &s}
 	switch p.ch() {
 	// case ';':
 	// 	p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
@@ -956,7 +964,7 @@ func (p *parser) forStmt() (r *ForStmt) {
 		switch p.ch() {
 		case ',':
 			comma := p.shift()
-			el := append([]*ExpressionListItem{{Expr: expr.(Expression), Comma: comma}}, p.expressionList()...)
+			el := append([]*ExprListItem{{Expr: expr.(Expression), Comma: comma}}, p.expressionList()...)
 			switch p.ch() {
 			case DEFINE:
 				def := p.shift()
@@ -965,7 +973,7 @@ func (p *parser) forStmt() (r *ForStmt) {
 					r.RangeClause = &RangeClause{ExprList: el, Assign: def, Range: p.shift(), Expr: p.expression(nil).(Expression)}
 				//                Expression
 				case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-					r.ForClause = p.forClause(&ShortVarDecl{IdentifierList: p.exprListToIDList(el), Define: def, ExprList: p.expressionList()})
+					r.ForClause = p.forClause(&ShortVarDecl{lexicalScoper: newLexicalScoper(p.lexicalScope), IdentifierList: p.exprListToIDList(el), Define: def, ExprList: p.expressionList()})
 				default:
 					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 					p.shift()
@@ -978,7 +986,7 @@ func (p *parser) forStmt() (r *ForStmt) {
 					r.RangeClause = &RangeClause{ExprList: el, Assign: op, Range: p.shift(), Expr: p.expression(nil).(Expression)}
 				//                Expression
 				case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-					r.ForClause = p.forClause(&Assignment{LExpressionList: el, AssOp: op, RExpressionList: p.expressionList()})
+					r.ForClause = p.forClause(&Assignment{LExprList: el, AssOp: op, RExprList: p.expressionList()})
 				default:
 					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 					p.shift()
@@ -993,12 +1001,12 @@ func (p *parser) forStmt() (r *ForStmt) {
 			def := p.shift()
 			switch p.ch() {
 			case RANGE:
-				r.RangeClause = &RangeClause{ExprList: []*ExpressionListItem{{Expr: expr.(Expression)}}, Assign: def, Range: p.shift(), Expr: p.expression(nil).(Expression)}
+				r.RangeClause = &RangeClause{ExprList: []*ExprListItem{{Expr: expr.(Expression)}}, Assign: def, Range: p.shift(), Expr: p.expression(nil).(Expression)}
 			default:
 				expr2 := p.expression(nil)
 				switch p.ch() {
 				case ';':
-					r.ForClause = p.forClause(&ShortVarDecl{IdentifierList: p.exprToIDList(expr), Define: def, ExprList: []*ExpressionListItem{{Expr: expr2.(Expression)}}})
+					r.ForClause = p.forClause(&ShortVarDecl{lexicalScoper: newLexicalScoper(p.lexicalScope), IdentifierList: p.exprToIDList(expr), Define: def, ExprList: []*ExprListItem{{Expr: expr2.(Expression)}}})
 				default:
 					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 					p.shift()
@@ -1009,12 +1017,12 @@ func (p *parser) forStmt() (r *ForStmt) {
 			op := p.shift()
 			switch p.ch() {
 			case RANGE:
-				r.RangeClause = &RangeClause{ExprList: []*ExpressionListItem{{Expr: expr.(Expression)}}, Assign: op, Range: p.shift(), Expr: p.expression(nil).(Expression)}
+				r.RangeClause = &RangeClause{ExprList: []*ExprListItem{{Expr: expr.(Expression)}}, Assign: op, Range: p.shift(), Expr: p.expression(nil).(Expression)}
 			default:
 				expr2 := p.expression(nil)
 				switch p.ch() {
 				case ';':
-					r.ForClause = p.forClause(&Assignment{LExpressionList: []*ExpressionListItem{{Expr: expr.(Expression)}}, AssOp: op, RExpressionList: []*ExpressionListItem{{Expr: expr2.(Expression)}}})
+					r.ForClause = p.forClause(&Assignment{LExprList: []*ExprListItem{{Expr: expr.(Expression)}}, AssOp: op, RExprList: []*ExprListItem{{Expr: expr2.(Expression)}}})
 				default:
 					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 					p.shift()
@@ -1084,6 +1092,8 @@ func (p *parser) forClause(init Node) (r *ForClause) {
 // TypeSwitchStmt_2 =
 // 	| TypeSwitchStmt_2 TypeCaseClause .
 func (p *parser) switchStmt() (r Node) {
+	var s Scope
+	defer p.pushScope(&s)()
 	sw := p.must(SWITCH)
 	// "switch" .
 	switch p.ch() {
@@ -1113,7 +1123,7 @@ func (p *parser) switchStmt() (r Node) {
 						// "switch" 'foo := bar.(type)' body
 						z.Ident = y.IdentifierList[0].Ident
 						z.Define = y.Define
-						return &TypeSwitchStmt{Switch: sw, TypeSwitchGuard: z, LBrace: p.body(), TypeCaseClauses: p.typeCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
+						return &TypeSwitchStmt{Scope: &s, Switch: sw, TypeSwitchGuard: z, LBrace: p.body(), TypeCaseClauses: p.typeCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
 					default:
 						p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 						p.shift()
@@ -1129,13 +1139,13 @@ func (p *parser) switchStmt() (r Node) {
 				// "switch" foo := bar ";" .
 				switch p.ch() {
 				case body:
-					return &ExpressionSwitchStmt{Switch: sw, SimpleStmt: x, Semicolon: semi, LBrace: p.body(), ExprCaseClauses: p.exprCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
+					return &ExpressionSwitchStmt{Scope: &s, Switch: sw, SimpleStmt: x, Semicolon: semi, LBrace: p.body(), ExprCaseClauses: p.exprCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
 					//                Expression
 				case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
 					expr := p.expression(nil)
 					if y, ok := expr.(*TypeSwitchGuard); ok {
 						// "switch" foo := bar ";" Expression.(type) .
-						return &TypeSwitchStmt{Switch: sw, SimpleStmt: x, Semicolon: semi, TypeSwitchGuard: y, LBrace: p.body(), TypeCaseClauses: p.typeCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
+						return &TypeSwitchStmt{Scope: &s, Switch: sw, SimpleStmt: x, Semicolon: semi, TypeSwitchGuard: y, LBrace: p.body(), TypeCaseClauses: p.typeCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
 					}
 
 					switch p.ch() {
@@ -1157,14 +1167,14 @@ func (p *parser) switchStmt() (r Node) {
 						case *TypeSwitchGuard:
 							y.Ident = tok
 							y.Define = def
-							return &TypeSwitchStmt{Switch: sw, SimpleStmt: x, Semicolon: semi, TypeSwitchGuard: y, LBrace: p.body(), TypeCaseClauses: p.typeCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
+							return &TypeSwitchStmt{Scope: &s, Switch: sw, SimpleStmt: x, Semicolon: semi, TypeSwitchGuard: y, LBrace: p.body(), TypeCaseClauses: p.typeCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
 						default:
 							p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 							p.shift()
 							return r
 						}
 					case body:
-						return &ExpressionSwitchStmt{Switch: sw, SimpleStmt: x, Semicolon: semi, Expr: expr.(Expression), LBrace: p.body(), ExprCaseClauses: p.exprCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
+						return &ExpressionSwitchStmt{Scope: &s, Switch: sw, SimpleStmt: x, Semicolon: semi, Expr: expr.(Expression), LBrace: p.body(), ExprCaseClauses: p.exprCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
 					default:
 						p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 						p.shift()
@@ -1188,7 +1198,7 @@ func (p *parser) switchStmt() (r Node) {
 					//TODO }
 
 					//TODO g := &TypeSwitchGuard{Ident: y.IdentifierList[0].Ident, Define: y.Define, PrimaryExpr: y.ExpressionList[0], Dot: p.shift(), LParen: p.must('('), Type: p.must(TYPE), RParen: p.must(')')}
-					//TODO return &TypeSwitchStmt{Switch: sw, TypeSwitchGuard: g, LBrace: p.body(), TypeCaseClauses: p.typeCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
+					//TODO return &TypeSwitchStmt{Scope: &s, Switch: sw, TypeSwitchGuard: g, LBrace: p.body(), TypeCaseClauses: p.typeCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
 				default:
 					p.err(errorf("TODO %T", y))
 					p.shift()
@@ -1202,11 +1212,11 @@ func (p *parser) switchStmt() (r Node) {
 		default:
 			switch y := x.(type) {
 			case *TypeSwitchGuard:
-				return &TypeSwitchStmt{Switch: sw, TypeSwitchGuard: y, LBrace: p.body(), TypeCaseClauses: p.typeCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
+				return &TypeSwitchStmt{Scope: &s, Switch: sw, TypeSwitchGuard: y, LBrace: p.body(), TypeCaseClauses: p.typeCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
 			default:
 				switch p.ch() {
 				case body:
-					return &ExpressionSwitchStmt{Switch: sw, Expr: x.(Expression), LBrace: p.body(), ExprCaseClauses: p.exprCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
+					return &ExpressionSwitchStmt{Scope: &s, Switch: sw, Expr: x.(Expression), LBrace: p.body(), ExprCaseClauses: p.exprCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
 				case ';':
 					semi := p.shift()
 					switch p.ch() {
@@ -1217,7 +1227,7 @@ func (p *parser) switchStmt() (r Node) {
 					default:
 						switch z := p.expression(nil).(type) {
 						case *TypeSwitchGuard:
-							return &TypeSwitchStmt{Switch: sw, SimpleStmt: y, Semicolon: semi, TypeSwitchGuard: z, LBrace: p.body(), TypeCaseClauses: p.typeCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
+							return &TypeSwitchStmt{Scope: &s, Switch: sw, SimpleStmt: y, Semicolon: semi, TypeSwitchGuard: z, LBrace: p.body(), TypeCaseClauses: p.typeCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
 						default:
 							p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 							p.shift()
@@ -1239,12 +1249,12 @@ func (p *parser) switchStmt() (r Node) {
 		// 	| Expression .
 		// ExprSwitchStmt_3 =
 		// 	| ExprSwitchStmt_3 ExprCaseClause .
-		return &ExpressionSwitchStmt{Switch: sw, LBrace: p.body(), ExprCaseClauses: p.exprCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
+		return &ExpressionSwitchStmt{Scope: &s, Switch: sw, LBrace: p.body(), ExprCaseClauses: p.exprCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
 	case ';':
 		semi := p.shift()
 		switch p.ch() {
 		case body:
-			return &ExpressionSwitchStmt{Switch: sw, SimpleStmt: &EmptyStmt{}, Semicolon: semi, LBrace: p.body(), ExprCaseClauses: p.exprCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
+			return &ExpressionSwitchStmt{Scope: &s, Switch: sw, SimpleStmt: &EmptyStmt{}, Semicolon: semi, LBrace: p.body(), ExprCaseClauses: p.exprCaseClauses(), RBrace: p.must('}'), Semicolon2: p.semi(true)}
 		default:
 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
@@ -1263,6 +1273,8 @@ func (p *parser) typeCaseClauses() (r []*TypeCaseClause) {
 		switch p.ch() {
 		//            TypeSwitchCase
 		case CASE, DEFAULT:
+			var s Scope
+			defer p.pushScope(&s)()
 			r = append(r, &TypeCaseClause{TypeSwitchCase: p.typeSwitchCase(), Colon: p.must(':'), StatementList: p.statementList()})
 		default:
 			return r
@@ -1320,6 +1332,8 @@ func (p *parser) exprCaseClauses() (r []*ExprCaseClause) {
 		switch p.ch() {
 		//            ExprSwitchCase
 		case CASE, DEFAULT:
+			var s Scope
+			defer p.pushScope(&s)()
 			r = append(r, &ExprCaseClause{ExprSwitchCase: p.exprSwitchCase(), Colon: p.must(':'), StatementList: p.statementList()})
 		default:
 			return r
@@ -1351,7 +1365,9 @@ func (p *parser) exprSwitchCase() (r *ExprSwitchCase) {
 func (p *parser) ifStmt(semi bool) (r *IfStmt) {
 	//                Expression case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
 	//                SimpleStmt case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-	r = &IfStmt{If: p.must(IF)}
+	var s Scope
+	defer p.pushScope(&s)()
+	r = &IfStmt{If: p.must(IF), Scope: &s}
 	switch x := p.exprOrSimpleStmt(false).(type) {
 	case simpleStmt:
 		r.SimpleStmt = x
@@ -1418,19 +1434,19 @@ func (p *parser) exprOrSimpleStmt(semi bool) (r Node) {
 		case body:
 			return expr
 		case DEFINE:
-			return &ShortVarDecl{IdentifierList: p.exprListToIDList([]*ExpressionListItem{{Expr: expr.(Expression)}}), Define: p.shift(), ExprList: p.expressionList(), Semicolon: p.semi(semi)}
+			return &ShortVarDecl{lexicalScoper: newLexicalScoper(p.lexicalScope), IdentifierList: p.exprListToIDList([]*ExprListItem{{Expr: expr.(Expression)}}), Define: p.shift(), ExprList: p.expressionList(), Semicolon: p.semi(semi)}
 		//                 assign_op
 		case '=', ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN:
-			return &Assignment{LExpressionList: []*ExpressionListItem{{Expr: expr.(Expression)}}, AssOp: p.shift(), RExpressionList: p.expressionList(), Semicolon: p.semi(semi)}
+			return &Assignment{LExprList: []*ExprListItem{{Expr: expr.(Expression)}}, AssOp: p.shift(), RExprList: p.expressionList(), Semicolon: p.semi(semi)}
 		case ',':
 			comma := p.shift()
-			el := append([]*ExpressionListItem{{Expr: expr.(Expression), Comma: comma}}, p.expressionList()...)
+			el := append([]*ExprListItem{{Expr: expr.(Expression), Comma: comma}}, p.expressionList()...)
 			switch p.ch() {
 			case DEFINE:
-				return &ShortVarDecl{IdentifierList: p.exprListToIDList(el), Define: p.shift(), ExprList: p.expressionList(), Semicolon: p.semi(semi)}
+				return &ShortVarDecl{lexicalScoper: newLexicalScoper(p.lexicalScope), IdentifierList: p.exprListToIDList(el), Define: p.shift(), ExprList: p.expressionList(), Semicolon: p.semi(semi)}
 			//                 assign_op
 			case '=', ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN:
-				return &Assignment{LExpressionList: el, AssOp: p.shift(), RExpressionList: p.expressionList(), Semicolon: p.semi(semi)}
+				return &Assignment{LExprList: el, AssOp: p.shift(), RExprList: p.expressionList(), Semicolon: p.semi(semi)}
 			default:
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 				p.shift()
@@ -1460,29 +1476,29 @@ func (p *parser) exprOrSimpleStmt(semi bool) (r Node) {
 	}
 }
 
-func (p *parser) exprToIDList(e Node) (r []*IdentifierListItem) {
+func (p *parser) exprToIDList(e Node) (r []*IdentListItem) {
 	switch x := e.(type) {
 	case Token: //TODO-
 		switch x.Ch {
 		case IDENTIFIER:
-			return []*IdentifierListItem{{Ident: x}}
+			return []*IdentListItem{{Ident: x}}
 		default:
 			p.errNode(e, errorf("TODO %v", x))
 			return r
 		}
 	case *Ident:
-		return []*IdentifierListItem{{Ident: x.Token}}
+		return []*IdentListItem{{Ident: x.Token}}
 	default:
 		p.errNode(e, errorf("TODO %T", x))
 		return r
 	}
 }
 
-func (p *parser) exprListToIDList(l []*ExpressionListItem) (r []*IdentifierListItem) {
+func (p *parser) exprListToIDList(l []*ExprListItem) (r []*IdentListItem) {
 	for _, v := range l {
 		switch x := v.Expr.(type) {
 		case *Ident:
-			r = append(r, &IdentifierListItem{Ident: x.Token, Comma: v.Comma})
+			r = append(r, &IdentListItem{Ident: x.Token, Comma: v.Comma})
 		default:
 			p.errNode(x, errorf("TODO %T", x))
 			return r
@@ -1629,7 +1645,7 @@ func (p *parser) fieldDecl() (r *FieldDecl) {
 							// . identifier "[" Expression "]" . ";"
 							r = &FieldDecl{EmbeddedField: &EmbeddedField{TypeName: &TypeNameNode{Name: &QualifiedIdent{lexicalScoper: newLexicalScoper(p.lexicalScope), Ident: id}, TypeArgs: &TypeArgs{LBracket: lbracket, TypeList: []*TypeListItem{{Type: x}}, RBracket: rbracket}}}}
 						default:
-							r = &FieldDecl{IdentifierList: []*IdentifierListItem{{Ident: id}}, Type: &ArrayTypeNode{LBracket: lbracket, ArrayLength: x.(Expression), RBracket: rbracket, ElementType: p.type1()}}
+							r = &FieldDecl{IdentifierList: []*IdentListItem{{Ident: id}}, Type: &ArrayTypeNode{LBracket: lbracket, ArrayLength: x.(Expression), RBracket: rbracket, ElementType: p.type1()}}
 						}
 					case ',':
 						// . identifier "[" Expression . ","
@@ -1819,12 +1835,12 @@ func (p *parser) typeArgs2(lbracket Token, typ Node) (r *TypeArgs) {
 // ExpressionList = Expression ExpressionList_1 .
 // ExpressionList_1 =
 // 	| ExpressionList_1 "," Expression .
-func (p *parser) expressionList() (r []*ExpressionListItem) {
+func (p *parser) expressionList() (r []*ExprListItem) {
 	for {
 		switch p.ch() {
 		//                Expression
 		case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
-			n := &ExpressionListItem{Expr: p.expression(nil).(Expression)}
+			n := &ExprListItem{Expr: p.expression(nil).(Expression)}
 			r = append(r, n)
 			switch p.ch() {
 			case ',':
@@ -2034,8 +2050,7 @@ func (p *parser) primaryExpression() (r Node) {
 		sig := p.signature()
 		switch p.ch() {
 		case '{', body:
-			var lbr bool
-			r = &FunctionLit{Func: f, Signature: sig, FunctionBody: &Block{LBrace: p.lbrace(&lbr), StatementList: p.statementList(), RBrace: p.fixlbr(lbr)}}
+			r = p.functionLit(f, sig)
 		case '(':
 			r = &FunctionTypeNode{Func: f, Signature: sig}
 		default:
@@ -2116,6 +2131,15 @@ func (p *parser) primaryExpression() (r Node) {
 		return invalidExpr
 	}
 	return p.primaryExpression2(r, checkForLiteral)
+}
+
+func (p *parser) functionLit(f Token, sig *Signature) (r *FunctionLit) {
+	defer func(n Node) { p.container = n }(p.container)
+	var lbr bool
+	r = &FunctionLit{Func: f, Signature: sig}
+	p.container = r
+	r.FunctionBody = &Block{LBrace: p.lbrace(&lbr), StatementList: p.statementList(), RBrace: p.fixlbr(lbr)}
+	return r
 }
 
 func (p *parser) primaryExpression2(pe Node, checkForLiteral bool) (r Node) {
@@ -2262,19 +2286,19 @@ func (p *parser) arguments(pe Node) (r *Arguments) {
 	default:
 		switch p.ch() {
 		case ')':
-			r.ExprList = []*ExpressionListItem{{Expr: x.(Expression)}}
+			r.ExprList = []*ExprListItem{{Expr: x.(Expression)}}
 			r.RParen = p.shift()
 			return r
 		case ',':
 			comma := p.shift()
 			switch p.ch() {
 			case ')':
-				r.ExprList = []*ExpressionListItem{{Expr: x.(Expression), Comma: comma}}
+				r.ExprList = []*ExprListItem{{Expr: x.(Expression), Comma: comma}}
 			default:
-				r.ExprList = append([]*ExpressionListItem{{Expr: x.(Expression), Comma: comma}}, p.expressionList()...)
+				r.ExprList = append([]*ExprListItem{{Expr: x.(Expression), Comma: comma}}, p.expressionList()...)
 			}
 		case ELLIPSIS:
-			r.ExprList = []*ExpressionListItem{{Expr: x.(Expression)}}
+			r.ExprList = []*ExprListItem{{Expr: x.(Expression)}}
 			r.Ellipsis = p.shift()
 		default:
 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
@@ -2331,7 +2355,7 @@ func (p *parser) exprOrType() (r Node) {
 		case typeNode:
 			return &PointerTypeNode{Star: star, BaseType: x}
 		default:
-			return &UnaryExpr{Op: star, Expr: x.(Expression)}
+			return p.expression(&UnaryExpr{Op: star, Expr: x.(Expression)})
 		}
 	case ARROW:
 		arrow := p.shift()
@@ -2371,8 +2395,7 @@ func (p *parser) exprOrType() (r Node) {
 		sig := p.signature()
 		switch p.ch() {
 		case '{', body:
-			var lbr bool
-			return p.expression(p.primaryExpression2(&FunctionLit{Func: f, Signature: sig, FunctionBody: &Block{LBrace: p.lbrace(&lbr), StatementList: p.statementList(), RBrace: p.fixlbr(lbr)}}, false))
+			return p.expression(p.primaryExpression2(p.functionLit(f, sig), false))
 		case ')', ']':
 			return &FunctionTypeNode{Func: f, Signature: sig}
 		default:

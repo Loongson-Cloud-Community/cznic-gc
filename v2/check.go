@@ -19,6 +19,7 @@ var (
 			"byte":       {Node: PredefinedType(Uint8)},
 			"complex128": {Node: PredefinedType(Complex128)},
 			"complex64":  {Node: PredefinedType(Complex64)},
+			"false":      {Node: newPredefineConstant(UntypedBoolType, constant.MakeBool(false))},
 			"float32":    {Node: PredefinedType(Float32)},
 			"float64":    {Node: PredefinedType(Float64)},
 			"int":        {Node: PredefinedType(Int)},
@@ -29,6 +30,7 @@ var (
 			"nil":        {Node: PredefinedType(UntypedNil)},
 			"rune":       {Node: PredefinedType(Int32)},
 			"string":     {Node: PredefinedType(String)},
+			"true":       {Node: newPredefineConstant(UntypedBoolType, constant.MakeBool(true))},
 			"uint":       {Node: PredefinedType(Uint)},
 			"uint16":     {Node: PredefinedType(Uint16)},
 			"uint32":     {Node: PredefinedType(Uint32)},
@@ -40,6 +42,14 @@ var (
 
 	noScope = &Scope{}
 )
+
+func newPredefineConstant(t Type, v constant.Value) (r *Constant) {
+	r = &Constant{}
+	r.typ = t
+	r.guard = checked
+	r.val = v
+	return r
+}
 
 // Scoped represents a node bound to a name and the offset where the visibility
 // starts.  Declarations outside of a function/method reports their visibility
@@ -97,7 +107,10 @@ type ctx struct {
 
 	iota int64
 
-	pushNamed bool
+	breakOk       bool
+	continueOk    bool
+	fallthroughOk bool
+	pushNamed     bool
 }
 
 func newCtx(checker PackageChecker, pkg *Package) *ctx {
@@ -108,6 +121,25 @@ func newCtx(checker PackageChecker, pkg *Package) *ctx {
 			pkg:      pkg,
 		},
 	}
+}
+
+func (c *ctx) inFor() *ctx {
+	r := *c
+	r.breakOk = true
+	r.continueOk = true
+	return &r
+}
+
+func (c *ctx) setFallthrough() *ctx {
+	r := *c
+	r.fallthroughOk = true
+	return &r
+}
+
+func (c *ctx) setBreakOk() *ctx {
+	r := *c
+	r.breakOk = true
+	return &r
 }
 
 func (c *ctx) setIota(n int64) *ctx {
@@ -159,7 +191,7 @@ func (c *ctx) symbolResolver(scope *Scope, pkg *Package, ident Token, passFileSc
 	fileScope := noScope
 	if passFileScope {
 		file := pkg.sourceFiles[ident.source]
-		fileScope = &file.Scope
+		fileScope = file.Scope
 	}
 	var err error
 	if r, err = c.checker.SymbolResolver(scope, fileScope, pkg, ident); err != nil {
@@ -225,6 +257,12 @@ func (c *ctx) checkType(n Node) Type {
 			return y.Type()
 		case *PredefinedType:
 			return y
+		case *FunctionTypeNode:
+			return y.Type()
+		case *Constant:
+			return y.Type()
+		case *InterfaceTypeNode:
+			return y.Type()
 		default:
 			c.err(n, errorf("TODO %T", y))
 			return Invalid
@@ -348,17 +386,30 @@ func (n *SourceFile) collectTLDs(c *ctx) {
 				}
 			}
 		case *VarDecl:
-			for _, vs := range x.VarSpecs {
-				for i, id := range vs.IdentifierList {
-					var expr Expression
-					if i < len(vs.ExprList) {
-						expr = vs.ExprList[i].Expr
-					}
-					c.pkg.Scope.add(c, id.Ident.Src(), 0, &Variable{Expr: expr, Ident: id.Ident, TypeNode: vs.Type})
-				}
-			}
+			c.varDecl(x)
 		default:
 			c.err(tld, "unexpected top level declaration node type: %T", x)
+		}
+	}
+}
+
+func (c *ctx) varDecl(n *VarDecl) {
+	s := n.LexicalScope()
+	for _, vs := range n.VarSpecs {
+		for i, id := range vs.IdentifierList {
+			var expr Expression
+			if i < len(vs.ExprList) {
+				expr = vs.ExprList[i].Expr
+			}
+			// The scope of a constant or variable identifier declared inside a function
+			// begins at the end of the ConstSpec or VarSpec (ShortVarDecl for short
+			// variable declarations) and ends at the end of the innermost containing
+			// block.
+			visibleFrom := vs.Semicolon.Offset()
+			if s.IsPackage() {
+				visibleFrom = 0
+			}
+			s.add(c, id.Ident.Src(), visibleFrom, &Variable{Expr: expr, Ident: id.Ident, TypeNode: vs.Type})
 		}
 	}
 }
@@ -399,8 +450,13 @@ func NewPackage(importPath string, files []*SourceFile) (r *Package, err error) 
 	sourceFiles := map[*source]*SourceFile{}
 	var ps *Scope
 	for _, file := range files {
-		if ps == nil {
+		switch {
+		case ps == nil:
 			ps = file.packageScope
+		default:
+			if ps != file.packageScope {
+				return nil, fmt.Errorf("NewPackage: source file were created using different configurations")
+			}
 		}
 		sourceFiles[file.PackageClause.Package.source] = file
 	}
@@ -494,6 +550,8 @@ func (n *Arguments) check(c *ctx) Node {
 		r := Expression(&Conversion{ConvertType: x, LParen: n.LParen, Expr: n.ExprList[0].Expr, Comma: n.ExprList[0].Comma, RParen: n.RParen})
 		c.checkExpr(&r)
 		return r
+	case *Selector:
+		resolvedTo = x
 	default:
 		c.err(n, errorf("TODO %T", x))
 		return n
@@ -514,43 +572,20 @@ func (n *Arguments) check(c *ctx) Node {
 		c.checkExpr(&r)
 		return r
 	case *FunctionDecl:
-		ft, ok := x.Type().(*FunctionType)
-		if !ok {
-			return n
+		return n.checkFn(c, x.Type().(*FunctionType), resolvedIn, x)
+	case *Variable:
+		if ft, ok := x.Type().(*FunctionType); ok {
+			return n.checkFn(c, ft, nil, nil)
 		}
 
-		switch len(ft.Result.Types) {
-		case 1:
-			n.typ = ft.Result.Types[0]
-		default:
-			n.typ = ft.Result
-		}
-		if len(ft.Parameters.Types) != len(n.ExprList) {
-			c.err(n, errorf("TODO %T", n))
-			return n
+		c.err(n, errorf("TODO %T", x))
+		return n
+	case *Selector:
+		if ft, ok := x.Type().(*FunctionType); ok {
+			return n.checkFn(c, ft, nil, nil)
 		}
 
-		if resolvedIn != nil {
-			switch resolvedIn.ImportPath {
-			case "unsafe":
-				switch x.FunctionName.Src() {
-				case "Alignof", "Offsetof", "Sizeof":
-					return n
-				}
-			}
-		}
-
-		for i, exprItem := range n.ExprList {
-			_, et := c.checkExpr(&exprItem.Expr)
-			et = c.singleType(exprItem.Expr, et)
-			pt := ft.Parameters.Types[i]
-			if !c.assignable(exprItem, et, pt) {
-				c.err(n, errorf("TODO %T", n))
-				continue
-			}
-
-			c.convertValue(exprItem, exprItem.Expr.Value(), pt)
-		}
+		c.err(n, errorf("TODO %T", x))
 		return n
 	default:
 		c.err(n, errorf("TODO %T", x))
@@ -558,8 +593,67 @@ func (n *Arguments) check(c *ctx) Node {
 	}
 }
 
-func (c *ctx) assignable(n Node, expr, to Type) bool {
-	if expr.Kind() == to.Kind() {
+func (n *Arguments) checkFn(c *ctx, ft *FunctionType, resolvedIn *Package, fd *FunctionDecl) Node {
+	switch len(ft.Result.Types) {
+	case 1:
+		n.typ = ft.Result.Types[0]
+	default:
+		n.typ = ft.Result
+	}
+	var variadic Type
+	if len(ft.Parameters.Types) != len(n.ExprList) {
+		if !ft.IsVariadic || len(n.ExprList) < len(ft.Parameters.Types) {
+			c.err(n, errorf("TODO %T", n))
+			return n
+		}
+
+		variadic = ft.Parameters.Types[len(ft.Parameters.Types)-1]
+	}
+
+	for i := range n.ExprList {
+		c.checkExpr(&n.ExprList[i].Expr)
+	}
+
+	if resolvedIn != nil && fd != nil {
+		switch resolvedIn.ImportPath {
+		case "unsafe":
+			switch fd.FunctionName.Src() {
+			case "Alignof", "Offsetof", "Sizeof":
+				return n
+			case "Add":
+				if !c.isAssignable(n.ExprList[0].Expr, n.ExprList[0].Expr.Type(), ft.Parameters.Types[0]) {
+					c.err(n, errorf("TODO %T", n))
+				}
+				if !isAnyIntegerType(n.ExprList[1].Expr.Type()) {
+					c.err(n, errorf("TODO %T", n))
+				}
+				return n
+			}
+		}
+	}
+
+	for i, exprItem := range n.ExprList {
+		et := c.singleType(exprItem.Expr, exprItem.Expr.Type())
+		pt := variadic
+		if i < len(ft.Parameters.Types) {
+			pt = ft.Parameters.Types[i]
+		}
+		if !c.isAssignable(exprItem, et, pt) {
+			c.err(n, errorf("TODO %T", n))
+			continue
+		}
+
+		c.convertValue(exprItem, exprItem.Expr.Value(), pt)
+	}
+	return n
+}
+
+func (c *ctx) isAssignable(n Node, expr, to Type) bool {
+	if expr == Invalid || to == Invalid {
+		return false
+	}
+
+	if expr == to || c.isIdentical(n, expr, to) {
 		return true
 	}
 
@@ -577,10 +671,74 @@ func (c *ctx) assignable(n Node, expr, to Type) bool {
 		default:
 			return false
 		}
-	default:
+	}
+
+	switch {
+	case expr.Kind() == to.Kind():
+		switch expr.(type) {
+		case PredefinedType:
+			return true
+		}
+	case to.Kind() == Interface:
+		dst := to.(*InterfaceType)
+		if len(dst.Elems) == 0 {
+			return true
+		}
+
 		c.err(n, errorf("TODO %s -> %s", expr, to))
+	}
+
+	c.err(n, errorf("TODO %s -> %s", expr, to))
+	return false
+}
+
+func (c *ctx) isIdentical(n Node, t, u Type) bool {
+	if t.Kind() != u.Kind() {
 		return false
 	}
+
+	if t == u {
+		return true
+	}
+
+	switch x := t.(type) {
+	case *ArrayType:
+		switch y := u.(type) {
+		case *ArrayType:
+			return x.Len == y.Len && c.isIdentical(n, x.Elem, y.Elem)
+		}
+	case *FunctionType:
+		switch y := u.(type) {
+		case *FunctionType:
+			in, out := x.Parameters.Types, x.Result.Types
+			in2, out2 := y.Parameters.Types, y.Result.Types
+			if len(in) != len(in2) || len(out) != len(out2) {
+				return false
+			}
+
+			for i, v := range in {
+				if !c.isIdentical(n, v, in2[i]) {
+					return false
+				}
+			}
+
+			for i, v := range out {
+				if !c.isIdentical(n, v, out2[i]) {
+					return false
+				}
+			}
+
+			return true
+		}
+	case *PointerType:
+		switch y := u.(type) {
+		case *PointerType:
+			return c.isIdentical(n, x.Elem, y.Elem)
+		}
+	}
+
+	c.err(n, errorf("TODO %s -> %s", t, u))
+	return false
 }
 
 func (n *BasicLit) check(c *ctx) Node {
@@ -611,10 +769,10 @@ func (n *BinaryExpr) check(c *ctx) Node {
 		case isIntegerType(b):
 			// ok
 		case y.Kind() != constant.Unknown:
-			c.err(n, errorf("TODO %v", n.Op.Ch.str()))
+			c.err(n.Op, errorf("TODO %v", n.Op.Ch.str()))
 			return n
 		default:
-			c.err(n, errorf("TODO %v", n.Op.Ch.str()))
+			c.err(n.Op, errorf("TODO %v", n.Op.Ch.str()))
 			return n
 		}
 
@@ -623,19 +781,48 @@ func (n *BinaryExpr) check(c *ctx) Node {
 		// the shift expression were replaced by its left operand alone.
 		switch {
 		case y.Kind() == constant.Unknown && x.Kind() != constant.Unknown:
-			c.err(n, errorf("TODO %v", n.Op.Ch.str()))
+			c.err(n.Op, errorf("TODO %v", n.Op.Ch.str()))
 			return n
 		default:
 			n.typ = a
 			n.val = constant.BinaryOp(x, xlat[n.Op.Ch], y)
 		}
 	case LOR, LAND:
-		c.err(n, errorf("TODO %v", n.Op.Ch.str()))
-	case EQ, NE, '<', LE, '>', GE:
-		c.err(n, errorf("TODO %v", n.Op.Ch.str()))
+		if !isAnyBoolType(a) || !isAnyBoolType(b) {
+			c.err(n.Op, errorf("TODO %v %v", a, b))
+			break
+		}
+
+		n.typ = UntypedBoolType
+		if a.Kind() == Bool || b.Kind() == Bool {
+			n.typ = PredefinedType(Bool)
+		}
+		if x.Kind() != constant.Unknown && y.Kind() != constant.Unknown {
+			n.val = constant.BinaryOp(x, xlat[n.Op.Ch], y)
+		}
+	case EQ, NE:
+		if !c.isComparable(n, a, b) {
+			c.err(n.Op, errorf("TODO %v", n.Op.Ch.str()))
+			break
+		}
+
+		n.typ = UntypedBoolType
+		if x.Kind() != constant.Unknown && y.Kind() != constant.Unknown {
+			n.val = constant.MakeBool(constant.Compare(x, xlat[n.Op.Ch], y))
+		}
+	case '<', LE, '>', GE:
+		if !c.isOrdered(n, a, b) {
+			c.err(n.Op, errorf("TODO %v", n.Op.Ch.str()))
+			break
+		}
+
+		n.typ = UntypedBoolType
+		if x.Kind() != constant.Unknown && y.Kind() != constant.Unknown {
+			n.val = constant.MakeBool(constant.Compare(x, xlat[n.Op.Ch], y))
+		}
 	default:
-		if !isArithmeticType(a) && !isUntypedArithmeticType(a) || !isArithmeticType(b) && !isUntypedArithmeticType(b) {
-			c.err(n, errorf("TODO %v %v", a, b))
+		if !isAnyArithmeticType(a) || !isAnyArithmeticType(b) {
+			c.err(n.Op, errorf("TODO %v %v", a, b))
 			break
 		}
 
@@ -648,7 +835,7 @@ func (n *BinaryExpr) check(c *ctx) Node {
 		switch {
 		case x.Kind() == constant.Unknown && y.Kind() == constant.Unknown:
 			if a.Kind() != b.Kind() {
-				c.err(n, errorf("TODO %v", n.Op.Ch.str()))
+				c.err(n.Op, errorf("TODO %v", n.Op.Ch.str()))
 				break
 			}
 
@@ -669,11 +856,77 @@ func (n *BinaryExpr) check(c *ctx) Node {
 			case constant.Complex:
 				n.typ = UntypedComplexType
 			default:
-				c.err(n, errorf("TODO %v", n.Op.Ch.str()))
+				c.err(n.Op, errorf("TODO %v", n.Op.Ch.str()))
 			}
 		}
 	}
 	return n
+}
+
+// - Boolean values are comparable. Two boolean values are equal if they are
+// either both true or both false.
+//
+// - Integer values are comparable and ordered, in the usual way.
+//
+// - Floating-point values are comparable and ordered, as defined by the
+// IEEE-754 standard.
+//
+// - Complex values are comparable. Two complex values u and v are equal if
+// both real(u) == real(v) and imag(u) == imag(v).
+//
+// - String values are comparable and ordered, lexically byte-wise.
+//
+// - Pointer values are comparable. Two pointer values are equal if they point
+// to the same variable or if both have value nil. Pointers to distinct
+// zero-size variables may or may not be equal.
+//
+// - Channel values are comparable. Two channel values are equal if they were
+// created by the same call to make or if both have value nil.
+//
+// - Interface values are comparable. Two interface values are equal if they
+// have identical dynamic types and equal dynamic values or if both have value
+// nil.
+//
+// - A value x of non-interface type X and a value t of interface type T are
+// comparable when values of type X are comparable and X implements T. They are
+// equal if t's dynamic type is identical to X and t's dynamic value is equal
+// to x.
+//
+// - Struct values are comparable if all their fields are comparable. Two
+// struct values are equal if their corresponding non-blank fields are equal.
+//
+// - Array values are comparable if values of the array element type are
+// comparable. Two array values are equal if their corresponding elements are
+// equal.
+
+func (c *ctx) isComparable(n Node, t, u Type) bool {
+	if t.Kind() == InvalidKind || u.Kind() == InvalidKind {
+		return false
+	}
+
+	if isAnyArithmeticType(t) && isAnyArithmeticType(u) {
+		return true
+	}
+
+	c.err(n, errorf("TODO %v %v", t, u))
+	return false
+}
+
+func (c *ctx) isOrdered(n Node, t, u Type) bool {
+	if t.Kind() == InvalidKind || u.Kind() == InvalidKind {
+		return false
+	}
+
+	if isAnyComplexType(t) || isAnyComplexType(u) {
+		return false
+	}
+
+	if isAnyArithmeticType(t) && isAnyArithmeticType(u) {
+		return true
+	}
+
+	c.err(n, errorf("TODO %v %v", t, u))
+	return false
 }
 
 func (n *CompositeLit) check(c *ctx) Node {
@@ -758,6 +1011,7 @@ func (n *Ident) check(c *ctx) Node {
 
 	defer n.exit()
 
+	// trc("%v: %q lexical scope %p", n.Position(), n.Token.Src(), n.LexicalScope())
 	switch n.resolvedTo = c.symbolResolver(n.lexicalScope, c.pkg, n.Token, true); x := n.ResolvedTo().(type) {
 	case Type:
 		n.typ = x
@@ -768,6 +1022,8 @@ func (n *Ident) check(c *ctx) Node {
 	case *FunctionDecl:
 		n.typ = c.checkType(x)
 	case *Variable:
+		n.typ = c.checkType(x)
+	case *Constant:
 		n.typ = c.checkType(x)
 	default:
 		c.err(n, errorf("TODO %T", x))
@@ -782,10 +1038,47 @@ func (n *Index) check(c *ctx) Node {
 
 	defer n.exit()
 
-	c.err(n, errorf("TODO %T", n))
-	return n
+	_, pt := c.checkExpr(&n.PrimaryExpr)
+	v, xt := c.checkExpr(&n.Expr)
+	switch x := pt.(type) {
+	case *PointerType:
+		if x.Elem.Kind() == Array {
+			return n.checkArray(c, x.Elem.(*ArrayType), v, xt)
+		}
 
-	//TODO c.err(n, errorf("TODO %T", n))
+		c.err(n, errorf("TODO %T", x))
+	case *ArrayType:
+		return n.checkArray(c, x, v, xt)
+	default:
+		c.err(n, errorf("TODO %T", x))
+	}
+	return n
+}
+
+func (n *Index) checkArray(c *ctx, at *ArrayType, xv constant.Value, xt Type) Node {
+	n.typ = at.Elem
+	if xv.Kind() == constant.Unknown {
+		if !isAnyIntegerType(xt) {
+			c.err(n, errorf("TODO %T", n))
+		}
+		return n
+	}
+
+	if !isAnyArithmeticType(xt) {
+		c.err(n, errorf("TODO %T", xv))
+		return n
+	}
+
+	u64, ok := constant.Uint64Val(xv)
+	if !ok {
+		c.err(n, errorf("TODO %T", xv))
+		return n
+	}
+
+	if u64 >= uint64(at.Len) {
+		c.err(n, errorf("TODO %T", xv))
+	}
+	return n
 }
 
 func (n *MethodExpr) check(c *ctx) Node {
@@ -957,7 +1250,8 @@ func (n *UnaryExpr) check(c *ctx) Node {
 		*BasicLit,
 		*Conversion,
 		*ParenExpr,
-		*Selector:
+		*Selector,
+		*UnaryExpr:
 
 		// ok
 	default:
@@ -968,10 +1262,10 @@ func (n *UnaryExpr) check(c *ctx) Node {
 	switch x := resolvedTo.(type) {
 	case nil:
 		// ok
-	case Type:
+	case Type, *AliasDecl:
 		switch n.Op.Ch {
 		case '*':
-			r := &PointerTypeNode{Star: n.Op, BaseType: x}
+			r := &PointerTypeNode{Star: n.Op, BaseType: n.Expr}
 			c.checkType(r)
 			return r
 		default:
@@ -997,7 +1291,7 @@ func (n *UnaryExpr) check(c *ctx) Node {
 	case '&':
 		n.typ = newPointer(c.pkg, t)
 	case '-', '+':
-		if !isArithmeticType(t) && !isUntypedArithmeticType(t) {
+		if !isAnyArithmeticType(t) {
 			c.err(n, errorf("TODO %s %v", n.Op.Ch.str(), t))
 			break
 		}
@@ -1013,6 +1307,22 @@ func (n *UnaryExpr) check(c *ctx) Node {
 		}
 
 		n.val = w
+	case '^':
+		if !isAnyIntegerType(t) {
+			c.err(n, errorf("TODO %T", n))
+		}
+
+		if v.Kind() == constant.Unknown {
+			break
+		}
+
+		w := constant.UnaryOp(xlat[n.Op.Ch], v, 0)
+		if w.Kind() == constant.Unknown {
+			c.err(n, errorf("TODO %s", n.Op.Ch.str()))
+			break
+		}
+
+		n.val = w
 	case '*':
 		switch x := n.Type().(type) {
 		case *PointerType:
@@ -1020,6 +1330,22 @@ func (n *UnaryExpr) check(c *ctx) Node {
 		default:
 			c.err(n, errorf("TODO %T", x))
 		}
+	case '!':
+		if !isAnyBoolType(t) {
+			c.err(n, errorf("TODO %T", n))
+		}
+
+		if v.Kind() == constant.Unknown {
+			break
+		}
+
+		w := constant.UnaryOp(xlat[n.Op.Ch], v, 0)
+		if w.Kind() == constant.Unknown {
+			c.err(n, errorf("TODO %s", n.Op.Ch.str()))
+			break
+		}
+
+		n.val = w
 	default:
 		c.err(n, errorf("TODO %T %s", n, n.Op.Ch.str()))
 	}
@@ -1059,7 +1385,11 @@ func (n *Signature) check(c *ctx) Node {
 
 	defer n.exit()
 
-	r := &FunctionType{Parameters: tuple(c, n.Parameters.ParameterList), Result: &TupleType{}}
+	in := n.Parameters.ParameterList
+	r := &FunctionType{Parameters: tuple(c, in), Result: &TupleType{}}
+	if len(in) != 0 {
+		r.IsVariadic = in[len(in)-1].Ellipsis.IsValid()
+	}
 	switch x := n.Result.(type) {
 	case *TypeNameNode:
 		r.Result.Types = append(r.Result.Types, c.checkType(x))
@@ -1089,8 +1419,21 @@ func (n *FunctionDecl) check(c *ctx) Node {
 
 	defer n.exit()
 
-	ft, ok := c.checkType(n.Signature).(*FunctionType)
-	if ok {
+	if ft, ok := c.checkType(n.Signature).(*FunctionType); ok {
+		ft.node = n
+		n.typ = ft
+	}
+	return n
+}
+
+func (n *FunctionTypeNode) check(c *ctx) Node {
+	if !n.enter(c, n) {
+		return n
+	}
+
+	defer n.exit()
+
+	if ft, ok := c.checkType(n.Signature).(*FunctionType); ok {
 		ft.node = n
 		n.typ = ft
 	}
@@ -1103,7 +1446,8 @@ func (n *FunctionDecl) checkBody(c *ctx) {
 		return
 	}
 
-	s := &body.Scope
+	s := body.Scope
+	// trc("%v: function %q body scope %p(%v), parent %p(%v)", n.Position(), n.FunctionName.Src(), s, s.IsPackage(), s.Parent, s.Parent != nil && s.Parent.IsPackage())
 	vis := body.LBrace.Offset()
 	ft, ok := n.Type().(*FunctionType)
 	if !ok {
@@ -1114,7 +1458,7 @@ func (n *FunctionDecl) checkBody(c *ctx) {
 	for _, v := range n.Signature.Parameters.ParameterList {
 		for _, w := range v.IdentifierList {
 			id := w.Ident
-			v := &Variable{Ident: id}
+			v := &Variable{Ident: id, isParamater: true}
 			v.typ = types[0]
 			types = types[1:]
 			v.guard = checked
@@ -1127,7 +1471,7 @@ func (n *FunctionDecl) checkBody(c *ctx) {
 		for _, v := range x.ParameterList {
 			for _, w := range v.IdentifierList {
 				id := w.Ident
-				v := &Variable{Ident: id}
+				v := &Variable{Ident: id, isParamater: true}
 				v.typ = types[0]
 				types = types[1:]
 				v.guard = checked
@@ -1139,6 +1483,7 @@ func (n *FunctionDecl) checkBody(c *ctx) {
 	default:
 		c.err(n, errorf("TODO %T", x))
 	}
+	//body.check(c)
 }
 
 func (n *MethodDecl) check(c *ctx) Node {
@@ -1153,3 +1498,262 @@ func (n *MethodDecl) check(c *ctx) Node {
 
 	//TODO c.err(n, errorf("TODO %T", n))
 }
+
+func (n *Block) check(c *ctx) {
+	for _, v := range n.StatementList {
+		c.checkStatement(v)
+	}
+}
+
+func (c *ctx) checkStatement(n Node) {
+	if n == nil {
+		return
+	}
+
+	switch x := n.(type) {
+	case *ExpressionStmt:
+		x.check(c)
+	case *ReturnStmt:
+		x.check(c)
+	case *IfStmt:
+		x.check(c)
+	case *VarDecl:
+		c.varDecl(x)
+	case *Assignment:
+		x.check(c)
+	case *ShortVarDecl:
+		x.check(c)
+	case *ForStmt:
+		x.check(c)
+	case *IncDecStmt:
+		x.check(c)
+	case *DeferStmt:
+		x.check(c)
+	case *BreakStmt:
+		x.check(c)
+	case *ContinueStmt:
+		x.check(c)
+	case *Block:
+		x.check(c)
+	case *ExpressionSwitchStmt:
+		x.check(c)
+	case *FallthroughStmt:
+		x.check(c)
+	default:
+		c.err(n, errorf("TODO %T", x))
+	}
+}
+
+func (n *ExpressionSwitchStmt) check(c *ctx) {
+	c.checkStatement(n.SimpleStmt)
+	t := Type(PredefinedType(Bool))
+	if n.Expr != nil {
+		_, t = c.checkExpr(&n.Expr)
+	}
+	c = c.setBreakOk()
+	for _, v := range n.ExprCaseClauses {
+		v.check(c, t)
+	}
+}
+
+func (n *ExprCaseClause) check(c *ctx, t Type) {
+	n.ExprSwitchCase.check(c, t)
+	c = c.setFallthrough()
+	for _, v := range n.StatementList {
+		c.checkStatement(v)
+	}
+}
+
+func (n *ExprSwitchCase) check(c *ctx, t Type) {
+	switch n.CaseOrDefault.Ch {
+	case CASE:
+		for i := range n.ExprList {
+			_, et := c.checkExpr(&n.ExprList[i].Expr)
+			if !c.isAssignable(n.ExprList[i].Expr, et, t) {
+				c.err(n, errorf("TODO %T", n))
+			}
+		}
+	case DEFAULT:
+		// nop
+	default:
+		c.err(n, errorf("TODO %T", n))
+	}
+}
+
+func (n *FallthroughStmt) check(c *ctx) {
+	if !c.fallthroughOk {
+		c.err(n, errorf("TODO %T", n))
+		return
+	}
+}
+
+func (n *ContinueStmt) check(c *ctx) {
+	if !c.continueOk {
+		c.err(n, errorf("TODO %T", n))
+		return
+	}
+
+	if n.Label.IsValid() {
+		c.err(n, errorf("TODO %T", n))
+	}
+}
+
+func (n *BreakStmt) check(c *ctx) {
+	if !c.breakOk {
+		c.err(n, errorf("TODO %T", n))
+		return
+	}
+
+	if n.Label.IsValid() {
+		c.err(n, errorf("TODO %T", n))
+	}
+}
+
+func (n *DeferStmt) check(c *ctx) {
+	c.checkExpr(&n.Expr)
+	// The expression must be a function or method call; it cannot be
+	// parenthesized.
+	switch x := n.Expr.(type) {
+	case *Arguments:
+		// ok
+	default:
+		c.err(n, errorf("TODO %T", x))
+	}
+}
+
+func (n *IncDecStmt) check(c *ctx) {
+	if _, t := c.checkExpr(&n.Expr); !isAnyArithmeticType(t) {
+		c.err(n, errorf("TODO %T", n))
+	}
+}
+
+func (n *ForStmt) check(c *ctx) {
+	switch {
+	case n.ForClause != nil:
+		fc := n.ForClause
+		c.checkStatement(fc.InitStmt)
+		if fc.Condition != nil {
+			if _, t := c.checkExpr(&fc.Condition); !isAnyBoolType(t) {
+				c.err(n, errorf("TODO %T", n))
+			}
+		}
+		c.checkStatement(fc.PostStmt)
+	case n.RangeClause != nil:
+		c.err(n.RangeClause, errorf("TODO %T", n))
+	}
+	n.Block.check(c.inFor())
+}
+
+func (n *ShortVarDecl) check(c *ctx) {
+	for i := range n.ExprList {
+		c.checkExpr(&n.ExprList[i].Expr)
+	}
+	if g, e := len(n.IdentifierList), len(n.ExprList); g != e {
+		c.err(n, errorf("TODO %T", n))
+		return
+	}
+
+	visibleFrom := n.Semicolon.Offset()
+	s := n.LexicalScope()
+	for i, v := range n.IdentifierList {
+		id := v.Ident
+		expr := n.ExprList[i].Expr
+		switch et := expr.Type(); et.Kind() {
+		case InvalidKind:
+		default:
+			v := &Variable{Expr: expr, Ident: id, typer: newTyper(c.defaultType(et))}
+			s.add(c, id.Src(), visibleFrom, v)
+		}
+	}
+}
+
+func (n *Assignment) check(c *ctx) {
+	var skip []bool
+	for i, v := range n.LExprList {
+		if x, ok := v.Expr.(*Ident); ok && x.Token.Src() == "_" {
+			x.guard = checked
+			skip = append(skip, true)
+			continue
+		}
+
+		c.checkExpr(&n.LExprList[i].Expr)
+		skip = append(skip, false)
+	}
+	for i := range n.RExprList {
+		c.checkExpr(&n.RExprList[i].Expr)
+	}
+	if g, e := len(n.LExprList), len(n.RExprList); g != e {
+		c.err(n, errorf("TODO %T", n))
+		return
+	}
+
+	for i, v := range n.LExprList {
+		if skip[i] {
+			continue
+		}
+
+		expr := n.RExprList[i].Expr
+		if !c.isAssignable(expr, expr.Type(), v.Expr.Type()) {
+			c.err(expr, errorf("TODO %v -> %v", expr.Type(), v.Expr.Type()))
+		}
+	}
+}
+
+func (n *IfStmt) check(c *ctx) {
+	c.checkStatement(n.SimpleStmt)
+	if _, t := c.checkExpr(&n.Expr); !isAnyBoolType(t) {
+		c.err(n, errorf("TODO %T", n))
+	}
+	n.Block.check(c)
+	switch x := n.ElsePart.(type) {
+	case nil:
+		// nop
+	case *IfStmt:
+		x.check(c)
+	case *Block:
+		x.check(c)
+	default:
+		c.err(n, errorf("TODO %T", x))
+	}
+}
+
+func (n *ReturnStmt) check(c *ctx) {
+	if len(n.ExprList) == 0 {
+		return
+	}
+
+	for i := range n.ExprList {
+		c.checkExpr(&n.ExprList[i].Expr)
+	}
+	var ft0 Type
+	switch x := n.container.(type) {
+	case *FunctionDecl:
+		ft0 = x.Signature.Type()
+	case *MethodDecl:
+		ft0 = x.Signature.Type()
+	case *FunctionLit:
+		ft0 = x.Signature.Type()
+	}
+	ft, ok := ft0.(*FunctionType)
+	if !ok {
+		return
+	}
+
+	if g, e := len(n.ExprList), len(ft.Result.Types); g != e {
+		c.err(n.ExprList[0].Expr, "expected %d expression, got %d", e, g)
+		return
+	}
+
+	for i, v := range n.ExprList {
+		et := v.Expr.Type()
+		if et == Invalid {
+			continue
+		}
+
+		if g, e := et, ft.Result.Types[i]; !c.isAssignable(v.Expr, g, e) {
+			c.err(n, errorf("TODO %T", n))
+		}
+	}
+}
+
+func (n *ExpressionStmt) check(c *ctx) { n.Expr.check(c) }

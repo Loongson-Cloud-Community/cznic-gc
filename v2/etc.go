@@ -235,6 +235,8 @@ func isIntegerType(t Type) bool {
 	}
 }
 
+func isAnyIntegerType(t Type) bool { return isIntegerType(t) || t.Kind() == UntypedInt }
+
 func isFloatType(t Type) bool {
 	switch t.Kind() {
 	case Float32, Float64:
@@ -243,6 +245,8 @@ func isFloatType(t Type) bool {
 		return false
 	}
 }
+
+func isAnyFloatType(t Type) bool { return isFloatType(t) || t.Kind() == UntypedFloat }
 
 func isComplexType(t Type) bool {
 	switch t.Kind() {
@@ -253,6 +257,8 @@ func isComplexType(t Type) bool {
 	}
 }
 
+func isAnyComplexType(t Type) bool { return isComplexType(t) || t.Kind() == UntypedComplex }
+
 func isArithmeticType(t Type) bool {
 	return isIntegerType(t) || isFloatType(t) || isComplexType(t)
 }
@@ -260,6 +266,26 @@ func isArithmeticType(t Type) bool {
 func isUntypedArithmeticType(t Type) bool {
 	switch t.Kind() {
 	case UntypedInt, UntypedFloat, UntypedComplex:
+		return true
+	default:
+		return false
+	}
+}
+
+func isAnyArithmeticType(t Type) bool { return isArithmeticType(t) || isUntypedArithmeticType(t) }
+
+func isAnyStringType(t Type) bool {
+	switch t.Kind() {
+	case String, UntypedString:
+		return true
+	default:
+		return false
+	}
+}
+
+func isAnyBoolType(t Type) bool {
+	switch t.Kind() {
+	case Bool, UntypedBool:
 		return true
 	default:
 		return false
