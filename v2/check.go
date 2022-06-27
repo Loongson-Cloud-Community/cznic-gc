@@ -28,6 +28,7 @@ var (
 			"int64":      {Node: PredefinedType(Int64)},
 			"int8":       {Node: PredefinedType(Int8)},
 			"nil":        {Node: PredefinedType(UntypedNil)},
+			"panic":      {Node: newPredefinedFunction([]Type{&InterfaceType{}}, nil)},
 			"rune":       {Node: PredefinedType(Int32)},
 			"string":     {Node: PredefinedType(String)},
 			"true":       {Node: newPredefineConstant(UntypedBoolType, constant.MakeBool(true))},
@@ -42,6 +43,13 @@ var (
 
 	noScope = &Scope{}
 )
+
+func newPredefinedFunction(in, out []Type) (r *FunctionDecl) {
+	r = &FunctionDecl{}
+	r.typ = &FunctionType{Parameters: &TupleType{Types: in}, Result: &TupleType{Types: out}}
+	r.guard = checked
+	return r
+}
 
 func newPredefineConstant(t Type, v constant.Value) (r *Constant) {
 	r = &Constant{}
@@ -603,6 +611,7 @@ func (n *Arguments) checkFn(c *ctx, ft *FunctionType, resolvedIn *Package, fd *F
 	var variadic Type
 	if len(ft.Parameters.Types) != len(n.ExprList) {
 		if !ft.IsVariadic || len(n.ExprList) < len(ft.Parameters.Types) {
+			// trc("%v: %v %v %v '%s'", n.LParen.Position(), ft.IsVariadic, len(n.ExprList), len(ft.Parameters.Types), n.Source(false))
 			c.err(n, errorf("TODO %T", n))
 			return n
 		}
@@ -639,7 +648,7 @@ func (n *Arguments) checkFn(c *ctx, ft *FunctionType, resolvedIn *Package, fd *F
 			pt = ft.Parameters.Types[i]
 		}
 		if !c.isAssignable(exprItem, et, pt) {
-			c.err(n, errorf("TODO %T", n))
+			c.err(exprItem.Expr, errorf("TODO %v -> %v", et, pt))
 			continue
 		}
 
@@ -653,7 +662,9 @@ func (c *ctx) isAssignable(n Node, expr, to Type) bool {
 		return false
 	}
 
-	if expr == to || c.isIdentical(n, expr, to) {
+	if expr == to ||
+		c.isIdentical(n, expr, to) ||
+		to.Kind() == Interface && len(to.(*InterfaceType).Elems) == 0 {
 		return true
 	}
 
@@ -679,13 +690,6 @@ func (c *ctx) isAssignable(n Node, expr, to Type) bool {
 		case PredefinedType:
 			return true
 		}
-	case to.Kind() == Interface:
-		dst := to.(*InterfaceType)
-		if len(dst.Elems) == 0 {
-			return true
-		}
-
-		c.err(n, errorf("TODO %s -> %s", expr, to))
 	}
 
 	c.err(n, errorf("TODO %s -> %s", expr, to))
@@ -1157,6 +1161,9 @@ func (n *QualifiedIdent) check(c *ctx) Node {
 		n.typ = c.checkType(x)
 	case *AliasDecl:
 		n.typ = c.checkType(x)
+	case *Variable:
+		x.check(c)
+		n.typ = x.Type()
 	default:
 		c.err(n, errorf("TODO %T", x))
 	}
@@ -1248,7 +1255,9 @@ func (n *UnaryExpr) check(c *ctx) Node {
 		PredefinedType,
 		*Arguments,
 		*BasicLit,
+		*CompositeLit,
 		*Conversion,
+		*Index,
 		*ParenExpr,
 		*Selector,
 		*UnaryExpr:
@@ -1483,7 +1492,7 @@ func (n *FunctionDecl) checkBody(c *ctx) {
 	default:
 		c.err(n, errorf("TODO %T", x))
 	}
-	//body.check(c)
+	body.check(c)
 }
 
 func (n *MethodDecl) check(c *ctx) Node {
@@ -1539,6 +1548,11 @@ func (c *ctx) checkStatement(n Node) {
 		x.check(c)
 	case *FallthroughStmt:
 		x.check(c)
+	case *GotoStmt:
+		//TODO x.check(c)
+	case *LabeledStmt:
+		//TODO
+		c.checkStatement(x.Statement)
 	default:
 		c.err(n, errorf("TODO %T", x))
 	}

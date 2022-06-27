@@ -2355,7 +2355,19 @@ func (p *parser) exprOrType() (r Node) {
 		case typeNode:
 			return &PointerTypeNode{Star: star, BaseType: x}
 		default:
-			return p.expression(&UnaryExpr{Op: star, Expr: x.(Expression)})
+			e0 := x.(Expression)
+			e := e0
+			ep := &e0
+			for {
+				switch y := e.(type) {
+				case *BinaryExpr:
+					e = y.A
+					ep = &y.A
+				default:
+					*ep = &UnaryExpr{Op: star, Expr: y}
+					return e0
+				}
+			}
 		}
 	case ARROW:
 		arrow := p.shift()

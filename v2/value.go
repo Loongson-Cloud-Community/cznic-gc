@@ -261,11 +261,18 @@ func (c *ctx) convertValue(n Node, v constant.Value, to Type) (r constant.Value)
 		return w
 	case Float32, Float64:
 		return constant.ToFloat(v)
-	default:
-		c.err(n, errorf("TODO %v %v -> %v", v, v.Kind(), to.Kind()))
-		return unknown
+	case Interface:
+		to := to.(*InterfaceType)
+		if len(to.Elems) == 0 {
+			return unknown
+		}
+	case Bool:
+		if v.Kind() == constant.Bool {
+			return v
+		}
 	}
-	panic(todo(""))
+	c.err(n, errorf("TODO %v %v -> %v", v, v.Kind(), to.Kind()))
+	return unknown
 }
 
 func (c *ctx) convertType(n Node, from, to Type) {
