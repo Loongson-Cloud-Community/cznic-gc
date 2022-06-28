@@ -2561,7 +2561,7 @@ func (p *parser) keyedElement() (r *KeyedElement) {
 	ke := p.keyOrElement()
 	switch p.ch() {
 	case ':':
-		return &KeyedElement{Key: ke, Colon: p.shift(), Element: p.keyedElement()}
+		return &KeyedElement{Key: ke, Colon: p.shift(), Element: p.keyOrElement()}
 	default:
 		return &KeyedElement{Element: ke}
 	}

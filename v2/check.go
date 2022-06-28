@@ -711,6 +711,22 @@ func (c *ctx) isIdentical(n Node, t, u Type) bool {
 		case *ArrayType:
 			return x.Len == y.Len && c.isIdentical(n, x.Elem, y.Elem)
 		}
+	case *StructType:
+		switch y := u.(type) {
+		case *StructType:
+			if len(x.Fields) != len(y.Fields) {
+				return false
+			}
+
+			for i, v := range x.Fields {
+				w := y.Fields[i]
+				if v.Name != w.Name || !c.isIdentical(n, v.Type(), w.Type()) {
+					return false
+				}
+			}
+
+			return true
+		}
 	case *FunctionType:
 		switch y := u.(type) {
 		case *FunctionType:
@@ -941,8 +957,125 @@ func (n *CompositeLit) check(c *ctx) Node {
 	defer n.exit()
 
 	n.typ = c.checkType(n.LiteralType)
-	//TODO check n.LiteralValue
+	n.LiteralValue.check(c, n.Type())
 	return n
+}
+
+func (n *LiteralValue) check(c *ctx, t Type) {
+	switch x := t.(type) {
+	case *ArrayType:
+		n.checkArray(c, x)
+	case *StructType:
+		n.checkStruct(c, x)
+	default:
+		c.err(n, errorf("TODO %T", x))
+	}
+}
+
+func (n *LiteralValue) checkStruct(c *ctx, strct *StructType) {
+	var ix int
+	for _, ke := range n.ElementList {
+		if ix >= len(strct.Fields) {
+			c.err(n, errorf("TODO %T", ix))
+			return
+		}
+
+		ke.checkStructElem(c, strct, strct.Fields[ix], &ix)
+		ix++
+	}
+}
+
+func (n *KeyedElement) checkStructElem(c *ctx, strct *StructType, f *Field, ix *int) {
+	switch x := n.Key.(type) {
+	case nil:
+		// ok
+	case *Ident:
+		f = strct.FieldByName(x.Token.Src())
+		if f == nil {
+			c.err(n.Key, errorf("TODO %T", x))
+			return
+		}
+
+		*ix = f.Index()
+	default:
+		c.err(n.Key, errorf("TODO %T", x))
+	}
+	switch x := n.Element.(type) {
+	case Expression:
+		elemVal, elemType := c.checkExpr(&x)
+		if elemType.Kind() != InvalidKind {
+			n.Element = x
+		}
+		if !c.isAssignable(n.Element, elemType, f.Type()) {
+			c.err(n.Element, errorf("TODO %T", x))
+			break
+		}
+
+		if elemVal.Kind() != constant.Unknown {
+			c.convertValue(n.Element, elemVal, f.Type())
+		}
+	default:
+		c.err(n.Element, errorf("TODO %T", x))
+	}
+}
+
+func (n *LiteralValue) checkArray(c *ctx, arr *ArrayType) {
+	el := arr.Elem
+	var ix int64
+	for _, ke := range n.ElementList {
+		ke.checkArrayElem(c, arr, el, &ix)
+		ix++
+	}
+}
+
+func (n *KeyedElement) checkArrayElem(c *ctx, arr *ArrayType, arrElem Type, ix *int64) {
+	switch x := n.Key.(type) {
+	case nil:
+		// ok
+	case Expression:
+		keyVal, keyType := c.checkExpr(&x)
+		if keyType.Kind() != InvalidKind {
+			n.Key = x
+		}
+		switch keyVal.Kind() {
+		case constant.Int:
+			i64, ok := constant.Int64Val(keyVal)
+			if !ok {
+				c.err(n.Key, errorf("TODO"))
+				break
+			}
+
+			if i64 >= arr.Len {
+				c.err(n.Key, errorf("TODO"))
+				return
+			}
+
+			*ix = i64
+		default:
+			c.err(n.Key, errorf("TODO %v", keyVal.Kind()))
+		}
+	default:
+		c.err(n.Key, errorf("TODO %T", x))
+	}
+	switch x := n.Element.(type) {
+	case Expression:
+		elemVal, elemType := c.checkExpr(&x)
+		if elemType.Kind() != InvalidKind {
+			n.Element = x
+		}
+		if !c.isAssignable(n.Element, elemType, arrElem) {
+			c.err(n.Element, errorf("TODO %T", x))
+			break
+		}
+
+		if elemVal.Kind() != constant.Unknown {
+			c.convertValue(n.Element, elemVal, arrElem)
+		}
+	case *LiteralValue:
+		x.check(c, arrElem)
+	default:
+		c.err(n.Element, errorf("TODO %T", x))
+	}
 }
 
 func (n *Constant) check(c *ctx) Node {

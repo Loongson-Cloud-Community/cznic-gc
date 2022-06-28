@@ -445,11 +445,15 @@ func (t *SliceType) String() string { return fmt.Sprintf("[]%s", t.Elem) }
 // Field represents a struct field.
 type Field struct {
 	typer
-	Name string
+	Name  string
+	index int
 }
 
 // NewField returns a newly created struct field.
 func NewField(name string, typ Type) *Field { return &Field{typer: newTyper(typ), Name: name} }
+
+// Index returns n's zero-base index.
+func (n *Field) Index() int { return n.index }
 
 // StructType represents a struct type.
 type StructType struct {
@@ -503,6 +507,9 @@ func (n *StructTypeNode) check(c *ctx) Node {
 		default:
 			c.err(v, errorf("TODO %T", x))
 		}
+	}
+	for i, v := range t.Fields {
+		v.index = i
 	}
 	n.typ = t
 	return n
