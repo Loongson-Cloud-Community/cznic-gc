@@ -400,7 +400,7 @@ func (n *SourceFile) collectTLDs(c *ctx) {
 	}
 }
 
-func (c *ctx) varDecl(n *VarDecl) {
+func (c *ctx) varDecl(n *VarDecl) (r []*Variable) {
 	s := n.LexicalScope()
 	for _, vs := range n.VarSpecs {
 		for i, id := range vs.IdentifierList {
@@ -416,9 +416,12 @@ func (c *ctx) varDecl(n *VarDecl) {
 			if s.IsPackage() {
 				visibleFrom = 0
 			}
-			s.add(c, id.Ident.Src(), visibleFrom, &Variable{Expr: expr, Ident: id.Ident, TypeNode: vs.Type})
+			v := &Variable{Expr: expr, Ident: id.Ident, TypeNode: vs.Type}
+			r = append(r, v)
+			s.add(c, id.Ident.Src(), visibleFrom, v)
 		}
 	}
+	return r
 }
 
 func (n *SourceFile) checkImports(c *ctx) {
@@ -1679,7 +1682,9 @@ func (c *ctx) checkStatement(n Node) {
 	case *IfStmt:
 		x.check(c)
 	case *VarDecl:
-		c.varDecl(x)
+		for _, v := range c.varDecl(x) {
+			v.check(c)
+		}
 	case *Assignment:
 		x.check(c)
 	case *ShortVarDecl:
