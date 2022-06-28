@@ -42,16 +42,18 @@ var (
 
 // Expression represents a computation.
 type Expression interface {
+	checker
 	Node
 	Type() Type
 	Value() constant.Value
-	checker
+	SetValue(constant.Value)
 }
 
 type valuer struct{ val constant.Value }
 
 func newValuer(v constant.Value) valuer { return valuer{v} }
 
+// Value implements Expression
 func (v valuer) Value() constant.Value {
 	if v.val == nil {
 		return unknown
@@ -59,6 +61,9 @@ func (v valuer) Value() constant.Value {
 
 	return v.val
 }
+
+// SetValue implements Expression
+func (v *valuer) SetValue(val constant.Value) { v.val = val }
 
 type invalidExprType struct {
 	guard

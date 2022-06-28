@@ -78,9 +78,7 @@ func (s *Scope) IsPackage() bool { return s.Parent != nil && s.Parent.Parent == 
 
 func (s *Scope) add(c *ctx, nm string, visibileFrom int, n Node) {
 	if nm == "_" {
-		if s.IsPackage() {
-			c.pkg.Blanks = append(c.pkg.Blanks, n)
-		}
+		*c.blanks = append(*c.blanks, n)
 		return
 	}
 
@@ -108,6 +106,7 @@ type ctx0 struct {
 	packages map[packagesKey]*Package
 	pkg      *Package
 	stack    []Node
+	blanks   *[]Node
 }
 
 type ctx struct {
@@ -488,6 +487,7 @@ func (n *Package) Source(full bool) []byte { return nil }
 // Check type checks n.
 func (n *Package) Check(checker PackageChecker) error {
 	c := newCtx(checker, n)
+	c.blanks = &n.Blanks
 	for _, file := range n.SourceFiles {
 		file.check(c)
 	}
@@ -507,11 +507,21 @@ func (n *Package) checkFunctionBodies(c *ctx) {
 	}
 	sort.Strings(tldNames)
 	for _, tldName := range tldNames {
+		var blanks []Node
+		c.blanks = &blanks
 		switch x := n.Scope.Nodes[tldName].Node.(type) {
 		case *FunctionDecl:
 			x.checkBody(c)
 		case *MethodDecl:
 			c.err(x, errorf("TODO %T", x))
+		}
+		for _, v := range blanks {
+			switch x := v.(type) {
+			case checker:
+				x.check(c)
+			default:
+				c.err(x, errorf("TODO %T", x))
+			}
 		}
 	}
 }
@@ -528,6 +538,14 @@ func (n *Package) checkDeclarations(c *ctx) {
 			x.check(c)
 		case *Package:
 			// nop
+		default:
+			c.err(x, errorf("TODO %T", x))
+		}
+	}
+	for _, v := range n.Blanks {
+		switch x := v.(type) {
+		case checker:
+			x.check(c)
 		default:
 			c.err(x, errorf("TODO %T", x))
 		}
@@ -996,6 +1014,8 @@ func (n *KeyedElement) checkStructElem(c *ctx, strct *StructType, f *Field, ix *
 			return
 		}
 
+		x.typ = f.Type()
+		x.guard = checked
 		*ix = f.Index()
 	default:
 		c.err(n.Key, errorf("TODO %T", x))
@@ -1295,8 +1315,7 @@ func (n *QualifiedIdent) check(c *ctx) Node {
 	case *AliasDecl:
 		n.typ = c.checkType(x)
 	case *Variable:
-		x.check(c)
-		n.typ = x.Type()
+		n.typ = c.checkType(x)
 	default:
 		c.err(n, errorf("TODO %T", x))
 	}
@@ -1686,6 +1705,8 @@ func (c *ctx) checkStatement(n Node) {
 	case *LabeledStmt:
 		//TODO
 		c.checkStatement(x.Statement)
+	case *EmptyStmt:
+		// nop
 	default:
 		c.err(n, errorf("TODO %T", x))
 	}
