@@ -1007,6 +1007,13 @@ func (n *LiteralValue) checkStruct(c *ctx, strct *StructType) {
 }
 
 func (n *KeyedElement) checkStructElem(c *ctx, strct *StructType, f *Field, ix *int) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	n.typ = f.Type()
 	switch x := n.Key.(type) {
 	case nil:
 		// ok
@@ -1018,6 +1025,7 @@ func (n *KeyedElement) checkStructElem(c *ctx, strct *StructType, f *Field, ix *
 		}
 
 		x.typ = f.Type()
+		n.typ = x.typ
 		x.guard = checked
 		*ix = f.Index()
 	default:
@@ -1052,6 +1060,13 @@ func (n *LiteralValue) checkArray(c *ctx, arr *ArrayType) {
 }
 
 func (n *KeyedElement) checkArrayElem(c *ctx, arr *ArrayType, arrElem Type, ix *int64) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	n.typ = arrElem
 	switch x := n.Key.(type) {
 	case nil:
 		// ok

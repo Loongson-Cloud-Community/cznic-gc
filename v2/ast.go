@@ -923,6 +923,7 @@ func (n *LiteralValue) Source(full bool) []byte { return nodeSource(&bytes.Buffe
 //
 //  KeyedElement = [ Key ":" ] Element .
 type KeyedElement struct {
+	typer
 	Key     Node
 	Colon   Token
 	Element Node
