@@ -128,7 +128,7 @@ func (p *parser) semi(enabled bool) (r Token) {
 	if enabled {
 		switch p.ch() {
 		case ';':
-			r = p.shift()
+			return p.shift()
 		case ')', '}':
 			// Specs: To allow complex statements to occupy a single line, a semicolon may
 			// be omitted before a closing ")" or "}".
@@ -137,6 +137,8 @@ func (p *parser) semi(enabled bool) (r Token) {
 			p.shift()
 		}
 	}
+	r = p.s.Tok
+	r.source = nil
 	return r
 }
 

@@ -118,7 +118,7 @@ func (n Token) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, 
 // String pretty formats n.
 func (n Token) String() string {
 	if n.Ch <= beforeTokens || n.Ch >= afterTokens { //TODO
-		return fmt.Sprintf("%v: %q %#U", n.Position(), n.Src(), rune(n.Ch))
+		return fmt.Sprintf("%v: %q %#U, off %v", n.Position(), n.Src(), rune(n.Ch), n.Offset())
 	}
 
 	return fmt.Sprintf("%v: %q %s", n.Position(), n.Src(), n.Ch)
@@ -135,6 +135,10 @@ func (n Token) Sep() string { return string(n.sep()) }
 func (n Token) Src() string { return string(n.src()) }
 
 func (n Token) sep() []byte {
+	if !n.IsValid() {
+		return nil
+	}
+
 	if p := n.source.patches[n.off]; p != nil {
 		return p.b[:p.off]
 	}
@@ -143,6 +147,10 @@ func (n Token) sep() []byte {
 }
 
 func (n Token) src() []byte {
+	if !n.IsValid() {
+		return nil
+	}
+
 	if p := n.source.patches[n.off]; p != nil {
 		return p.b[p.off:]
 	}
