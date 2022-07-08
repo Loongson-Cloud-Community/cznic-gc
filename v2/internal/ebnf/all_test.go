@@ -397,6 +397,10 @@ func parserFails(fn string, src []byte) bool {
 	sp := filepath.ToSlash(fn)
 	switch {
 	case
+		strings.Contains(sp, "src/cmd/compile/internal/types2/testdata/check/decls0.go"),
+		strings.Contains(sp, "src/cmd/compile/internal/types2/testdata/check/expr0.go"),
+		strings.Contains(sp, "src/go/types/testdata/check/decls0.go"),
+		strings.Contains(sp, "src/go/types/testdata/check/expr0.go"),
 		strings.Contains(sp, "test/fixedbugs/bug002.go"),
 		strings.Contains(sp, "test/fixedbugs/bug003.go"),
 		strings.Contains(sp, "test/fixedbugs/bug004.go"),

@@ -617,10 +617,10 @@ func (s *Scanner) scan() (r bool) {
 // into the token stream immediately after a line's final token if that token
 // is
 //
-//	- an identifier
-//	- an integer, floating-point, imaginary, rune, or string literal
-//	- one of the keywords break, continue, fallthrough, or return
-//	- one of the operators and punctuation ++, --, ), ], or }
+//   - an identifier
+//   - an integer, floating-point, imaginary, rune, or string literal
+//   - one of the keywords break, continue, fallthrough, or return
+//   - one of the operators and punctuation ++, --, ), ], or }
 func (s *Scanner) injectSemi() bool {
 	switch s.last {
 	case

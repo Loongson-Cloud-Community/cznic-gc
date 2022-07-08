@@ -143,8 +143,9 @@ func (p *parser) semi(enabled bool) (r Token) {
 }
 
 // TopLevelDecl = Declaration
-// 	| FunctionDecl
-// 	| MethodDecl .
+//
+//	| FunctionDecl
+//	| MethodDecl .
 func (p *parser) topLevelDecls() (r []Node) {
 	//              TopLevelDecl case CONST, FUNC, TYPE, VAR:
 	for {
@@ -174,13 +175,18 @@ func (p *parser) topLevelDecls() (r []Node) {
 }
 
 // ConstDecl = "const" "(" ")"
-// 	| "const" "(" ConstSpec ConstDecl_1 ";" ")"
-// 	| "const" "(" ConstSpec ConstDecl_2 ")"
-// 	| "const" ConstSpec .
+//
+//	| "const" "(" ConstSpec ConstDecl_1 ";" ")"
+//	| "const" "(" ConstSpec ConstDecl_2 ")"
+//	| "const" ConstSpec .
+//
 // ConstDecl_1 =
-// 	| ConstDecl_1 ";" ConstSpec .
+//
+//	| ConstDecl_1 ";" ConstSpec .
+//
 // ConstDecl_2 =
-// 	| ConstDecl_2 ";" ConstSpec .
+//
+//	| ConstDecl_2 ";" ConstSpec .
 func (p *parser) constDecl() (r *ConstDecl) {
 	c := p.must(CONST)
 	switch p.ch() {
@@ -218,8 +224,9 @@ func (p *parser) constSpecs() (r []*ConstSpec) {
 }
 
 // ConstSpec = IdentifierList "=" ExpressionList
-// 	| IdentifierList Type "=" ExpressionList
-// 	| IdentifierList .
+//
+//	| IdentifierList Type "=" ExpressionList
+//	| IdentifierList .
 func (p *parser) constSpec(semi bool) (r *ConstSpec) {
 	if p.ch() != IDENTIFIER {
 		p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
@@ -254,9 +261,12 @@ func (p *parser) constSpec(semi bool) (r *ConstSpec) {
 }
 
 // TypeDecl = "type" TypeSpec
-// 	| "type" "(" TypeDecl_1 ")" .
+//
+//	| "type" "(" TypeDecl_1 ")" .
+//
 // TypeDecl_1 =
-// 	| TypeDecl_1 TypeSpec ";" .
+//
+//	| TypeDecl_1 TypeSpec ";" .
 func (p *parser) typeDecl() (r *TypeDecl) {
 	t := p.must(TYPE)
 	switch p.ch() {
@@ -284,10 +294,13 @@ func (p *parser) typeSpecs() (r []Node) {
 // AliasDecl = identifier "=" Type .
 // TypeDef = identifier TypeDef_1 Type .
 // TypeDef_1 =
-// 	| TypeParameters .
+//
+//	| TypeParameters .
+//
 // TypeParameters = "[" TypeParamList TypeParameters_1 "]" .
 // TypeParameters_1 =
-// 	| "," .
+//
+//	| "," .
 func (p *parser) typeSpec(semi bool) (r Node) {
 	switch p.ch() {
 	case IDENTIFIER:
@@ -343,7 +356,8 @@ func (p *parser) typeSpec(semi bool) (r Node) {
 
 // TypeParameters = "[" TypeParamList TypeParameters_1 "]" .
 // TypeParameters_1 =
-// 	| "," .
+//
+//	| "," .
 func (p *parser) typeParameters() (r *TypeParameters) {
 	return &TypeParameters{LBracket: p.must('['), TypeParamList: p.typeParamDecls(), RBracket: p.must(']')}
 }
@@ -381,7 +395,8 @@ func (p *parser) typeParamDecls2(il []*IdentListItem) (r []*TypeParamDecl) {
 
 // MethodDecl = "func" Receiver MethodName Signature MethodDecl_1 .
 // MethodDecl_1 =
-// 	| FunctionBody .
+//
+//	| FunctionBody .
 func (p *parser) methodDecl(f Token) (r *MethodDecl) {
 	defer func(n Node) { p.container = n }(p.container)
 	r = &MethodDecl{Func: f, Receiver: p.parameters(), MethodName: p.must(IDENTIFIER)}
@@ -404,11 +419,16 @@ func (p *parser) methodDecl(f Token) (r *MethodDecl) {
 }
 
 // FunctionDecl = "func" FunctionName TypeParameters Signature FunctionDecl_1
-// 	| "func" FunctionName Signature FunctionDecl_2 .
+//
+//	| "func" FunctionName Signature FunctionDecl_2 .
+//
 // FunctionDecl_1 =
-// 	| FunctionBody .
+//
+//	| FunctionBody .
+//
 // FunctionDecl_2 =
-// 	| FunctionBody .
+//
+//	| FunctionBody .
 func (p *parser) functionDecl(f Token) (r *FunctionDecl) {
 	defer func(n Node) { p.container = n }(p.container)
 	r = &FunctionDecl{Func: f, FunctionName: p.must(IDENTIFIER)}
@@ -443,7 +463,8 @@ func (p *parser) block(semi bool) (r *Block) {
 
 // Signature = Parameters Signature_1 .
 // Signature_1 =
-// 	| Result .
+//
+//	| Result .
 func (p *parser) signature() (r *Signature) {
 	r = &Signature{Parameters: p.parameters()}
 	switch p.ch() {
@@ -474,17 +495,21 @@ func (p *parser) result() (r Node) {
 
 // Parameters = "(" Parameters_1 ")" .
 // Parameters_1 =
-// 	| ParameterList Parameters_1_1 .
+//
+//	| ParameterList Parameters_1_1 .
+//
 // Parameters_1_1 =
-// 	| "," .
+//
+//	| "," .
 func (p *parser) parameters() (r *Parameters) {
 	return &Parameters{LParen: p.must('('), ParameterList: p.parameterList(), Comma: p.opt(','), RParen: p.must(')')}
 }
 
 // ParameterDecl = identifier "..." Type
-// 	| identifier Type
-// 	| "..." Type
-// 	| Type .
+//
+//	| identifier Type
+//	| "..." Type
+//	| Type .
 func (p *parser) parameterList() (r []*ParameterDecl) {
 	defer func() {
 		if len(r) == 0 {
@@ -624,9 +649,12 @@ func (p *parser) parameterList() (r []*ParameterDecl) {
 }
 
 // VarDecl = "var" VarSpec
-// 	| "var" "(" VarDecl_1 ")" .
+//
+//	| "var" "(" VarDecl_1 ")" .
+//
 // VarDecl_1 =
-// 	| VarDecl_1 VarSpec ";" .
+//
+//	| VarDecl_1 VarSpec ";" .
 func (p *parser) varDecl() (r *VarDecl) {
 	//                   VarDecl case VAR:
 	v := p.must(VAR)
@@ -656,9 +684,12 @@ func (p *parser) varSpecs() (r []*VarSpec) {
 }
 
 // VarSpec = IdentifierList Type VarSpec_1
-// 	| IdentifierList "=" ExpressionList .
+//
+//	| IdentifierList "=" ExpressionList .
+//
 // VarSpec_1 =
-// 	| "=" ExpressionList .
+//
+//	| "=" ExpressionList .
 func (p *parser) varSpec(semi bool) (r *VarSpec) {
 	switch p.ch() {
 	//                   VarSpec
@@ -692,7 +723,8 @@ func (p *parser) varSpec(semi bool) (r *VarSpec) {
 
 // IdentifierList = identifier IdentifierList_1 .
 // IdentifierList_1 =
-// 	| IdentifierList_1 "," identifier .
+//
+//	| IdentifierList_1 "," identifier .
 func (p *parser) identifierList() (r []*IdentListItem) {
 	for p.ch() == IDENTIFIER {
 		n := &IdentListItem{Ident: p.shift()}
@@ -720,9 +752,12 @@ func (p *parser) identifierList2(id Token) (r []*IdentListItem) {
 }
 
 // ImportDecl = "import" ImportSpec
-// 	| "import" "(" ImportDecl_1 ")" .
+//
+//	| "import" "(" ImportDecl_1 ")" .
+//
 // ImportDecl_1 =
-// 	| ImportDecl_1 ImportSpec ";" .
+//
+//	| ImportDecl_1 ImportSpec ";" .
 func (p *parser) importDecls() (r []*ImportDecl) {
 	for {
 		switch p.ch() {
@@ -759,8 +794,9 @@ func (p *parser) importSpecs() (r []*ImportSpec) {
 }
 
 // ImportSpec = "." ImportPath
-// 	| PackageName ImportPath
-// 	| ImportPath .
+//
+//	| PackageName ImportPath
+//	| ImportPath .
 func (p *parser) importSpec(semi bool) (r *ImportSpec) {
 	//                ImportSpec case '.', IDENTIFIER, STRING_LIT:
 	switch p.ch() {
@@ -779,11 +815,16 @@ func (p *parser) importSpec(semi bool) (r *ImportSpec) {
 
 // StatementList = StatementList_1 StatementList_2 .
 // StatementList_1 =
-// 	| StatementList_1 StatementList_1_1 ";" .
+//
+//	| StatementList_1 StatementList_1_1 ";" .
+//
 // StatementList_1_1 =
-// 	| Statement .
+//
+//	| Statement .
+//
 // StatementList_2 =
-// 	| Statement .
+//
+//	| Statement .
 func (p *parser) statementList() (r []Node) {
 	for {
 		switch p.ch() {
@@ -904,8 +945,10 @@ func (p *parser) commClauses() (r []*CommClause) {
 }
 
 // CommCase = "case" SendStmt
-// 	| "case" RecvStmt
-// 	| "default" .
+//
+//	| "case" RecvStmt
+//	| "default" .
+//
 // RecvStmt   = [ ExpressionList "=" | IdentifierList ":=" ] RecvExpr .
 // SendStmt = Channel "<-" Expression .
 func (p *parser) commCase() (r *CommCase) {
@@ -942,9 +985,10 @@ func (p *parser) simpleStmt(semi bool) (r Node) {
 }
 
 // ForStmt = "for" ForClause LoopBody
-// 	| "for" RangeClause LoopBody
-// 	| "for" Condition LoopBody
-// 	| "for" LoopBody .
+//
+//	| "for" RangeClause LoopBody
+//	| "for" Condition LoopBody
+//	| "for" LoopBody .
 func (p *parser) forStmt() (r *ForStmt) {
 	//        Condition case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
 	//        ForClause case '!', '&', '(', '*', '+', '-', ';', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
@@ -1083,16 +1127,25 @@ func (p *parser) forClause(init Node) (r *ForClause) {
 // SwitchStmt = ExprSwitchStmt | TypeSwitchStmt .
 // ExprSwitchStmt = "switch" ExprSwitchStmt_1 ExprSwitchStmt_2 body ExprSwitchStmt_3 "}" .
 // ExprSwitchStmt_1 =
-// 	| SimpleStmt ";" .
+//
+//	| SimpleStmt ";" .
+//
 // ExprSwitchStmt_2 =
-// 	| Expression .
+//
+//	| Expression .
+//
 // ExprSwitchStmt_3 =
-// 	| ExprSwitchStmt_3 ExprCaseClause .
+//
+//	| ExprSwitchStmt_3 ExprCaseClause .
+//
 // TypeSwitchStmt = "switch" TypeSwitchStmt_1 TypeSwitchGuard body TypeSwitchStmt_2 "}" .
 // TypeSwitchStmt_1 =
-// 	| SimpleStmt ";" .
+//
+//	| SimpleStmt ";" .
+//
 // TypeSwitchStmt_2 =
-// 	| TypeSwitchStmt_2 TypeCaseClause .
+//
+//	| TypeSwitchStmt_2 TypeCaseClause .
 func (p *parser) switchStmt() (r Node) {
 	var s Scope
 	defer p.pushScope(&s)()
@@ -1285,7 +1338,8 @@ func (p *parser) typeCaseClauses() (r []*TypeCaseClause) {
 }
 
 // TypeSwitchCase = "case" TypeList
-// 	| "default" .
+//
+//	| "default" .
 func (p *parser) typeSwitchCase() (r *TypeSwitchCase) {
 	switch p.ch() {
 	case CASE:
@@ -1344,7 +1398,8 @@ func (p *parser) exprCaseClauses() (r []*ExprCaseClause) {
 }
 
 // ExprSwitchCase = "case" ExpressionList
-// 	| "default" .
+//
+//	| "default" .
 func (p *parser) exprSwitchCase() (r *ExprSwitchCase) {
 	switch p.ch() {
 	case CASE:
@@ -1360,9 +1415,13 @@ func (p *parser) exprSwitchCase() (r *ExprSwitchCase) {
 
 // IfStmt = "if" IfStmt_1 Expression LoopBody IfStmt_2 .
 // IfStmt_1 =
-// 	| SimpleStmt ";" .
+//
+//	| SimpleStmt ";" .
+//
 // IfStmt_2 =
-// 	| "else" IfStmt_2_1 .
+//
+//	| "else" IfStmt_2_1 .
+//
 // IfStmt_2_1 = IfStmt | Block .
 func (p *parser) ifStmt(semi bool) (r *IfStmt) {
 	//                Expression case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
@@ -1580,8 +1639,9 @@ func (p *parser) type1() (r Node) {
 }
 
 // ChannelType = "<-" "chan" ElementType
-// 	| "chan" "<-" ElementType
-// 	| "chan" ElementType .
+//
+//	| "chan" "<-" ElementType
+//	| "chan" ElementType .
 func (p *parser) channelType() (r *ChannelTypeNode) {
 	switch p.ch() {
 	case ARROW:
@@ -1596,11 +1656,16 @@ func (p *parser) channelType() (r *ChannelTypeNode) {
 }
 
 // FieldDecl = IdentifierList Type FieldDecl_1
-// 	| EmbeddedField FieldDecl_2 .
+//
+//	| EmbeddedField FieldDecl_2 .
+//
 // FieldDecl_1 =
-// 	| Tag .
+//
+//	| Tag .
+//
 // FieldDecl_2 =
-// 	| Tag .
+//
+//	| Tag .
 func (p *parser) fieldDecl() (r *FieldDecl) {
 	switch p.ch() {
 	//             EmbeddedField case '*', IDENTIFIER:
@@ -1730,7 +1795,8 @@ func (p *parser) interfaceElems() (r []Node) {
 
 // TypeElem = TypeTerm TypeElem_1 .
 // TypeElem_1 =
-// 	| TypeElem_1 "|" TypeTerm .
+//
+//	| TypeElem_1 "|" TypeTerm .
 func (p *parser) typeElem(semi bool) (r *TypeElem) {
 	r = &TypeElem{}
 	for {
@@ -1751,6 +1817,9 @@ func (p *parser) typeElem(semi bool) (r *TypeElem) {
 }
 
 func (p *parser) typeElem2(typeTerm *TypeTerm, semi bool) (r *TypeElem) {
+	if p.ch() == '|' {
+		typeTerm.Pipe = p.shift()
+	}
 	r = &TypeElem{TypeTerms: []*TypeTerm{typeTerm}}
 	for {
 		switch p.ch() {
@@ -1786,11 +1855,16 @@ func (p *parser) typeTerm() (r *TypeTerm) {
 }
 
 // TypeName = QualifiedIdent TypeName_1
-// 	| identifier TypeName_2 .
+//
+//	| identifier TypeName_2 .
+//
 // TypeName_1 =
-// 	| TypeArgs .
+//
+//	| TypeArgs .
+//
 // TypeName_2 =
-// 	| TypeArgs .
+//
+//	| TypeArgs .
 func (p *parser) typeName() (r *TypeNameNode) {
 	switch p.ch() {
 	case IDENTIFIER:
@@ -1823,7 +1897,8 @@ func (p *parser) typeName2(in *TypeNameNode) (r *TypeNameNode) {
 
 // TypeArgs = "[" TypeList TypeArgs_1 "]" .
 // TypeArgs_1 =
-// 	| "," .
+//
+//	| "," .
 func (p *parser) typeArgs() (r *TypeArgs) {
 	return &TypeArgs{LBracket: p.must('['), TypeList: p.typeList(), Comma: p.opt(','), RBracket: p.must(']')}
 }
@@ -1836,7 +1911,8 @@ func (p *parser) typeArgs2(lbracket Token, typ Node) (r *TypeArgs) {
 
 // ExpressionList = Expression ExpressionList_1 .
 // ExpressionList_1 =
-// 	| ExpressionList_1 "," Expression .
+//
+//	| ExpressionList_1 "," Expression .
 func (p *parser) expressionList() (r []*ExprListItem) {
 	for {
 		switch p.ch() {
@@ -1858,7 +1934,8 @@ func (p *parser) expressionList() (r []*ExprListItem) {
 
 // Expression = LogicalAndExpression Expression_1 .
 // Expression_1 =
-// 	| Expression_1 "||" LogicalAndExpression .
+//
+//	| Expression_1 "||" LogicalAndExpression .
 func (p *parser) expression(expr Node) (r Node) {
 	r = p.logicalAndExpression(expr)
 	for p.ch() == LOR {
@@ -1869,7 +1946,8 @@ func (p *parser) expression(expr Node) (r Node) {
 
 // LogicalAndExpression = RelationalExpression LogicalAndExpression_1 .
 // LogicalAndExpression_1 =
-// 	| LogicalAndExpression_1 "&&" RelationalExpression .
+//
+//	| LogicalAndExpression_1 "&&" RelationalExpression .
 func (p *parser) logicalAndExpression(expr Node) (r Node) {
 	r = p.relationalExpression(expr)
 	for p.ch() == LAND {
@@ -1880,7 +1958,8 @@ func (p *parser) logicalAndExpression(expr Node) (r Node) {
 
 // RelationalExpression = AdditiveExpression RelationalExpression_1 .
 // RelationalExpression_1 =
-// 	| RelationalExpression_1 rel_op AdditiveExpression .
+//
+//	| RelationalExpression_1 rel_op AdditiveExpression .
 func (p *parser) relationalExpression(expr Node) (r Node) {
 	r = p.additiveExpression(expr)
 	for {
@@ -1896,7 +1975,8 @@ func (p *parser) relationalExpression(expr Node) (r Node) {
 
 // AdditiveExpression = MultiplicativeExpression AdditiveExpression_1 .
 // AdditiveExpression_1 =
-// 	| AdditiveExpression_1 add_op MultiplicativeExpression .
+//
+//	| AdditiveExpression_1 add_op MultiplicativeExpression .
 func (p *parser) additiveExpression(expr Node) (r Node) {
 	r = p.multiplicativeExpression(expr)
 	for {
@@ -1912,7 +1992,8 @@ func (p *parser) additiveExpression(expr Node) (r Node) {
 
 // MultiplicativeExpression = UnaryExpr MultiplicativeExpression_1 .
 // MultiplicativeExpression_1 =
-// 	| MultiplicativeExpression_1 mul_op UnaryExpr .
+//
+//	| MultiplicativeExpression_1 mul_op UnaryExpr .
 func (p *parser) multiplicativeExpression(expr Node) (r Node) {
 	r = expr
 	if expr == nil {
@@ -1930,7 +2011,8 @@ func (p *parser) multiplicativeExpression(expr Node) (r Node) {
 }
 
 // UnaryExpr = PrimaryExpr
-// 	| unary_op UnaryExpr .
+//
+//	| unary_op UnaryExpr .
 func (p *parser) unaryExpression() (r Node) {
 	switch p.ch() {
 	//               PrimaryExpr case '(', '*', '[', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
@@ -1958,29 +2040,42 @@ func (p *parser) unaryExpression() (r Node) {
 }
 
 // PrimaryExpr = Operand PrimaryExpr_1
-// 	| Conversion PrimaryExpr_2
-// 	| MethodExpr PrimaryExpr_3 .
+//
+//	| Conversion PrimaryExpr_2
+//	| MethodExpr PrimaryExpr_3 .
+//
 // PrimaryExpr_1 =
-// 	| PrimaryExpr_1 PrimaryExpr_1_1 .
+//
+//	| PrimaryExpr_1 PrimaryExpr_1_1 .
+//
 // PrimaryExpr_1_1 = Arguments
-// 	| Index
-// 	| Selector
-// 	| Slice
-// 	| TypeAssertion .
+//
+//	| Index
+//	| Selector
+//	| Slice
+//	| TypeAssertion .
+//
 // PrimaryExpr_2 =
-// 	| PrimaryExpr_2 PrimaryExpr_2_1 .
+//
+//	| PrimaryExpr_2 PrimaryExpr_2_1 .
+//
 // PrimaryExpr_2_1 = Arguments
-// 	| Index
-// 	| Selector
-// 	| Slice
-// 	| TypeAssertion .
+//
+//	| Index
+//	| Selector
+//	| Slice
+//	| TypeAssertion .
+//
 // PrimaryExpr_3 =
-// 	| PrimaryExpr_3 PrimaryExpr_3_1 .
+//
+//	| PrimaryExpr_3 PrimaryExpr_3_1 .
+//
 // PrimaryExpr_3_1 = Arguments
-// 	| Index
-// 	| Selector
-// 	| Slice
-// 	| TypeAssertion .
+//
+//	| Index
+//	| Selector
+//	| Slice
+//	| TypeAssertion .
 func (p *parser) primaryExpression() (r Node) {
 	checkForLiteral := false
 	switch p.ch() {
@@ -2249,21 +2344,34 @@ func (p *parser) slice2(peNode Node, lbracket Token, exprNode Node) (r *SliceExp
 }
 
 // Arguments = "(" ")"
-// 	| "(" ExpressionList Arguments_1 Arguments_2 ")"
-// 	| "(" Type "," ExpressionList Arguments_3 Arguments_4 ")"
-// 	| "(" Type Arguments_5 Arguments_6 ")" .
+//
+//	| "(" ExpressionList Arguments_1 Arguments_2 ")"
+//	| "(" Type "," ExpressionList Arguments_3 Arguments_4 ")"
+//	| "(" Type Arguments_5 Arguments_6 ")" .
+//
 // Arguments_1 =
-// 	| "..." .
+//
+//	| "..." .
+//
 // Arguments_2 =
-// 	| "," .
+//
+//	| "," .
+//
 // Arguments_3 =
-// 	| "..." .
+//
+//	| "..." .
+//
 // Arguments_4 =
-// 	| "," .
+//
+//	| "," .
+//
 // Arguments_5 =
-// 	| "..." .
+//
+//	| "..." .
+//
 // Arguments_6 =
-// 	| "," .
+//
+//	| "," .
 func (p *parser) arguments(pe Node) (r *Arguments) {
 	r = &Arguments{PrimaryExpr: pe.(Expression), LParen: p.must('(')}
 	if p.ch() == ')' {
@@ -2380,7 +2488,7 @@ func (p *parser) exprOrType() (r Node) {
 			// 	| "chan" ElementType .
 			r = &ChannelTypeNode{ArrowPre: arrow, Chan: p.shift(), ElementType: p.type1()}
 			switch p.ch() {
-			case ')':
+			case ')', ',':
 				return r
 			default:
 				p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
@@ -2457,9 +2565,9 @@ func (p *parser) exprOrType() (r Node) {
 			case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, FLOAT_LIT, FUNC, IDENTIFIER, IMAG_LIT, INTERFACE, INT_LIT, MAP, RUNE_LIT, STRING_LIT, STRUCT:
 				switch x := p.exprOrType().(type) {
 				case typeNode:
-					p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
-					p.shift()
-					return invalidExpr
+					id := &Ident{lexicalScoper: newLexicalScoper(p.lexicalScope), Token: id}
+					ta := &TypeArgs{LBracket: lbracket, TypeList: p.typeList2(x), RBracket: p.must(']')}
+					return p.expression(p.primaryExpression2(&GenericOperand{OperandName: id, TypeArgs: ta}, true))
 				default:
 					// QualifiedIdent "[" Expression .
 					switch p.ch() {
@@ -2519,25 +2627,32 @@ func (p *parser) exprOrType() (r Node) {
 }
 
 // LiteralValue1 = lbrace ElementList LiteralValue1_1 "#fixlbr" "}"
-// 	| lbrace "#fixlbr" "}" .
+//
+//	| lbrace "#fixlbr" "}" .
+//
 // LiteralValue1_1 =
-// 	| "," .
+//
+//	| "," .
 func (p *parser) literalValue1() (r *LiteralValue) {
 	var lbr bool
 	return &LiteralValue{LBrace: p.lbrace(&lbr), ElementList: p.elementList(), RBrace: p.fixlbr(lbr)}
 }
 
 // LiteralValue2 = "{" "}"
-// 	| "{" ElementList LiteralValue2_1 "}" .
+//
+//	| "{" ElementList LiteralValue2_1 "}" .
+//
 // LiteralValue2_1 =
-// 	| "," .
+//
+//	| "," .
 func (p *parser) literalValue2() (r *LiteralValue) {
 	return &LiteralValue{LBrace: p.must('{'), ElementList: p.elementList(), RBrace: p.must('}')}
 }
 
 // ElementList = KeyedElement ElementList_1 .
 // ElementList_1 =
-// 	| ElementList_1 "," KeyedElement .
+//
+//	| ElementList_1 "," KeyedElement .
 func (p *parser) elementList() (r []*KeyedElement) {
 	for p.ch() != '}' {
 		switch p.ch() {
@@ -2558,7 +2673,8 @@ func (p *parser) elementList() (r []*KeyedElement) {
 }
 
 // KeyedElement = Key ":" Element
-// 	| Element .
+//
+//	| Element .
 func (p *parser) keyedElement() (r *KeyedElement) {
 	ke := p.keyOrElement()
 	switch p.ch() {
