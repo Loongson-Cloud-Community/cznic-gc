@@ -564,7 +564,9 @@ func (n *Arguments) check(c *ctx) Node {
 
 	var resolvedTo Node
 	var resolvedIn *Package
-	switch x := c.checkExprOrType(&n.PrimaryExpr).(type) {
+	x0 := c.checkExprOrType(&n.PrimaryExpr)
+more:
+	switch x := x0.(type) {
 	case *Ident:
 		resolvedTo = x.ResolvedTo()
 	case *QualifiedIdent:
@@ -581,6 +583,23 @@ func (n *Arguments) check(c *ctx) Node {
 		return r
 	case *Selector:
 		resolvedTo = x
+	case *ParenExpr:
+		x0 = x.Expr
+		goto more
+	case *UnaryExpr:
+		x.check(c)
+		switch x.Op.Ch {
+		case '*':
+			if ft, ok := x.Type().(*FunctionType); ok {
+				return n.checkFn(c, ft, nil, nil)
+			}
+
+			c.err(n, errorf("TODO %T, %s", x.Type(), x.Type()))
+			return n
+		default:
+			c.err(n, errorf("TODO %q", x.Op.Src()))
+			return n
+		}
 	default:
 		c.err(n, errorf("TODO %T", x))
 		return n
@@ -607,7 +626,7 @@ func (n *Arguments) check(c *ctx) Node {
 			return n.checkFn(c, ft, nil, nil)
 		}
 
-		c.err(n, errorf("TODO %T", x))
+		c.err(n, errorf("TODO %T, %s", x.Type(), x.Type()))
 		return n
 	case *Selector:
 		if ft, ok := x.Type().(*FunctionType); ok {

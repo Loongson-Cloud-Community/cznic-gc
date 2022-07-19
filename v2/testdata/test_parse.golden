@@ -7181,7 +7181,11 @@
 /usr/local/go/test/fixedbugs/issue5291.dir/pkg1.go
 /usr/local/go/test/fixedbugs/issue5291.dir/prog.go
 /usr/local/go/test/fixedbugs/issue5291.go
+/usr/local/go/test/fixedbugs/issue53137.dir/main.go
+/usr/local/go/test/fixedbugs/issue53137.go
+/usr/local/go/test/fixedbugs/issue53454.go
 /usr/local/go/test/fixedbugs/issue5358.go
+/usr/local/go/test/fixedbugs/issue53600.go
 /usr/local/go/test/fixedbugs/issue5373.go
 /usr/local/go/test/fixedbugs/issue5470.dir/a.go
 /usr/local/go/test/fixedbugs/issue5470.dir/b.go
@@ -7976,6 +7980,9 @@
 /usr/local/go/test/typeparam/issue52117.go
 /usr/local/go/test/typeparam/issue52228.go
 /usr/local/go/test/typeparam/issue52241.go
+/usr/local/go/test/typeparam/issue53309.go
+/usr/local/go/test/typeparam/issue53419.go
+/usr/local/go/test/typeparam/issue53477.go
 /usr/local/go/test/typeparam/list.go
 /usr/local/go/test/typeparam/list2.go
 /usr/local/go/test/typeparam/listimp.dir/a.go
