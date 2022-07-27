@@ -829,6 +829,12 @@ func (n *BinaryExpr) check(c *ctx) Node {
 		case isIntegerType(b):
 			// ok
 		case y.Kind() != constant.Unknown:
+			if isAnyArithmeticType(b) {
+				c.convertValue(n.B, y, PredefinedType(Uint))
+				break
+			}
+
+			trc("y %T %v, b %s", y, y.Kind(), b)
 			c.err(n.Op, errorf("TODO %v", n.Op.Ch.str()))
 			return n
 		default:
