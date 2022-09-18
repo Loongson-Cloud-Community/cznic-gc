@@ -86,6 +86,8 @@ type Node interface {
 	// every non-empty token separator by a single space character and drop the
 	// first token separator entirely, if any.
 	Source(full bool) []byte
+	// Tokens returns the tokens a node consists of.
+	Tokens() []Token
 }
 
 // Token is the product of Scanner.Scan and a terminal node of the complete
@@ -114,6 +116,9 @@ func (n Token) Position() (r token.Position) {
 
 // Source implements Node.
 func (n Token) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n Token) Tokens() []Token { return []Token{n} }
 
 // String pretty formats n.
 func (n Token) String() string {
@@ -204,6 +209,10 @@ type Scanner struct {
 	// read only.
 	Tok  Token
 	errs errList
+
+	// CommentHandler, if not nil, is invoked on line and general comments, passing
+	// the offset and content of the comment. The content must not be modified.
+	CommentHandler func(off int32, s []byte)
 
 	cnt  int32
 	last Ch
@@ -1226,6 +1235,11 @@ out:
 
 func (s *Scanner) generalComment(off int32) (injectSemi bool) {
 	// Leading /* consumed
+	if s.CommentHandler != nil {
+		defer func() {
+			s.CommentHandler(off, s.source.buf[off:s.off])
+		}()
+	}
 	var nl bool
 	for {
 		switch {
@@ -1257,6 +1271,11 @@ func (s *Scanner) generalComment(off int32) (injectSemi bool) {
 
 func (s *Scanner) lineComment(off int32) (injectSemi bool) {
 	// Leading // consumed
+	if s.CommentHandler != nil {
+		defer func() {
+			s.CommentHandler(off, s.source.buf[off:s.off])
+		}()
+	}
 	for {
 		switch {
 		case s.c == '\n':

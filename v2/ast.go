@@ -168,6 +168,9 @@ func (n *PackageClause) Position() (r token.Position) {
 // Source implements Node.
 func (n *PackageClause) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *PackageClause) Tokens() []Token { return nodeTokens(n) }
+
 // ImportSpec describes an import specification.
 //
 //	ImportSpec = [ "." | PackageName ] ImportPath .
@@ -189,6 +192,9 @@ func (n *ImportSpec) Position() (r token.Position) {
 // Source implements Node.
 func (n *ImportSpec) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *ImportSpec) Tokens() []Token { return nodeTokens(n) }
+
 // ImportDecl describes an import declaration.
 //
 //	ImportDecl = "import" ( ImportSpec | "(" { ImportSpec ";" } ")" ) .
@@ -207,6 +213,9 @@ func (n *ImportDecl) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *ImportDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *ImportDecl) Tokens() []Token { return nodeTokens(n) }
 
 // SourceFile describes a source file.
 //
@@ -227,6 +236,9 @@ func (n *SourceFile) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *SourceFile) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *SourceFile) Tokens() []Token { return nodeTokens(n) }
 
 // FunctionDecl describes a function declaration.
 //
@@ -249,6 +261,9 @@ func (n *FunctionDecl) Position() (r token.Position) {
 // Source implements Node.
 func (n *FunctionDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *FunctionDecl) Tokens() []Token { return nodeTokens(n) }
+
 // Signature describes a function signature.
 //
 //	Signature = Parameters [ Result ] .
@@ -265,6 +280,9 @@ func (n *Signature) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *Signature) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *Signature) Tokens() []Token { return nodeTokens(n) }
 
 // Parameters describes function parameters or a function result.
 //
@@ -285,6 +303,9 @@ func (n *Parameters) Position() (r token.Position) {
 // Source implements Node.
 func (n *Parameters) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *Parameters) Tokens() []Token { return nodeTokens(n) }
+
 // TypeDecl describes a type declaration.
 //
 //	TypeDecl = "type" ( TypeSpec | "(" { TypeSpec ";" } ")" ) .
@@ -303,6 +324,9 @@ func (n *TypeDecl) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *TypeDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *TypeDecl) Tokens() []Token { return nodeTokens(n) }
 
 // TypeDef describes a type definition.
 //
@@ -348,6 +372,9 @@ func (n *TypeDef) check(c *ctx) Node {
 	return n
 }
 
+// Tokens returns the tokens n consist of.
+func (n *TypeDef) Tokens() []Token { return nodeTokens(n) }
+
 // ParameterDecl describes a parameter declaration.
 //
 //	ParameterDecl = [ IdentifierList ] [ "..." ] Type .
@@ -373,6 +400,9 @@ func (n *ParameterDecl) Position() (r token.Position) {
 // Source implements Node.
 func (n *ParameterDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *ParameterDecl) Tokens() []Token { return nodeTokens(n) }
+
 // IdentListItem describes an item of an identifier list.
 type IdentListItem struct {
 	Ident Token
@@ -388,6 +418,9 @@ func (n *IdentListItem) Position() (r token.Position) {
 func (n *IdentListItem) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
+
+// Tokens returns the tokens n consist of.
+func (n *IdentListItem) Tokens() []Token { return nodeTokens(n) }
 
 // VarDecl describes a variable declaration.
 //
@@ -409,6 +442,9 @@ func (n *VarDecl) Position() (r token.Position) {
 // Source implements Node.
 func (n *VarDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *VarDecl) Tokens() []Token { return nodeTokens(n) }
+
 // ConstDecl describes a constant declaration.
 //
 //	ConstDecl = "const" ( ConstSpec | "(" { ConstSpec ";" } ")" ) .
@@ -428,6 +464,9 @@ func (n *ConstDecl) Position() (r token.Position) {
 // Source implements Node.
 func (n *ConstDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *ConstDecl) Tokens() []Token { return nodeTokens(n) }
+
 // Block describes a compound statement.
 //
 //	Block = "{" StatementList "}" .
@@ -446,6 +485,9 @@ func (n *Block) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *Block) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *Block) Tokens() []Token { return nodeTokens(n) }
 
 // StructTypeNode describes a struct type.
 //
@@ -468,6 +510,9 @@ func (n *StructTypeNode) Position() (r token.Position) {
 func (n *StructTypeNode) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
+
+// Tokens returns the tokens n consist of.
+func (n *StructTypeNode) Tokens() []Token { return nodeTokens(n) }
 
 // FieldDecl describes a field declaration.
 //
@@ -492,6 +537,9 @@ func (n *FieldDecl) Position() (r token.Position) {
 // Source implements Node.
 func (n *FieldDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *FieldDecl) Tokens() []Token { return nodeTokens(n) }
+
 // EmbeddedField describes an embeded field.
 //
 //	EmbeddedField = [ "*" ] TypeName .
@@ -511,6 +559,9 @@ func (n *EmbeddedField) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *EmbeddedField) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *EmbeddedField) Tokens() []Token { return nodeTokens(n) }
 
 // VarSpec describes a variable specification.
 //
@@ -535,6 +586,9 @@ func (n *VarSpec) Position() (r token.Position) {
 // Source implements Node.
 func (n *VarSpec) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *VarSpec) Tokens() []Token { return nodeTokens(n) }
+
 // PointerTypeNode describes a pointer type.
 //
 //	PointerTypeNode = "*" BaseType .
@@ -554,6 +608,9 @@ func (n *PointerTypeNode) Position() (r token.Position) {
 func (n *PointerTypeNode) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
+
+// Tokens returns the tokens n consist of.
+func (n *PointerTypeNode) Tokens() []Token { return nodeTokens(n) }
 
 // TypeNameNode describes a type name.
 //
@@ -584,6 +641,9 @@ func (n *TypeNameNode) check(c *ctx) Node {
 	n.typ = c.checkType(n.Name)
 	return n
 }
+
+// Tokens returns the tokens n consist of.
+func (n *TypeNameNode) Tokens() []Token { return nodeTokens(n) }
 
 // QualifiedIdent describes an optionally qualified identifier.
 //
@@ -619,6 +679,9 @@ func (n *QualifiedIdent) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
 
+// Tokens returns the tokens n consist of.
+func (n *QualifiedIdent) Tokens() []Token { return nodeTokens(n) }
+
 // ConstSpec describes a constant specification.
 //
 //	ConstSpec = IdentifierList [ [ Type ] "=" ExpressionList ] .
@@ -645,6 +708,9 @@ func (n *ConstSpec) Position() (r token.Position) {
 // Source implements Node.
 func (n *ConstSpec) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *ConstSpec) Tokens() []Token { return nodeTokens(n) }
+
 // ExprListItem describes an item of an expression list.
 //
 // ExpressionList = Expression { "," Expression } .
@@ -663,6 +729,9 @@ func (n *ExprListItem) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
 
+// Tokens returns the tokens n consist of.
+func (n *ExprListItem) Tokens() []Token { return nodeTokens(n) }
+
 // ExpressionStmt describes an expression statement.
 type ExpressionStmt struct {
 	Expr      Expression
@@ -678,6 +747,9 @@ func (n *ExpressionStmt) Position() (r token.Position) {
 func (n *ExpressionStmt) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
+
+// Tokens returns the tokens n consist of.
+func (n *ExpressionStmt) Tokens() []Token { return nodeTokens(n) }
 
 // BinaryExpr describes a binary expression.
 type BinaryExpr struct {
@@ -697,6 +769,9 @@ func (n *BinaryExpr) Position() (r token.Position) {
 func (n *BinaryExpr) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
+
+// Tokens returns the tokens n consist of.
+func (n *BinaryExpr) Tokens() []Token { return nodeTokens(n) }
 
 // ShortVarDecl describes a short variable declaration.
 //
@@ -720,6 +795,9 @@ func (n *ShortVarDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffe
 
 func (n *ShortVarDecl) semi(p *parser) { n.Semicolon = p.semi(true) }
 
+// Tokens returns the tokens n consist of.
+func (n *ShortVarDecl) Tokens() []Token { return nodeTokens(n) }
+
 // MethodDecl describes a method declaration.
 //
 //	MethodDecl = "func" Receiver MethodName Signature [ FunctionBody ] .
@@ -741,6 +819,9 @@ func (n *MethodDecl) Position() (r token.Position) {
 // Source implements Node.
 func (n *MethodDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *MethodDecl) Tokens() []Token { return nodeTokens(n) }
+
 // ReturnStmt describes a return statement.
 //
 //	ReturnStmt = "return" [ ExpressionList ] .
@@ -758,6 +839,9 @@ func (n *ReturnStmt) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *ReturnStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *ReturnStmt) Tokens() []Token { return nodeTokens(n) }
 
 // Selector describes a selector.
 //
@@ -777,6 +861,9 @@ func (n *Selector) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *Selector) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *Selector) Tokens() []Token { return nodeTokens(n) }
 
 // Arguments describes a call or conversion.
 //
@@ -802,6 +889,9 @@ func (n *Arguments) Position() (r token.Position) {
 // Source implements Node.
 func (n *Arguments) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *Arguments) Tokens() []Token { return nodeTokens(n) }
+
 // IfStmt describes an if statement.
 //
 //	IfStmt = "if" [ SimpleStmt ";" ] Expression Block [ "else" ( IfStmt | Block ) ] .
@@ -825,6 +915,9 @@ func (n *IfStmt) Position() (r token.Position) {
 // Source implements Node.
 func (n *IfStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *IfStmt) Tokens() []Token { return nodeTokens(n) }
+
 // SliceTypeNode describes a slice type.
 //
 //	SliceTypeNode = "[" "]" ElementType .
@@ -842,6 +935,9 @@ func (n *SliceTypeNode) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *SliceTypeNode) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *SliceTypeNode) Tokens() []Token { return nodeTokens(n) }
 
 // Assignment describes a short variable declaration.
 //
@@ -864,6 +960,9 @@ func (n *Assignment) Source(full bool) []byte { return nodeSource(&bytes.Buffer{
 
 func (n *Assignment) semi(p *parser) { n.Semicolon = p.semi(true) }
 
+// Tokens returns the tokens n consist of.
+func (n *Assignment) Tokens() []Token { return nodeTokens(n) }
+
 // UnaryExpr describes an unary expression.
 //
 //	UnaryExpr = PrimaryExpr | unary_op UnaryExpr .
@@ -881,6 +980,9 @@ func (n *UnaryExpr) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *UnaryExpr) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *UnaryExpr) Tokens() []Token { return nodeTokens(n) }
 
 // CompositeLit describes a composite literal.
 //
@@ -900,6 +1002,9 @@ func (n *CompositeLit) Position() (r token.Position) {
 // Source implements Node.
 func (n *CompositeLit) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *CompositeLit) Tokens() []Token { return nodeTokens(n) }
+
 // LiteralValue describes a composite literal value.
 //
 //	LiteralValue = "{" [ ElementList [ "," ] ] "}" .
@@ -916,6 +1021,9 @@ func (n *LiteralValue) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *LiteralValue) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *LiteralValue) Tokens() []Token { return nodeTokens(n) }
 
 // KeyedElement describes an optionally keyed element.
 //
@@ -940,6 +1048,9 @@ func (n *KeyedElement) Position() (r token.Position) {
 // Source implements Node.
 func (n *KeyedElement) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *KeyedElement) Tokens() []Token { return nodeTokens(n) }
+
 // InterfaceTypeNode describes an interface type.
 //
 //	InterfaceTypeNode = "interface" "{" { InterfaceElem ";" } "}" .
@@ -962,6 +1073,9 @@ func (n *InterfaceTypeNode) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
 
+// Tokens returns the tokens n consist of.
+func (n *InterfaceTypeNode) Tokens() []Token { return nodeTokens(n) }
+
 // ForStmt describes a for statement.
 //
 //	ForStmt = "for" [ Condition | ForClause | RangeClause ] Block .
@@ -981,6 +1095,9 @@ func (n *ForStmt) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *ForStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *ForStmt) Tokens() []Token { return nodeTokens(n) }
 
 // ForClause describes a for clause.
 //
@@ -1005,6 +1122,9 @@ func (n *ForClause) Position() (r token.Position) {
 // Source implements Node.
 func (n *ForClause) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *ForClause) Tokens() []Token { return nodeTokens(n) }
+
 // RangeClause describes a range clause.
 //
 //	RangeClause = [ ExpressionList "=" | IdentifierList ":=" ] "range" Expression .
@@ -1023,6 +1143,9 @@ func (n *RangeClause) Position() (r token.Position) {
 // Source implements Node.
 func (n *RangeClause) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *RangeClause) Tokens() []Token { return nodeTokens(n) }
+
 // MethodElem describes a method element.
 //
 // MethodElem     = MethodName Signature .
@@ -1039,6 +1162,9 @@ func (n *MethodElem) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *MethodElem) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *MethodElem) Tokens() []Token { return nodeTokens(n) }
 
 // MethodExpr describes a method expression.
 //
@@ -1059,6 +1185,9 @@ func (n *MethodExpr) Position() (r token.Position) {
 // Source implements Node.
 func (n *MethodExpr) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *MethodExpr) Tokens() []Token { return nodeTokens(n) }
+
 // TypeParameters describes type parameters.
 //
 //	TypeParameters = "[" TypeParamList [ "," ] "]" .
@@ -1077,6 +1206,9 @@ func (n *TypeParameters) Position() (r token.Position) {
 func (n *TypeParameters) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
+
+// Tokens returns the tokens n consist of.
+func (n *TypeParameters) Tokens() []Token { return nodeTokens(n) }
 
 // TypeParamDecl describes an item of a type parameter list.
 //
@@ -1099,6 +1231,9 @@ func (n *TypeParamDecl) Position() (r token.Position) {
 // Source implements Node.
 func (n *TypeParamDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *TypeParamDecl) Tokens() []Token { return nodeTokens(n) }
+
 // TypeElem describes a type element.
 //
 //	TypeElem = TypeTerm { "|" TypeTerm } .
@@ -1118,6 +1253,9 @@ func (n *TypeElem) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *TypeElem) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *TypeElem) Tokens() []Token { return nodeTokens(n) }
 
 // TypeTerm describes a type term.
 //
@@ -1141,6 +1279,9 @@ func (n *TypeTerm) Position() (r token.Position) {
 // Source implements Node.
 func (n *TypeTerm) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *TypeTerm) Tokens() []Token { return nodeTokens(n) }
+
 // Index describes an index.
 //
 //	Index = "[" Expression "]" .
@@ -1161,6 +1302,9 @@ func (n *Index) Position() (r token.Position) {
 // Source implements Node.
 func (n *Index) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *Index) Tokens() []Token { return nodeTokens(n) }
+
 // DeferStmt describes a defer statement.
 //
 //	DeferStmt = "defer" Expression .
@@ -1178,6 +1322,9 @@ func (n *DeferStmt) Position() (r token.Position) {
 // Source implements Node.
 func (n *DeferStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *DeferStmt) Tokens() []Token { return nodeTokens(n) }
+
 // EmptyStmt describes an empty statement.
 //
 //	EmptyStmt = .
@@ -1192,6 +1339,9 @@ func (n *EmptyStmt) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *EmptyStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *EmptyStmt) Tokens() []Token { return nodeTokens(n) }
 
 // FunctionLit describes a function literal.
 //
@@ -1211,6 +1361,9 @@ func (n *FunctionLit) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *FunctionLit) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *FunctionLit) Tokens() []Token { return nodeTokens(n) }
 
 // ExpressionSwitchStmt describes an expression switch statement.
 //
@@ -1237,6 +1390,9 @@ func (n *ExpressionSwitchStmt) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
 
+// Tokens returns the tokens n consist of.
+func (n *ExpressionSwitchStmt) Tokens() []Token { return nodeTokens(n) }
+
 // TypeSwitchStmt describes a type switch statement.
 //
 //	TypeSwitchStmt  = "switch" [ SimpleStmt ";" ] TypeSwitchGuard "{" { TypeCaseClause } "}" .
@@ -1261,6 +1417,9 @@ func (n *TypeSwitchStmt) Position() (r token.Position) {
 func (n *TypeSwitchStmt) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
+
+// Tokens returns the tokens n consist of.
+func (n *TypeSwitchStmt) Tokens() []Token { return nodeTokens(n) }
 
 // TypeSwitchGuard describes a type switch guard.
 //
@@ -1291,6 +1450,9 @@ func (n *TypeSwitchGuard) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
 
+// Tokens returns the tokens n consist of.
+func (n *TypeSwitchGuard) Tokens() []Token { return nodeTokens(n) }
+
 // TypeCaseClause describes a type switch case clause.
 //
 //	TypeCaseClause  = TypeSwitchCase ":" StatementList .
@@ -1310,6 +1472,9 @@ func (n *TypeCaseClause) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
 
+// Tokens returns the tokens n consist of.
+func (n *TypeCaseClause) Tokens() []Token { return nodeTokens(n) }
+
 // TypeSwitchCase describes an expression switch case.
 //
 //	TypeSwitchCase  = "case" TypeList | "default" .
@@ -1327,6 +1492,9 @@ func (n *TypeSwitchCase) Position() (r token.Position) {
 func (n *TypeSwitchCase) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
+
+// Tokens returns the tokens n consist of.
+func (n *TypeSwitchCase) Tokens() []Token { return nodeTokens(n) }
 
 // TypeAssertion describes a type assertion.
 //
@@ -1349,6 +1517,9 @@ func (n *TypeAssertion) Position() (r token.Position) {
 // Source implements Node.
 func (n *TypeAssertion) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *TypeAssertion) Tokens() []Token { return nodeTokens(n) }
+
 // CommClause describes an select statement communication clause.
 //
 //	CommClause = CommCase ":" StatementList .
@@ -1366,6 +1537,9 @@ func (n *CommClause) Position() (r token.Position) {
 // Source implements Node.
 func (n *CommClause) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *CommClause) Tokens() []Token { return nodeTokens(n) }
+
 // CommCase describes an communication clause case.
 //
 //	CommCase   = "case" ( SendStmt | RecvStmt ) | "default" .
@@ -1381,6 +1555,9 @@ func (n *CommCase) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *CommCase) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *CommCase) Tokens() []Token { return nodeTokens(n) }
 
 // ExprCaseClause describes an expression switch case clause.
 //
@@ -1401,6 +1578,9 @@ func (n *ExprCaseClause) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
 
+// Tokens returns the tokens n consist of.
+func (n *ExprCaseClause) Tokens() []Token { return nodeTokens(n) }
+
 // ExprSwitchCase describes an expression switch case.
 //
 //	ExprSwitchCase = "case" ExpressionList | "default" .
@@ -1418,6 +1598,9 @@ func (n *ExprSwitchCase) Position() (r token.Position) {
 func (n *ExprSwitchCase) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
+
+// Tokens returns the tokens n consist of.
+func (n *ExprSwitchCase) Tokens() []Token { return nodeTokens(n) }
 
 // SliceExpr describes a slice expression.
 //
@@ -1443,6 +1626,9 @@ func (n *SliceExpr) Position() (r token.Position) {
 // Source implements Node.
 func (n *SliceExpr) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *SliceExpr) Tokens() []Token { return nodeTokens(n) }
+
 // SelectStmt describes a select statement.
 //
 //	SelectStmt = "select" "{" { CommClause } "}" .
@@ -1461,6 +1647,9 @@ func (n *SelectStmt) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *SelectStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *SelectStmt) Tokens() []Token { return nodeTokens(n) }
 
 // SendStmt describes a send statement.
 //
@@ -1483,6 +1672,9 @@ func (n *SendStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{},
 
 func (n *SendStmt) semi(p *parser) { n.Semicolon = p.semi(true) }
 
+// Tokens returns the tokens n consist of.
+func (n *SendStmt) Tokens() []Token { return nodeTokens(n) }
+
 // BreakStmt describes a continue statement.
 //
 //	BreakStmt = "break" [ Label ] .
@@ -1499,6 +1691,9 @@ func (n *BreakStmt) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *BreakStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *BreakStmt) Tokens() []Token { return nodeTokens(n) }
 
 // ContinueStmt describes a continue statement.
 //
@@ -1517,6 +1712,9 @@ func (n *ContinueStmt) Position() (r token.Position) {
 // Source implements Node.
 func (n *ContinueStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *ContinueStmt) Tokens() []Token { return nodeTokens(n) }
+
 // FallthroughStmt describes a fallthrough statement.
 //
 //	FallthroughStmt = "fallthrough" .
@@ -1534,6 +1732,9 @@ func (n *FallthroughStmt) Position() (r token.Position) {
 func (n *FallthroughStmt) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
+
+// Tokens returns the tokens n consist of.
+func (n *FallthroughStmt) Tokens() []Token { return nodeTokens(n) }
 
 // Conversion describes a conversion.
 //
@@ -1556,6 +1757,9 @@ func (n *Conversion) Position() (r token.Position) {
 // Source implements Node.
 func (n *Conversion) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *Conversion) Tokens() []Token { return nodeTokens(n) }
+
 // AliasDecl describes a type alias.
 //
 //	AliasDecl = identifier "=" Type .
@@ -1574,6 +1778,9 @@ func (n *AliasDecl) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *AliasDecl) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *AliasDecl) Tokens() []Token { return nodeTokens(n) }
 
 // ArrayTypeNode describes a channel type.
 //
@@ -1596,6 +1803,9 @@ func (n *ArrayTypeNode) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *ArrayTypeNode) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *ArrayTypeNode) Tokens() []Token { return nodeTokens(n) }
 
 // ChannelTypeNode describes a channel type.
 //
@@ -1622,6 +1832,9 @@ func (n *ChannelTypeNode) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
 
+// Tokens returns the tokens n consist of.
+func (n *ChannelTypeNode) Tokens() []Token { return nodeTokens(n) }
+
 // FunctionTypeNode describes a function type.
 //
 //	FunctionTypeNode = "func" Signature .
@@ -1641,6 +1854,9 @@ func (n *FunctionTypeNode) Position() (r token.Position) {
 func (n *FunctionTypeNode) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
+
+// Tokens returns the tokens n consist of.
+func (n *FunctionTypeNode) Tokens() []Token { return nodeTokens(n) }
 
 // MapTypeNode describes a map type.
 //
@@ -1662,6 +1878,9 @@ func (n *MapTypeNode) Position() (r token.Position) {
 // Source implements Node.
 func (n *MapTypeNode) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *MapTypeNode) Tokens() []Token { return nodeTokens(n) }
+
 // GoStmt describes a go statement.
 //
 // GoStmt = "go" Expression .
@@ -1678,6 +1897,9 @@ func (n *GoStmt) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *GoStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *GoStmt) Tokens() []Token { return nodeTokens(n) }
 
 // GenericOperand describes an operand name and type arguments.
 //
@@ -1699,6 +1921,9 @@ func (n *GenericOperand) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n, full).Bytes()
 }
 
+// Tokens returns the tokens n consist of.
+func (n *GenericOperand) Tokens() []Token { return nodeTokens(n) }
+
 // GotoStmt describes a goto statement.
 //
 //	GotoStmt = "goto" Label .
@@ -1716,6 +1941,9 @@ func (n *GotoStmt) Position() (r token.Position) {
 // Source implements Node.
 func (n *GotoStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *GotoStmt) Tokens() []Token { return nodeTokens(n) }
+
 // LabeledStmt describes a labeled statement.
 //
 //	LabeledStmt = Label ":" Statement .
@@ -1732,6 +1960,9 @@ func (n *LabeledStmt) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *LabeledStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *LabeledStmt) Tokens() []Token { return nodeTokens(n) }
 
 // TypeArgs describes a type name.
 //
@@ -1751,6 +1982,9 @@ func (n *TypeArgs) Position() (r token.Position) {
 // Source implements Node.
 func (n *TypeArgs) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *TypeArgs) Tokens() []Token { return nodeTokens(n) }
+
 // TypeListItem describes an item of a type list.
 type TypeListItem struct {
 	Type  Node
@@ -1764,6 +1998,9 @@ func (n *TypeListItem) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *TypeListItem) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *TypeListItem) Tokens() []Token { return nodeTokens(n) }
 
 // IncDecStmt describes an increment or decrement statemen.
 //
@@ -1785,6 +2022,9 @@ func (n *IncDecStmt) Source(full bool) []byte { return nodeSource(&bytes.Buffer{
 
 func (n *IncDecStmt) semi(p *parser) { n.Semicolon = p.semi(true) }
 
+// Tokens returns the tokens n consist of.
+func (n *IncDecStmt) Tokens() []Token { return nodeTokens(n) }
+
 // ParenExpr describes a parenthesized expression.
 //
 // ParenExpr = "(" Expression ")" .
@@ -1803,6 +2043,9 @@ func (n *ParenExpr) Position() (r token.Position) {
 
 // Source implements Node.
 func (n *ParenExpr) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
+
+// Tokens returns the tokens n consist of.
+func (n *ParenExpr) Tokens() []Token { return nodeTokens(n) }
 
 // ParenType describes a parenthesized type.
 //
@@ -1823,6 +2066,9 @@ func (n *ParenType) Position() (r token.Position) {
 // Source implements Node.
 func (n *ParenType) Source(full bool) []byte { return nodeSource(&bytes.Buffer{}, n, full).Bytes() }
 
+// Tokens returns the tokens n consist of.
+func (n *ParenType) Tokens() []Token { return nodeTokens(n) }
+
 // Constant represents a Go constant.
 type Constant struct {
 	node *ConstSpec
@@ -1839,6 +2085,9 @@ func (n *Constant) Position() (r token.Position) { return n.Ident.Position() }
 func (n *Constant) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n.Expr, full).Bytes()
 }
+
+// Tokens returns the tokens n consist of.
+func (n *Constant) Tokens() []Token { return nodeTokens(n) }
 
 // Variable represents a Go variable.
 type Variable struct {
@@ -1863,6 +2112,9 @@ func (n *Variable) Source(full bool) []byte {
 	return nodeSource(&bytes.Buffer{}, n.Expr, full).Bytes()
 }
 
+// Tokens returns the tokens n consist of.
+func (n *Variable) Tokens() []Token { return nodeTokens(n) }
+
 // BasicLit represents a basic literal.
 type BasicLit struct {
 	typer
@@ -1875,6 +2127,9 @@ func (n *BasicLit) Position() (r token.Position) { return n.Token.Position() }
 
 // Source implements Node.
 func (n *BasicLit) Source(full bool) []byte { return n.Token.src() }
+
+// Tokens returns the tokens n consist of.
+func (n *BasicLit) Tokens() []Token { return nodeTokens(n) }
 
 // Ident represents an unqualified operand/type name.
 type Ident struct {
@@ -1893,3 +2148,6 @@ func (n *Ident) Position() (r token.Position) { return n.Token.Position() }
 
 // Source implements Node.
 func (n *Ident) Source(full bool) []byte { return n.Token.src() }
+
+// Tokens returns the tokens n consist of.
+func (n *Ident) Tokens() []Token { return []Token{n.Token} }

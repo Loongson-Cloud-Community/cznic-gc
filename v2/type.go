@@ -176,6 +176,9 @@ type noSourcer struct{}
 // Source implements Node. It returns nil.
 func (noSourcer) Source(bool) []byte { return nil }
 
+// Tokens implements Node. It returns nil.
+func (noSourcer) Tokens() []Token { return nil }
+
 // InvalidType represents an invalid type.
 type InvalidType struct {
 	noSourcer
@@ -203,6 +206,9 @@ func (t PredefinedType) Position() (r token.Position) { return r }
 func (t PredefinedType) Source(full bool) []byte { return nil }
 
 func (t PredefinedType) String() string { return strings.ToLower(t.Kind().String()) }
+
+// Tokens implements Node. It returns nil.
+func (t PredefinedType) Tokens() []Token { return nil }
 
 // Kind implements Type.
 func (t PredefinedType) Kind() Kind { return Kind(t) }
@@ -559,6 +565,9 @@ func (t *TupleType) Position() (r token.Position) {
 
 // Source implements Node. It returns nil.
 func (t *TupleType) Source(bool) []byte { return nil }
+
+// Tokens implements Node. It returns nil.
+func (t *TupleType) Tokens() []Token { return nil }
 
 func (t *TupleType) String() string {
 	var a []string

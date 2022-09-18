@@ -487,6 +487,9 @@ func (n *Package) Position() (r token.Position) {
 // Source implements Node. Source returns a zero value.
 func (n *Package) Source(full bool) []byte { return nil }
 
+// Tokens returns the tokens n consist of. Tokens returns nil.
+func (n *Package) Tokens() []Token { return nil }
+
 // Check type checks n.
 func (n *Package) Check(checker PackageChecker) error {
 	c := newCtx(checker, n)

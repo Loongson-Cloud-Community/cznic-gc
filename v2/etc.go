@@ -166,6 +166,50 @@ func (p *parallel) wait() error {
 	return fmt.Errorf("%s", strings.Join(a, "\n"))
 }
 
+func nodeTokens(n interface{}) (r []Token) {
+	if n == nil {
+		return nil
+	}
+
+	if x, ok := n.(Token); ok && x.IsValid() {
+		return []Token{x}
+	}
+
+	t := reflect.TypeOf(n)
+	v := reflect.ValueOf(n)
+	var zero reflect.Value
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+		v = v.Elem()
+		if v == zero {
+			return nil
+		}
+	}
+
+	switch t.Kind() {
+	case reflect.Struct:
+		nf := t.NumField()
+		for i := 0; i < nf; i++ {
+			f := t.Field(i)
+			if !f.IsExported() {
+				continue
+			}
+
+			if v == zero || v.IsZero() {
+				continue
+			}
+
+			r = append(r, nodeTokens(v.Field(i).Interface())...)
+		}
+	case reflect.Slice:
+		ne := v.Len()
+		for i := 0; i < ne; i++ {
+			r = append(r, nodeTokens(v.Index(i).Interface())...)
+		}
+	}
+	return r
+}
+
 func nodeSource(b *bytes.Buffer, n interface{}, full bool) *bytes.Buffer {
 	if n == nil {
 		return b

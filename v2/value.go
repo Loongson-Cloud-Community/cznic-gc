@@ -75,6 +75,7 @@ func (n *invalidExprType) Kind() Kind                   { return InvalidKind }
 func (n *invalidExprType) check(c *ctx) Node            { return n }
 func (n *invalidExprType) Position() (r token.Position) { return r }
 func (n *invalidExprType) Source(full bool) []byte      { return []byte("<invalid expression>") }
+func (n *invalidExprType) Tokens() []Token              { return nil }
 
 func (c *ctx) convertValue(n Node, v constant.Value, to Type) (r constant.Value) {
 	if v.Kind() == constant.Unknown {
