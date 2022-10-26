@@ -15,7 +15,7 @@ const (
 )
 
 var (
-	spec ebnf.Grammar
+	spec, peg ebnf.Grammar
 )
 
 func init() {
@@ -27,6 +27,19 @@ func init() {
 	var b bytes.Buffer
 	printEBNF(&b, spec)
 	if err = os.WriteFile("spec.ebnf", b.Bytes(), 0660); err != nil {
+		panic(err)
+	}
+
+	s, err := os.ReadFile("peg.ebnf")
+	if err != nil {
+		panic(err)
+	}
+
+	if peg, err = ebnf.Parse("peg.ebnf", bytes.NewBuffer(s)); err != nil {
+		panic(err)
+	}
+
+	if ebnf.Verify(peg, startProduction); err != nil {
 		panic(err)
 	}
 }
@@ -42,5 +55,15 @@ func TestSpecEBNF(t *testing.T) {
 			a = append(a, w.Name.String)
 		}
 		t.Logf("left recursive: %v", a)
+	}
+}
+
+func TestPEGEBNF(t *testing.T) {
+	for _, v := range leftRecursive(peg, startProduction) {
+		var a []string
+		for _, w := range v {
+			a = append(a, w.Name.String)
+		}
+		t.Errorf("left recursive: %v", a)
 	}
 }
