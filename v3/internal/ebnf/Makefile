@@ -1,4 +1,4 @@
-.PHONY:	clean edit editor
+.PHONY:	clean edit editor test
 
 clean:
 	rm -f log-* cpu.test mem.test *.out
@@ -10,4 +10,7 @@ edit:
 
 editor:
 	gofmt -l -s -w *.go
-	go test 2>&1 | tee log-editor
+	go test -c -o /dev/null 2>&1 | tee log-editor
+
+test:
+	go test -v 2>&1 | tee log-test
