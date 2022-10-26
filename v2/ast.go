@@ -332,6 +332,7 @@ func (n *TypeDecl) Tokens() []Token { return nodeTokens(n) }
 //
 //	TypeDef = identifier [ TypeParameters ] Type .
 type TypeDef struct {
+	lexicalScoper
 	typer
 	Ident          Token
 	TypeParameters *TypeParameters
@@ -1764,6 +1765,7 @@ func (n *Conversion) Tokens() []Token { return nodeTokens(n) }
 //
 //	AliasDecl = identifier "=" Type .
 type AliasDecl struct {
+	lexicalScoper
 	typer
 	Ident     Token
 	Eq        Token

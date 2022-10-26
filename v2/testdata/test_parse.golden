@@ -7809,7 +7809,11 @@
 /usr/local/go/test/fixedbugs/issue5470.dir/a.go
 /usr/local/go/test/fixedbugs/issue5470.dir/b.go
 /usr/local/go/test/fixedbugs/issue5470.go
+/usr/local/go/test/fixedbugs/issue54911.go
 /usr/local/go/test/fixedbugs/issue5493.go
+/usr/local/go/test/fixedbugs/issue54991.go
+/usr/local/go/test/fixedbugs/issue55122.go
+/usr/local/go/test/fixedbugs/issue55122b.go
 /usr/local/go/test/fixedbugs/issue5515.go
 /usr/local/go/test/fixedbugs/issue5581.go
 /usr/local/go/test/fixedbugs/issue5607.go
@@ -8612,6 +8616,7 @@
 /usr/local/go/test/typeparam/issue53477.go
 /usr/local/go/test/typeparam/issue53762.go
 /usr/local/go/test/typeparam/issue54135.go
+/usr/local/go/test/typeparam/issue54225.go
 /usr/local/go/test/typeparam/issue54302.dir/a.go
 /usr/local/go/test/typeparam/issue54302.dir/main.go
 /usr/local/go/test/typeparam/issue54302.go

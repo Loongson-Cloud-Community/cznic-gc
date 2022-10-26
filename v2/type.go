@@ -488,7 +488,7 @@ func (t *StructType) String() string {
 	return b.String()
 }
 
-// FieldByName returns the field named nm or nil, if such field does not exist.
+// FieldByName returns the field named nm or nil, if no such field exists.
 func (t *StructType) FieldByName(nm string) *Field {
 	if t.m == nil {
 		t.m = map[string]*Field{}
@@ -506,9 +506,19 @@ func (n *StructTypeNode) check(c *ctx) Node {
 	for _, v := range n.FieldDecls {
 		switch x := v.(type) {
 		case *FieldDecl:
-			ft := newTyper(c.checkType(x.Type))
-			for _, id := range x.IdentifierList {
-				t.Fields = append(t.Fields, &Field{typer: ft, Name: id.Ident.Src()})
+			switch {
+			case x.EmbeddedField != nil:
+				ef := x.EmbeddedField
+				ft := c.checkType(ef.TypeName)
+				if ef.Star.IsValid() {
+					ft = newPointer(c.pkg, ft)
+				}
+				t.Fields = append(t.Fields, &Field{typer: newTyper(ft), Name: ef.TypeName.Name.Ident.Src()})
+			default:
+				ft := newTyper(c.checkType(x.Type))
+				for _, id := range x.IdentifierList {
+					t.Fields = append(t.Fields, &Field{typer: ft, Name: id.Ident.Src()})
+				}
 			}
 		default:
 			c.err(v, errorf("TODO %T", x))

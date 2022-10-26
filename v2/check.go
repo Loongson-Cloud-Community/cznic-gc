@@ -1025,7 +1025,7 @@ func (n *LiteralValue) checkStruct(c *ctx, strct *StructType) {
 	var ix int
 	for _, ke := range n.ElementList {
 		if ix >= len(strct.Fields) {
-			c.err(n, errorf("TODO %T", ix))
+			c.err(n, errorf("TODO %v/%v", ix, len(strct.Fields)))
 			return
 		}
 
@@ -1245,11 +1245,19 @@ func (n *Index) check(c *ctx) Node {
 	v, xt := c.checkExpr(&n.Expr)
 	switch x := pt.(type) {
 	case *PointerType:
-		if x.Elem.Kind() == Array {
-			return n.checkArray(c, x.Elem.(*ArrayType), v, xt)
+		switch y := x.Elem.(type) {
+		case *ArrayType:
+			return n.checkArray(c, y, v, xt)
+		case *TypeDef:
+			switch z := y.Type().(type) {
+			case *ArrayType:
+				return n.checkArray(c, z, v, xt)
+			default:
+				c.err(n, errorf("TODO %T", z))
+			}
+		default:
+			c.err(n, errorf("TODO %T", y))
 		}
-
-		c.err(n, errorf("TODO %T", x))
 	case *ArrayType:
 		return n.checkArray(c, x, v, xt)
 	default:
@@ -1685,7 +1693,10 @@ func (n *FunctionDecl) checkBody(c *ctx) {
 				s.add(c, id.Src(), vis, v)
 			}
 		}
-	case nil:
+	case
+		*TypeNameNode,
+		nil:
+
 		// ok
 	default:
 		c.err(n, errorf("TODO %T", x))
@@ -1753,6 +1764,19 @@ func (c *ctx) checkStatement(n Node) {
 	case *LabeledStmt:
 		//TODO
 		c.checkStatement(x.Statement)
+	case *TypeDecl:
+		for _, ts := range x.TypeSpecs {
+			switch y := ts.(type) {
+			case *AliasDecl:
+				y.LexicalScope().add(c, y.Ident.Src(), y.Ident.Offset(), ts)
+				c.checkType(y)
+			case *TypeDef:
+				y.LexicalScope().add(c, y.Ident.Src(), y.Ident.Offset(), ts)
+				c.checkType(y)
+			default:
+				c.err(y, errorf("TODO %T", y))
+			}
+		}
 	case *EmptyStmt:
 		// nop
 	default:

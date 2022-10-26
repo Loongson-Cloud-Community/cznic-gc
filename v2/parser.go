@@ -308,30 +308,30 @@ func (p *parser) typeSpec(semi bool) (r Node) {
 		// identifier .
 		switch p.ch() {
 		case '=':
-			return &AliasDecl{Ident: id, Eq: p.shift(), TypeNode: p.type1(), Semicolon: p.semi(semi)}
+			return &AliasDecl{lexicalScoper: newLexicalScoper(p.lexicalScope), Ident: id, Eq: p.shift(), TypeNode: p.type1(), Semicolon: p.semi(semi)}
 		case '[':
 			lbracket := p.shift()
 			// identifier "[" .
 			switch p.ch() {
 			case ']':
 				// identifier "[" . "]"
-				return &TypeDef{Ident: id, TypeNode: &SliceTypeNode{LBracket: lbracket, RBracket: p.shift(), ElementType: p.type1()}, Semicolon: p.semi(semi)}
+				return &TypeDef{lexicalScoper: newLexicalScoper(p.lexicalScope), Ident: id, TypeNode: &SliceTypeNode{LBracket: lbracket, RBracket: p.shift(), ElementType: p.type1()}, Semicolon: p.semi(semi)}
 			case ELLIPSIS:
 				// identifier "[" . "..."
-				return &TypeDef{Ident: id, TypeNode: &ArrayTypeNode{LBracket: lbracket, Ellipsis: p.shift(), RBracket: p.must(']'), ElementType: p.type1()}, Semicolon: p.semi(semi)}
+				return &TypeDef{lexicalScoper: newLexicalScoper(p.lexicalScope), Ident: id, TypeNode: &ArrayTypeNode{LBracket: lbracket, Ellipsis: p.shift(), RBracket: p.must(']'), ElementType: p.type1()}, Semicolon: p.semi(semi)}
 			default:
 				expr := p.expression(nil)
 				// identifier "[" expression .
 				switch p.ch() {
 				case ']':
 					// identifier "[" expression . "]"
-					return &TypeDef{Ident: id, TypeNode: &ArrayTypeNode{LBracket: lbracket, ArrayLength: expr.(Expression), RBracket: p.shift(), ElementType: p.type1()}, Semicolon: p.semi(semi)}
+					return &TypeDef{lexicalScoper: newLexicalScoper(p.lexicalScope), Ident: id, TypeNode: &ArrayTypeNode{LBracket: lbracket, ArrayLength: expr.(Expression), RBracket: p.shift(), ElementType: p.type1()}, Semicolon: p.semi(semi)}
 				default:
 					switch x := expr.(type) {
 					case Token:
-						return &TypeDef{Ident: id, TypeParameters: p.typeParameters2(lbracket, x), TypeNode: p.type1(), Semicolon: p.semi(semi)}
+						return &TypeDef{lexicalScoper: newLexicalScoper(p.lexicalScope), Ident: id, TypeParameters: p.typeParameters2(lbracket, x), TypeNode: p.type1(), Semicolon: p.semi(semi)}
 					case *Ident:
-						return &TypeDef{Ident: id, TypeParameters: p.typeParameters2(lbracket, x.Token), TypeNode: p.type1(), Semicolon: p.semi(semi)}
+						return &TypeDef{lexicalScoper: newLexicalScoper(p.lexicalScope), Ident: id, TypeParameters: p.typeParameters2(lbracket, x.Token), TypeNode: p.type1(), Semicolon: p.semi(semi)}
 					default:
 						p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 						p.shift()
@@ -341,7 +341,7 @@ func (p *parser) typeSpec(semi bool) (r Node) {
 			}
 			//                      Type case '(', '*', '[', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
 		case '(', '*', ARROW, CHAN, FUNC, IDENTIFIER, INTERFACE, MAP, STRUCT:
-			return &TypeDef{Ident: id, TypeNode: p.type1(), Semicolon: p.semi(semi)}
+			return &TypeDef{lexicalScoper: newLexicalScoper(p.lexicalScope), Ident: id, TypeNode: p.type1(), Semicolon: p.semi(semi)}
 		default:
 			p.err(errorf("TODO %v", p.s.Tok.Ch.str()))
 			p.shift()
