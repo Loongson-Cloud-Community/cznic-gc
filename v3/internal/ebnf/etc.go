@@ -3,13 +3,22 @@ package main
 import (
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 
+	"github.com/dustin/go-humanize"
 	"golang.org/x/exp/ebnf"
+)
+
+var (
+	trcTODOs       bool
+	extendedErrors = true
 )
 
 // origin returns caller's short position, skipping skip frames.
@@ -210,4 +219,107 @@ func leftRecursive(g ebnf.Grammar, start string) (r [][]*ebnf.Production) {
 
 	f(p.Expr, 1, []*ebnf.Production{p})
 	return r
+}
+
+// errorf constructs an error value. If ExtendedErrors is true, the error will
+// contain its origin.
+func errorf(s string, args ...interface{}) error {
+	switch {
+	case s == "":
+		s = fmt.Sprintf(strings.Repeat("%v ", len(args)), args...)
+	default:
+		s = fmt.Sprintf(s, args...)
+	}
+	if trcTODOs && strings.HasPrefix(s, "TODO") {
+		fmt.Fprintf(os.Stderr, "%s (%v)\n", s, origin(2))
+		os.Stderr.Sync()
+	}
+	switch {
+	case extendedErrors:
+		return fmt.Errorf("%s (%v: %v: %v)", s, origin(4), origin(3), origin(2))
+	default:
+		return fmt.Errorf("%s", s)
+	}
+}
+
+func h(v interface{}) string {
+	switch x := v.(type) {
+	case int:
+		return humanize.Comma(int64(x))
+	case int32:
+		return humanize.Comma(int64(x))
+	case int64:
+		return humanize.Comma(x)
+	case uint32:
+		return humanize.Comma(int64(x))
+	case uint64:
+		if x <= math.MaxInt64 {
+			return humanize.Comma(int64(x))
+		}
+	}
+	return fmt.Sprint(v)
+}
+
+type parallel struct {
+	errors []error
+	limit  chan struct{}
+	sync.Mutex
+	wg sync.WaitGroup
+
+	fails   int32
+	files   int32
+	ok      int32
+	skipped int32
+}
+
+func newParallel() *parallel {
+	return &parallel{
+		limit: make(chan struct{}, runtime.GOMAXPROCS(0)),
+	}
+}
+
+func (p *parallel) AddSkipped() { atomic.AddInt32(&p.skipped, 1) }
+func (p *parallel) addFail()    { atomic.AddInt32(&p.fails, 1) }
+func (p *parallel) addFile()    { atomic.AddInt32(&p.files, 1) }
+func (p *parallel) addOk()      { atomic.AddInt32(&p.ok, 1) }
+
+func (p *parallel) err(err error) {
+	if err == nil {
+		return
+	}
+
+	s := err.Error()
+	if x := strings.Index(s, "TODO"); x >= 0 {
+		fmt.Println(s[x:])
+	}
+	p.Lock()
+	p.errors = append(p.errors, err)
+	p.Unlock()
+}
+
+func (p *parallel) exec(run func() error) {
+	p.limit <- struct{}{}
+	p.wg.Add(1)
+
+	go func() {
+		defer func() {
+			p.wg.Done()
+			<-p.limit
+		}()
+
+		p.err(run())
+	}()
+}
+
+func (p *parallel) wait() error {
+	p.wg.Wait()
+	if len(p.errors) == 0 {
+		return nil
+	}
+
+	var a []string
+	for _, v := range p.errors {
+		a = append(a, v.Error())
+	}
+	return fmt.Errorf("%s", strings.Join(a, "\n"))
 }

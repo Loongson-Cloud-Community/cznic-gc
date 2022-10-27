@@ -2,7 +2,7 @@ AliasDecl = identifier "=" Type .
 Arguments = "(" [ ( ExpressionList | Type [ "," ExpressionList ] ) [ "..." ] [ "," ] ] ")" .
 ArrayLength = Expression .
 ArrayType = "[" ArrayLength "]" ElementType .
-Assignment = ExpressionList assign_op ExpressionList .
+Assignment = ExpressionList ( "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" | "=" ) ExpressionList .
 BaseType = Type .
 BasicLit = int_lit | float_lit | imaginary_lit | rune_lit | string_lit .
 Block = "{" StatementList "}" .
@@ -27,14 +27,14 @@ EmptyStmt =  .
 ExprCaseClause = ExprSwitchCase ":" StatementList .
 ExprSwitchCase = "case" ExpressionList | "default" .
 ExprSwitchStmt = "switch" [ SimpleStmt ";" ] [ Expression ] "{" { ExprCaseClause } "}" .
-Expression = UnaryExpr { binary_op Expression } .
+Expression = UnaryExpr { ( "||" | "&&" | "==" | "!=" | "<" | "<=" | ">" | ">=" | "+" | "-" | "|" | "^" | "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" ) 	Expression } .
 ExpressionList = Expression { "," Expression } .
 ExpressionStmt = Expression .
 FallthroughStmt = "fallthrough" .
 FieldDecl = ( IdentifierList Type | EmbeddedField ) [ Tag ] .
 FieldName = identifier .
 ForClause = [ InitStmt ] ";" [ Condition ] ";" [ PostStmt ] .
-ForStmt = "for" [ Condition | ForClause | RangeClause ] Block .
+ForStmt = "for" [ RangeClause | Condition | ForClause ] Block .
 FunctionBody = Block .
 FunctionDecl = "func" FunctionName [ TypeParameters ] Signature [ FunctionBody ] .
 FunctionLit = "func" Signature FunctionBody .
@@ -88,12 +88,12 @@ Selector = "." identifier .
 SendStmt = Channel "<-" Expression .
 ShortVarDecl = IdentifierList ":=" ExpressionList .
 Signature = Parameters [ Result ] .
-SimpleStmt = EmptyStmt | ExpressionStmt | SendStmt | IncDecStmt | Assignment | ShortVarDecl .
+SimpleStmt = /* EmptyStmt | */ Assignment | ShortVarDecl | IncDecStmt | ExpressionStmt | SendStmt  .
 Slice = "[" [ Expression ] ":" [ Expression ] "]" | "[" [ Expression ] ":" Expression ":" Expression "]" .
 SliceType = "[" "]" ElementType .
 SourceFile = PackageClause ";" { ImportDecl ";" } { TopLevelDecl ";" } .
 Statement = Declaration | LabeledStmt | SimpleStmt | GoStmt | ReturnStmt | BreakStmt | ContinueStmt | GotoStmt | FallthroughStmt | Block | IfStmt | SwitchStmt | SelectStmt | ForStmt | DeferStmt .
-StatementList = { Statement ";" } .
+StatementList = [ Statement { ";" Statement } [ ";" ] ] .
 StructType = "struct" "{" { FieldDecl ";" } "}" .
 SwitchStmt = ExprSwitchStmt | TypeSwitchStmt .
 Tag = string_lit .
@@ -108,7 +108,7 @@ TypeDef = identifier [ TypeParameters ] Type .
 TypeElem = TypeTerm { "|" TypeTerm } .
 TypeList = Type { "," Type } .
 TypeLit = ArrayType | StructType | PointerType | FunctionType | InterfaceType | SliceType | MapType | ChannelType .
-TypeName = identifier | QualifiedIdent .
+TypeName = QualifiedIdent | identifier .
 TypeParamDecl = IdentifierList TypeConstraint .
 TypeParamList = TypeParamDecl { "," TypeParamDecl } .
 TypeParameters = "[" TypeParamList [ "," ] "]" .
@@ -117,7 +117,7 @@ TypeSwitchCase = "case" TypeList | "default" .
 TypeSwitchGuard = [ identifier ":=" ] PrimaryExpr "." "(" "type" ")" .
 TypeSwitchStmt = "switch" [ SimpleStmt ";" ] TypeSwitchGuard "{" { TypeCaseClause } "}" .
 TypeTerm = Type | UnderlyingType .
-UnaryExpr = PrimaryExpr | unary_op UnaryExpr .
+UnaryExpr = PrimaryExpr | ( "+" | "-" | "!" | "^" | "*" | "&" | "<-" ) UnaryExpr .
 UnderlyingType = "~" Type .
 VarDecl = "var" ( VarSpec | "(" { VarSpec ";" } ")" ) .
 VarSpec = IdentifierList ( Type [ "=" ExpressionList ] | "=" ExpressionList ) .
