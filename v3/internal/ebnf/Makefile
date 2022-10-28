@@ -13,4 +13,6 @@ editor:
 	go test -c -o /dev/null 2>&1 | tee log-editor
 
 test:
-	go test -v -trc 2>&1 | tee log-test
+	go test -v -failfast 2>&1 | tee log-test
+	git diff testdata/
+	git status
