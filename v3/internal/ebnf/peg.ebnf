@@ -30,14 +30,11 @@ EmbeddedField = [ "*" ] TypeName [ TypeArgs ] .
 EmptyStmt = .
 ExprCaseClause = ExprSwitchCase ":" StatementList .
 ExprSwitchCase = "case" ExpressionList | "default" .
-ExprSwitchStmt =
-	  "switch" [ ExpressionPreBlock ] "{" { ExprCaseClause } "}"
-	| "switch" SimpleStmt ";" [ ExpressionPreBlock ] "{" { ExprCaseClause } "}"
-	.
+ExprSwitchStmt = "switch" [ ExpressionPreBlock ] "{" { ExprCaseClause } "}" | "switch" SimpleStmt ";" [ ExpressionPreBlock ] "{" { ExprCaseClause } "}" .
 Expression = UnaryExpr { BinaryOp Expression } .
-ExpressionPreBlock = UnaryExprPreBlock { BinaryOp ExpressionPreBlock } | Expression .
 ExpressionList = Expression { "," Expression } .
 ExpressionListPreBlock = ExpressionPreBlock { "," ExpressionPreBlock } .
+ExpressionPreBlock = UnaryExprPreBlock { BinaryOp ExpressionPreBlock } | Expression .
 ExpressionStmt = Expression .
 ExpressionStmtPreBlock = ExpressionPreBlock .
 FallthroughStmt = "fallthrough" .
@@ -53,10 +50,7 @@ FunctionType = "func" Signature .
 GoStmt = "go" Expression .
 GotoStmt = "goto" Label .
 IdentifierList = identifier { "," identifier } .
-IfStmt =
-	"if" ExpressionPreBlock Block [ "else" ( IfStmt | Block ) ]
-	| "if" SimpleStmt ";" ExpressionPreBlock Block [ "else" ( IfStmt | Block ) ]
-	.
+IfStmt = "if" ExpressionPreBlock Block [ "else" ( IfStmt | Block ) ] | "if" SimpleStmt ";" ExpressionPreBlock Block [ "else" ( IfStmt | Block ) ] .
 ImportDecl = "import" ( ImportSpec | "(" { ImportSpec ";" } ")" ) .
 ImportPath = string_lit .
 ImportSpec = [ "." | PackageName ] ImportPath .
@@ -81,8 +75,8 @@ MethodExpr = ReceiverType "." MethodName .
 MethodName = identifier .
 MulOp = "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" .
 Operand = Literal | OperandName [ TypeArgs ] | "(" Expression ")" .
-OperandPreBlock = LiteralPreBlock | OperandName [ TypeArgs ] | "(" Expression ")" .
 OperandName = QualifiedIdent | identifier .
+OperandPreBlock = LiteralPreBlock | OperandName [ TypeArgs ] | "(" Expression ")" .
 PackageClause = "package" PackageName .
 PackageName = identifier .
 ParameterDecl = identifier "..." Type | identifier Type | "..." Type | Type .

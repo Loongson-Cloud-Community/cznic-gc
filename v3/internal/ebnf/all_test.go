@@ -16,6 +16,7 @@ import (
 )
 
 const (
+	pegEBNF         = "peg.ebnf"
 	startProduction = "SourceFile"
 )
 
@@ -52,8 +53,7 @@ func TestSpecEBNF(t *testing.T) {
 	}
 }
 
-func loadPEG() (*grammar, error) {
-	const fn = "peg.ebnf"
+func loadPEG(fn string) (*grammar, error) {
 	b, err := os.ReadFile(fn)
 	if err != nil {
 		return nil, err
@@ -63,34 +63,30 @@ func loadPEG() (*grammar, error) {
 }
 
 func TestPEGEBNF(t *testing.T) {
-	peg, err := loadPEG()
+	testGrammar(t, pegEBNF)
+}
+
+func testGrammar(t *testing.T, fn string) {
+	peg, err := loadPEG(fn)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var a []string
-	for nm, p := range peg.ebnf {
+	for nm, p := range peg.g {
 		var b []string
 		for k := range peg.followSets[p] {
-			switch k {
-			case epsilon:
-				b = append(b, "ε")
-			default:
-				b = append(b, fmt.Sprint(k))
-				if fmt.Sprint(k) == "ILLEGAL" {
-					panic(todo("", int(k)))
-				}
-			}
+			b = append(b, tokString(k))
 		}
 		sort.Strings(b)
-		a = append(a, fmt.Sprintf("%s %q", nm, b))
+		a = append(a, fmt.Sprintf("%s case %v:", nm, strings.Join(b, ", ")))
 	}
 	sort.Strings(a)
-	if err := os.WriteFile("closures", []byte(strings.Join(a, "\n")), 0660); err != nil {
+	if err := os.WriteFile(fn+".fs", []byte(strings.Join(a, "\n")), 0660); err != nil {
 		t.Fatal(err)
 	}
 
-	for _, v := range leftRecursive(peg.ebnf, startProduction) {
+	for _, v := range leftRecursive(peg.g, startProduction) {
 		var a []string
 		for _, w := range v {
 			a = append(a, w.Name.String)
@@ -163,26 +159,26 @@ func (g *golden) close() {
 	}
 }
 
-func TestPEG(t *testing.T) {
-	peg, err := loadPEG()
+func TestEBNFParser(t *testing.T) {
+	peg, err := loadPEG(pegEBNF)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	gld := newGolden(t, fmt.Sprintf("testdata/test_parse.golden"))
+	gld := newGolden(t, fmt.Sprintf("testdata/test_parse.ebnf.golden"))
 
 	defer gld.close()
 
 	p := newParallel()
-	t.Run("cd", func(t *testing.T) { testPEG(p, t, peg, ".", gld) })
-	t.Run("goroot", func(t *testing.T) { testPEG(p, t, peg, runtime.GOROOT(), gld) })
+	t.Run("cd", func(t *testing.T) { testParser(p, t, peg, ".", gld) })
+	t.Run("goroot", func(t *testing.T) { testParser(p, t, peg, runtime.GOROOT(), gld) })
 	if err := p.wait(); err != nil {
 		t.Error(err)
 	}
 	t.Logf("TOTAL files %v, skip %v, ok %v, fail %v", h(p.files), h(p.skipped), h(p.ok), h(p.fails))
 }
 
-func testPEG(p *parallel, t *testing.T, g *grammar, root string, gld *golden) {
+func testParser(p *parallel, t *testing.T, g *grammar, root string, gld *golden) {
 	if err := filepath.Walk(filepath.FromSlash(root), func(path0 string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err

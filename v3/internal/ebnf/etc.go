@@ -421,7 +421,7 @@ func leftRecursive(g ebnf.Grammar, start string) (r [][]*ebnf.Production) {
 type followSet map[token.Token]struct{}
 
 type grammar struct {
-	ebnf       ebnf.Grammar
+	g          ebnf.Grammar
 	followSets map[*ebnf.Production]followSet
 }
 
@@ -435,8 +435,8 @@ func newGrammar(name, start string, src []byte) (r *grammar, err error) {
 		return nil, err
 	}
 
-	r = &grammar{ebnf: g, followSets: map[*ebnf.Production]followSet{}}
-	for nm, p := range r.ebnf {
+	r = &grammar{g: g, followSets: map[*ebnf.Production]followSet{}}
+	for nm, p := range r.g {
 		if token.IsExported(nm) {
 			r.followSets[p] = r.closure(p.Expr)
 		}
@@ -461,12 +461,12 @@ func (g *grammar) closure(e ebnf.Expression) (r followSet) {
 		return r
 	case *ebnf.Name:
 		nm := x.String
-		p := g.ebnf[nm]
+		p := g.g[nm]
 		if r = g.followSets[p]; r != nil {
 			return r
 		}
 
-		if e := g.ebnf[nm].Expr; e != nil {
+		if e := g.g[nm].Expr; e != nil {
 			r = followSet{}
 			g.followSets[p] = r
 			for k := range g.closure(e) {
@@ -534,6 +534,72 @@ func pos(p token.Position) token.Position {
 	return p
 }
 
+func tokString(t token.Token) string {
+	if t == epsilon {
+		return "ε"
+	}
+
+	s := t.String()
+	if len(s) == 1 {
+		return fmt.Sprintf("'%c'", s[0])
+	}
+
+	switch t {
+	case token.SHL:
+		return "SHL"
+	case token.SHR:
+		return "SHR"
+	case token.AND_NOT:
+		return "AND_NOT"
+	case token.ADD_ASSIGN:
+		return "ADD_ASSIGN"
+	case token.SUB_ASSIGN:
+		return "SUB_ASSIGN"
+	case token.MUL_ASSIGN:
+		return "MUL_ASSIGN"
+	case token.QUO_ASSIGN:
+		return "QUO_ASSIGN"
+	case token.REM_ASSIGN:
+		return "REM_ASSIGN"
+	case token.AND_ASSIGN:
+		return "AND_ASSIGN"
+	case token.OR_ASSIGN:
+		return "OR_ASSIGN"
+	case token.XOR_ASSIGN:
+		return "XOR_ASSIGN"
+	case token.SHL_ASSIGN:
+		return "SHL_ASSIGN"
+	case token.SHR_ASSIGN:
+		return "SHR_ASSIGN"
+	case token.AND_NOT_ASSIGN:
+		return "AND_NOT_ASSIGN"
+	case token.LAND:
+		return "LAND"
+	case token.LOR:
+		return "LOR"
+	case token.ARROW:
+		return "ARROW"
+	case token.INC:
+		return "INC"
+	case token.DEC:
+		return "DEC"
+	case token.EQL:
+		return "EQL"
+	case token.NEQ:
+		return "NEQ"
+	case token.LEQ:
+		return "LEQ"
+	case token.GEQ:
+		return "GEQ"
+	case token.DEFINE:
+		return "DEFINE"
+	case token.ELLIPSIS:
+		return "ELLIPSIS"
+	default:
+		return strings.ToUpper(s)
+	}
+}
+
 type parser struct {
 	f    *token.File
 	g    *grammar
@@ -599,7 +665,7 @@ func (p *parser) c(ix int) tok {
 }
 
 func (p *parser) parse(start string) error {
-	ix, ok := p.parseExpression(0, p.g.ebnf[start].Expr)
+	ix, ok := p.parseExpression(0, p.g.g[start].Expr)
 	if p.budget == 0 {
 		return errorf("%s: resources exhausted", p.path)
 	}
@@ -646,7 +712,7 @@ func (p *parser) parseExpression(ix int, e ebnf.Expression) (r int, ok bool) {
 	case *ebnf.Name:
 		switch nm = x.String; {
 		case token.IsExported(nm):
-			pr := p.g.ebnf[nm]
+			pr := p.g.g[nm]
 			fs := p.g.followSets[pr]
 			if _, ok := fs[p.c(ix).tok]; ok {
 				return p.parseExpression(ix, pr.Expr)
