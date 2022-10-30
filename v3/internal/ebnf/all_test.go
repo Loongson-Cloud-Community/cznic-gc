@@ -170,15 +170,15 @@ func TestEBNFParser(t *testing.T) {
 	defer gld.close()
 
 	p := newParallel()
-	t.Run("cd", func(t *testing.T) { testParser(p, t, peg, ".", gld) })
-	t.Run("goroot", func(t *testing.T) { testParser(p, t, peg, runtime.GOROOT(), gld) })
+	t.Run("cd", func(t *testing.T) { testEBNFParser(p, t, peg, ".", gld) })
+	t.Run("goroot", func(t *testing.T) { testEBNFParser(p, t, peg, runtime.GOROOT(), gld) })
 	if err := p.wait(); err != nil {
 		t.Error(err)
 	}
 	t.Logf("TOTAL files %v, skip %v, ok %v, fail %v", h(p.files), h(p.skipped), h(p.ok), h(p.fails))
 }
 
-func testParser(p *parallel, t *testing.T, g *grammar, root string, gld *golden) {
+func testEBNFParser(p *parallel, t *testing.T, g *grammar, root string, gld *golden) {
 	if err := filepath.Walk(filepath.FromSlash(root), func(path0 string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -223,7 +223,7 @@ func testParser(p *parallel, t *testing.T, g *grammar, root string, gld *golden)
 				return errorf("%s: %v", path, err)
 			}
 
-			pp, err := newParser(g, path, b, *oTrcPEG)
+			pp, err := newEBNFParser(g, path, b, *oTrcPEG)
 			if err != nil {
 				p.addSkipped()
 				return nil
@@ -264,4 +264,88 @@ func isKnownBad(fn string, pos token.Position) bool {
 	}
 
 	return false
+}
+
+//TODO func TestParser(t *testing.T) {
+//TODO 	gld := newGolden(t, fmt.Sprintf("testdata/test_parse.golden"))
+//TODO
+//TODO 	defer gld.close()
+//TODO
+//TODO 	p := newParallel()
+//TODO 	t.Run("cd", func(t *testing.T) { testParser(p, t, ".", gld) })
+//TODO 	t.Run("goroot", func(t *testing.T) { testParser(p, t, runtime.GOROOT(), gld) })
+//TODO 	if err := p.wait(); err != nil {
+//TODO 		t.Error(err)
+//TODO 	}
+//TODO 	t.Logf("TOTAL files %v, skip %v, ok %v, fail %v", h(p.files), h(p.skipped), h(p.ok), h(p.fails))
+//TODO 	if p.fails != 0 {
+//TODO 		t.Logf("Shortest failing file: %s, %v tokens", p.minPath, p.minToks)
+//TODO 	}
+//TODO }
+
+func testParser(p *parallel, t *testing.T, root string, gld *golden) {
+	if err := filepath.Walk(filepath.FromSlash(root), func(path0 string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		if re != nil && !re.MatchString(path0) {
+			return nil
+		}
+
+		if filepath.Ext(path0) != ".go" {
+			return nil
+		}
+
+		p.addFile()
+		path := path0
+		p.exec(func() (err error) {
+			if *oTrc {
+				fmt.Fprintln(os.Stderr, path)
+			}
+
+			var pp *parser
+
+			defer func() {
+				if err != nil {
+					p.addFail()
+					if pp != nil {
+						p.min(path, len(pp.toks))
+					}
+				}
+			}()
+
+			b, err := os.ReadFile(path)
+			if err != nil {
+				return errorf("%s: %v", path, err)
+			}
+
+			if pp, err = newParser(path, b); err != nil {
+				pp = nil
+				p.addSkipped()
+				return nil
+			}
+
+			if err := pp.parse(); err != nil {
+				if isKnownBad(path, pp.errPosition()) {
+					pp = nil
+					p.addSkipped()
+					return nil
+				}
+
+				return errorf("%s", err)
+			}
+
+			p.addOk()
+			gld.w("%s\n", path)
+			return nil
+		})
+		return nil
+	}); err != nil {
+		t.Error(err)
+	}
 }

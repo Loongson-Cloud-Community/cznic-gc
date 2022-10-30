@@ -14,5 +14,6 @@ editor:
 
 test:
 	go test -v -failfast 2>&1 | tee log-test
-	git diff testdata/
-	git status
+	@git diff testdata/
+	@git status
+	@grep 'FAIL' log-test || true

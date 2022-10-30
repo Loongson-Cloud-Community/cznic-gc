@@ -281,8 +281,10 @@ type parallel struct {
 	errors []error
 	limit  chan struct{}
 	sync.Mutex
-	wg sync.WaitGroup
+	wg      sync.WaitGroup
+	minPath string
 
+	minToks int
 	fails   int32
 	files   int32
 	ok      int32
@@ -299,6 +301,16 @@ func (p *parallel) addSkipped() { atomic.AddInt32(&p.skipped, 1) }
 func (p *parallel) addFail()    { atomic.AddInt32(&p.fails, 1) }
 func (p *parallel) addFile()    { atomic.AddInt32(&p.files, 1) }
 func (p *parallel) addOk()      { atomic.AddInt32(&p.ok, 1) }
+
+func (p *parallel) min(path string, toks int) {
+	p.Lock()
+	defer p.Unlock()
+
+	if p.minToks == 0 || toks < p.minToks {
+		p.minToks = toks
+		p.minPath = path
+	}
+}
 
 func (p *parallel) err(err error) {
 	if err == nil {
@@ -600,7 +612,7 @@ func tokString(t token.Token) string {
 	}
 }
 
-type parser struct {
+type ebnfParser struct {
 	f    *token.File
 	g    *grammar
 	path string
@@ -613,8 +625,8 @@ type parser struct {
 	trcPEG bool
 }
 
-func newParser(g *grammar, path string, src []byte, trcPEG bool) (r *parser, err error) {
-	r = &parser{
+func newEBNFParser(g *grammar, path string, src []byte, trcPEG bool) (r *ebnfParser, err error) {
+	r = &ebnfParser{
 		budget: 3e7,
 		g:      g,
 		path:   path,
@@ -637,17 +649,17 @@ func newParser(g *grammar, path string, src []byte, trcPEG bool) (r *parser, err
 	}
 }
 
-func (p *parser) indent() (r string) {
+func (p *ebnfParser) indent() (r string) {
 	p.indentN++
 	return strings.Repeat("· ", p.indentN-1)
 }
 
-func (p *parser) undent() string {
+func (p *ebnfParser) undent() string {
 	p.indentN--
 	return strings.Repeat("· ", p.indentN)
 }
 
-func (p *parser) tok(s string) token.Token {
+func (p *ebnfParser) tok(s string) token.Token {
 	if r, ok := toks[s]; ok {
 		return r
 	}
@@ -655,7 +667,7 @@ func (p *parser) tok(s string) token.Token {
 	panic(todo("%q", s))
 }
 
-func (p *parser) c(ix int) tok {
+func (p *ebnfParser) c(ix int) tok {
 	if p.budget == 0 {
 		return p.toks[len(p.toks)-1]
 	}
@@ -664,7 +676,7 @@ func (p *parser) c(ix int) tok {
 	return p.toks[ix]
 }
 
-func (p *parser) parse(start string) error {
+func (p *ebnfParser) parse(start string) error {
 	ix, ok := p.parseExpression(0, p.g.g[start].Expr)
 	if p.budget == 0 {
 		return errorf("%s: resources exhausted", p.path)
@@ -677,9 +689,11 @@ func (p *parser) parse(start string) error {
 	return nil
 }
 
-func (p *parser) errPosition() token.Position { return p.f.PositionFor(p.toks[p.maxIndex].pos, true) }
+func (p *ebnfParser) errPosition() token.Position {
+	return p.f.PositionFor(p.toks[p.maxIndex].pos, true)
+}
 
-func (p *parser) parseExpression(ix int, e ebnf.Expression) (r int, ok bool) {
+func (p *ebnfParser) parseExpression(ix int, e ebnf.Expression) (r int, ok bool) {
 	var nm string
 	r = ix
 

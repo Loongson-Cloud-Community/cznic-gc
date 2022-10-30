@@ -8752,4 +8752,4 @@
 all_test.go
 ebnflint.go
 etc.go
-testdata/parser/1.go
+parser.go
