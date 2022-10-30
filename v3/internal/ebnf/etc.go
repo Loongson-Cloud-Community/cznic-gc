@@ -445,8 +445,6 @@ func newGrammar(name, start string, src []byte) (r *grammar, err error) {
 }
 
 func (g *grammar) closure(e ebnf.Expression) (r followSet) {
-	// trc("%T = %s", e, ebnfString(e))
-	// defer func() { trc("%s -> %q", ebnfString(e), r) }()
 	switch x := e.(type) {
 	case ebnf.Sequence:
 		r = followSet{}
@@ -477,6 +475,10 @@ func (g *grammar) closure(e ebnf.Expression) (r followSet) {
 			return r
 		}
 
+		if token.IsExported(nm) {
+			return followSet{epsilon: {}}
+		}
+
 		r = followSet{toks[nm]: struct{}{}}
 		g.followSets[p] = r
 		return r
@@ -499,8 +501,17 @@ func (g *grammar) closure(e ebnf.Expression) (r followSet) {
 		}
 		r[epsilon] = struct{}{}
 		return r
+	case *ebnf.Repetition:
+		r = followSet{}
+		for k, v := range g.closure(x.Body) {
+			r[k] = v
+		}
+		r[epsilon] = struct{}{}
+		return r
+	case nil:
+		return followSet{epsilon: {}}
 	default:
-		panic(todo("%T", x))
+		panic(todo("%T %s", x, ebnfString(e)))
 	}
 }
 
@@ -510,7 +521,18 @@ type tok struct {
 	lit string
 }
 
-func (t tok) String() string { return fmt.Sprintf("%d: %v %q", t.pos, t.tok, t.lit) }
+func (t tok) String() string {
+	lit := t.lit
+	if lit == "" {
+		lit = fmt.Sprint(t.tok)
+	}
+	return fmt.Sprintf("%d: %v %q", t.pos, t.tok, lit)
+}
+
+func pos(p token.Position) token.Position {
+	p.Filename = ""
+	return p
+}
 
 type parser struct {
 	f    *token.File
@@ -527,7 +549,7 @@ type parser struct {
 
 func newParser(g *grammar, path string, src []byte, trcPEG bool) (r *parser, err error) {
 	r = &parser{
-		budget: 1e7,
+		budget: 3e7,
 		g:      g,
 		path:   path,
 		trcPEG: trcPEG,
@@ -567,8 +589,6 @@ func (p *parser) tok(s string) token.Token {
 	panic(todo("%q", s))
 }
 
-func (p *parser) at(ix int) { p.maxIndex = mathutil.Max(p.maxIndex, ix) }
-
 func (p *parser) c(ix int) tok {
 	if p.budget == 0 {
 		return p.toks[len(p.toks)-1]
@@ -594,18 +614,27 @@ func (p *parser) parse(start string) error {
 func (p *parser) errPosition() token.Position { return p.f.PositionFor(p.toks[p.maxIndex].pos, true) }
 
 func (p *parser) parseExpression(ix int, e ebnf.Expression) (r int, ok bool) {
+	var nm string
 	r = ix
+
+	defer func() {
+		p.maxIndex = mathutil.Max(p.maxIndex, ix)
+	}()
+
 	if p.trcPEG {
-		trc("-> %s%s[%d]: tok {%v}, = %s", p.indent(), p.f.PositionFor(p.c(ix).pos, true), ix, p.c(ix), ebnfString(e))
+		p.indent()
 		defer func(ix int) {
-			s := "reject"
-			if ok {
-				s = "ACCEPT"
+			if nm == "" {
+				nm = ebnfString(e)
 			}
-			trc("<- %s%s[%d]: tok {%v}, = %s (%v, %s)", p.undent(), p.f.PositionFor(p.c(ix).pos, true), ix, p.c(ix), ebnfString(e), r, s)
+			switch {
+			case ok:
+				trc("%s ACCEPTED %s at %s: - %s:", p.undent(), nm, pos(p.f.PositionFor(p.c(ix).pos, true)), pos(p.f.PositionFor(p.c(r).pos, true)))
+			default:
+				trc("%s REJECTED %s at %s[%d]: tok {%v}", p.undent(), nm, p.f.PositionFor(p.c(ix).pos, true), ix, p.c(ix))
+			}
 		}(ix)
 	}
-	p.at(ix)
 	switch x := e.(type) {
 	case ebnf.Sequence:
 		for _, v := range x {
@@ -615,7 +644,7 @@ func (p *parser) parseExpression(ix int, e ebnf.Expression) (r int, ok bool) {
 		}
 		return ix, true
 	case *ebnf.Name:
-		switch nm := x.String; {
+		switch nm = x.String; {
 		case token.IsExported(nm):
 			pr := p.g.ebnf[nm]
 			fs := p.g.followSets[pr]

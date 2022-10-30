@@ -76,7 +76,11 @@ PointerType = "*" BaseType .
 PostStmt = SimpleStmt .
 PrimaryExpr = Operand | Conversion | MethodExpr | PrimaryExpr Selector | PrimaryExpr Index | PrimaryExpr Slice | PrimaryExpr TypeAssertion | PrimaryExpr Arguments .
 QualifiedIdent = PackageName "." identifier .
-RangeClause = [ ExpressionList "=" | IdentifierList ":=" ] "range" Expression .
+RangeClause = 
+	  "range" Expression
+	| ExpressionList "=" "range" Expression
+	| IdentifierList ":=" "range" Expression
+	.
 Receiver = Parameters .
 ReceiverType = Type .
 RecvExpr = Expression .
