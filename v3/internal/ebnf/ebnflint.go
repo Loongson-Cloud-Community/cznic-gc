@@ -59,11 +59,11 @@ func extractSpecEBNF(src []byte) []byte {
 	return buf.Bytes()
 }
 
-func verifySpecEBNF(name, start string, r io.Reader) (ebnf.Grammar, error) {
+func verifySpecEBNF(name, start string, r io.Reader) ([]byte, ebnf.Grammar, error) {
 	if r == nil {
 		f, err := os.Open(name)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		defer f.Close()
 		r = f
@@ -71,17 +71,17 @@ func verifySpecEBNF(name, start string, r io.Reader) (ebnf.Grammar, error) {
 
 	src, err := io.ReadAll(r)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	if filepath.Ext(name) == ".html" || bytes.Index(src, open) >= 0 {
+	if filepath.Ext(name) == ".html" || bytes.Contains(src, open) {
 		src = extractSpecEBNF(src)
 	}
 
 	grammar, err := ebnf.Parse(name, bytes.NewBuffer(src))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return grammar, ebnf.Verify(grammar, start)
+	return src, grammar, ebnf.Verify(grammar, start)
 }

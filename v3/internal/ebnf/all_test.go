@@ -39,17 +39,18 @@ func TestMain(m *testing.M) {
 }
 
 func TestSpecEBNF(t *testing.T) {
-	spec, err := verifySpecEBNF(filepath.Join(runtime.GOROOT(), "doc", "go_spec.html"), startProduction, nil)
+	b, _, err := verifySpecEBNF(filepath.Join(runtime.GOROOT(), "doc", "go_spec.html"), startProduction, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	for _, v := range leftRecursive(spec, startProduction) {
-		var a []string
-		for _, w := range v {
-			a = append(a, w.Name.String)
-		}
-		t.Logf("left recursive: %v", a)
+	g, err := newGrammar("spec", startProduction, b)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for k := range g.leftRecursive {
+		t.Logf("left recursive: %v", k)
 	}
 }
 
@@ -75,7 +76,7 @@ func testGrammar(t *testing.T, fn string) {
 	var a []string
 	for nm, p := range peg.g {
 		var b []string
-		for k := range peg.followSets[p] {
+		for k := range peg.exprClosure(p.Expr) {
 			b = append(b, tokSource(k))
 		}
 		sort.Strings(b)
@@ -86,12 +87,8 @@ func testGrammar(t *testing.T, fn string) {
 		t.Fatal(err)
 	}
 
-	for _, v := range leftRecursive(peg.g, startProduction) {
-		var a []string
-		for _, w := range v {
-			a = append(a, w.Name.String)
-		}
-		t.Errorf("left recursive: %v", a)
+	for k := range peg.leftRecursive {
+		t.Errorf("left recursive: %v", k)
 	}
 }
 
@@ -165,7 +162,7 @@ func TestEBNFParser(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	gld := newGolden(t, fmt.Sprintf("testdata/test_parse.ebnf.golden"))
+	gld := newGolden(t, "testdata/test_parse.ebnf.golden")
 
 	defer gld.close()
 
@@ -267,7 +264,7 @@ func isKnownBad(fn string, pos token.Position) bool {
 
 func TestParser(t *testing.T) {
 	return //TODO-
-	gld := newGolden(t, fmt.Sprintf("testdata/test_parse.golden"))
+	gld := newGolden(t, "testdata/test_parse.golden")
 
 	defer gld.close()
 

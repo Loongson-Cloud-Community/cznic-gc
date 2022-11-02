@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -271,21 +270,21 @@ func trc(s string, args ...interface{}) string {
 	return r
 }
 
-func printEBNF(w io.Writer, g ebnf.Grammar) {
-	var a []string
-	for k := range g {
-		a = append(a, k)
-	}
-	sort.Strings(a)
-	for _, k := range a {
-		p := g[k]
-		fmt.Fprintf(w, "%s = ", p.Name.String)
-		if p.Expr != nil {
-			printEBNFExpression(w, p.Expr)
-		}
-		fmt.Fprintf(w, " .\n")
-	}
-}
+//TODO- func printEBNF(w io.Writer, g ebnf.Grammar) {
+//TODO- 	var a []string
+//TODO- 	for k := range g {
+//TODO- 		a = append(a, k)
+//TODO- 	}
+//TODO- 	sort.Strings(a)
+//TODO- 	for _, k := range a {
+//TODO- 		p := g[k]
+//TODO- 		fmt.Fprintf(w, "%s = ", p.Name.String)
+//TODO- 		if p.Expr != nil {
+//TODO- 			printEBNFExpression(w, p.Expr)
+//TODO- 		}
+//TODO- 		fmt.Fprintf(w, " .\n")
+//TODO- 	}
+//TODO- }
 
 func ebnfString(e ebnf.Expression) string {
 	var b strings.Builder
@@ -338,12 +337,6 @@ func printEBNFExpression(w io.Writer, e ebnf.Expression) {
 	default:
 		panic(todo("%T", x))
 	}
-}
-
-func ebnfEpressionString(e ebnf.Expression) string {
-	var b strings.Builder
-	printEBNFExpression(&b, e)
-	return b.String()
 }
 
 // errorf constructs an error value. If ExtendedErrors is true, the error will
@@ -461,93 +454,39 @@ func (p *parallel) wait() error {
 	return fmt.Errorf("%s", strings.Join(a, "\n"))
 }
 
-func leftRecursive(g ebnf.Grammar, start string) (r [][]*ebnf.Production) {
-	p := g[start]
-	m := map[*ebnf.Production]int{p: 1}
-	n := map[*ebnf.Production]int{p: 1}
-	detected := map[*ebnf.Production]struct{}{}
+type closure map[token.Token]struct{}
 
-	var f func(ebnf.Expression, int, []*ebnf.Production) int
-	f = func(e ebnf.Expression, pos int, stack []*ebnf.Production) (npos int) {
-		switch x := e.(type) {
-		case ebnf.Sequence:
-			for _, v := range x {
-				pos = f(v, pos, stack)
-			}
-			return pos
-		case *ebnf.Name:
-			nm := x.String
-			if first := nm[0]; first >= 'a' && first <= 'z' {
-				return pos + 1
-			}
-
-			p := g[nm]
-			if _, ok := detected[p]; ok {
-				return pos
-			}
-
-			sv := m[p]
-			defer func() { m[p] = sv; n[p] = 1 }()
-
-			if sv == pos {
-				detected[p] = struct{}{}
-				for sp := len(stack) - 1; ; sp-- {
-					if stack[sp] == p {
-						r = append(r, append([]*ebnf.Production(nil), stack[sp:]...))
-						return pos
-					}
-				}
-				panic(todo(""))
-			}
-
-			if sv != 0 {
-				return pos
-			}
-
-			if n[p] != 0 {
-				return pos + 1
-			}
-
-			m[p] = pos
-			return f(p.Expr, pos, append(stack, p))
-		case *ebnf.Token:
-			return pos + 1
-		case ebnf.Alternative:
-			moved := true
-			for _, v := range x {
-				if f(v, pos, stack) == pos {
-					moved = false
-				}
-			}
-			if moved {
-				pos++
-			}
-			return pos
-		case *ebnf.Repetition:
-			f(x.Body, pos, stack)
-			return pos
-		case *ebnf.Group:
-			return f(x.Body, pos, stack)
-		case *ebnf.Option:
-			f(x.Body, pos, stack)
-			return pos
-		case nil:
-			return pos + 1
-		default:
-			panic(todo("%T", x))
-		}
-		panic(todo(""))
+func (c *closure) add(t token.Token) closure {
+	m := *c
+	if m == nil {
+		m = map[token.Token]struct{}{t: {}}
+		*c = m
 	}
-
-	f(p.Expr, 1, []*ebnf.Production{p})
-	return r
+	m[t] = struct{}{}
+	return m
 }
 
-type followSet map[token.Token]struct{}
+func (c *closure) union(d closure) closure {
+	m := *c
+	if d == nil {
+		return m
+	}
+
+	if m == nil {
+		m = map[token.Token]struct{}{}
+		*c = m
+	}
+	for k, v := range d {
+		m[k] = v
+	}
+	return m
+}
 
 type grammar struct {
-	g          ebnf.Grammar
-	followSets map[*ebnf.Production]followSet
+	exprClosures    map[string]closure
+	g               ebnf.Grammar
+	leftRecursive   map[string]struct{}
+	productClosures map[*ebnf.Production]closure
 }
 
 func newGrammar(name, start string, src []byte) (r *grammar, err error) {
@@ -560,84 +499,84 @@ func newGrammar(name, start string, src []byte) (r *grammar, err error) {
 		return nil, err
 	}
 
-	r = &grammar{g: g, followSets: map[*ebnf.Production]followSet{}}
+	r = &grammar{
+		exprClosures:    map[string]closure{},
+		g:               g,
+		leftRecursive:   map[string]struct{}{},
+		productClosures: map[*ebnf.Production]closure{},
+	}
 	for nm, p := range r.g {
 		if token.IsExported(nm) {
-			r.followSets[p] = r.closure(p.Expr)
+			c := r.closure0(nm, p.Expr, map[string]struct{}{})
+			r.exprClosures[ebnfString(p.Expr)] = c
+			r.productClosures[p] = c
 		}
 	}
 	return r, nil
 }
 
-func (g *grammar) closure(e ebnf.Expression) (r followSet) {
+func (g *grammar) exprClosure(e ebnf.Expression) (r closure) {
+	k := ebnfString(e)
+	if r, ok := g.exprClosures[k]; ok {
+		return r
+	}
+
+	r = g.closure0("", e, map[string]struct{}{})
+	g.exprClosures[k] = r
+	return r
+}
+
+func (g *grammar) closure0(prod string, e ebnf.Expression, m map[string]struct{}) (r closure) {
+	k := ebnfString(e)
+	if _, ok := m[k]; ok {
+		return nil
+	}
+
+	m[k] = struct{}{}
+	r = closure{}
 	switch x := e.(type) {
-	case ebnf.Sequence:
-		r = followSet{}
+	case ebnf.Alternative:
+		r = closure{}
 		for _, v := range x {
-			s := g.closure(v)
-			for k, v := range s {
-				r[k] = v
-			}
+			r.union(g.closure0(prod, v, m))
+		}
+		return r
+	case *ebnf.Group:
+		return g.closure0(prod, x.Body, m)
+	case *ebnf.Name:
+		nm := x.String
+		if nm == prod {
+			g.leftRecursive[nm] = struct{}{}
+		}
+		p := g.g[nm]
+		e := p.Expr
+		if token.IsExported(nm) {
+			return r.union(g.closure0(prod, e, m))
+		}
+
+		return r.add(toks[nm])
+	case *ebnf.Option:
+		r.add(epsilon)
+		return r.union(g.closure0(prod, x.Body, m))
+	case *ebnf.Repetition:
+		r.add(epsilon)
+		return r.union(g.closure0(prod, x.Body, m))
+	case ebnf.Sequence:
+		for _, v := range x {
+			s := g.closure0(prod, v, m)
+			r.union(s)
 			if _, ok := s[epsilon]; !ok {
 				delete(r, epsilon)
 				break
 			}
 		}
 		return r
-	case *ebnf.Name:
-		nm := x.String
-		p := g.g[nm]
-		if r = g.followSets[p]; r != nil {
-			return r
-		}
-
-		if e := g.g[nm].Expr; e != nil {
-			r = followSet{}
-			g.followSets[p] = r
-			for k := range g.closure(e) {
-				r[k] = struct{}{}
-			}
-			return r
-		}
-
-		if token.IsExported(nm) {
-			return followSet{epsilon: {}}
-		}
-
-		r = followSet{toks[nm]: struct{}{}}
-		g.followSets[p] = r
-		return r
-	case ebnf.Alternative:
-		r = followSet{}
-		for _, v := range x {
-			for k, v := range g.closure(v) {
-				r[k] = v
-			}
-		}
-		return r
 	case *ebnf.Token:
-		return followSet{toks[x.String]: struct{}{}}
-	case *ebnf.Group:
-		return g.closure(x.Body)
-	case *ebnf.Option:
-		r = followSet{}
-		for k, v := range g.closure(x.Body) {
-			r[k] = v
-		}
-		r[epsilon] = struct{}{}
-		return r
-	case *ebnf.Repetition:
-		r = followSet{}
-		for k, v := range g.closure(x.Body) {
-			r[k] = v
-		}
-		r[epsilon] = struct{}{}
-		return r
+		return r.add(toks[x.String])
 	case nil:
-		return followSet{epsilon: {}}
-	default:
-		panic(todo("%T %s", x, ebnfString(e)))
+		return r.add(epsilon)
 	}
+	panic(todo("%q %T %s", prod, e, k))
 }
 
 type tok struct {
@@ -834,71 +773,71 @@ func tokSource(t token.Token) string {
 	}
 }
 
-func tokString(t token.Token) string {
-	if t == epsilon {
-		return "ε"
-	}
-
-	s := t.String()
-	if len(s) == 1 {
-		return fmt.Sprintf("'%c'", s[0])
-	}
-
-	switch t {
-	case SHL:
-		return "SHL"
-	case SHR:
-		return "SHR"
-	case AND_NOT:
-		return "AND_NOT"
-	case ADD_ASSIGN:
-		return "ADD_ASSIGN"
-	case SUB_ASSIGN:
-		return "SUB_ASSIGN"
-	case MUL_ASSIGN:
-		return "MUL_ASSIGN"
-	case QUO_ASSIGN:
-		return "QUO_ASSIGN"
-	case REM_ASSIGN:
-		return "REM_ASSIGN"
-	case AND_ASSIGN:
-		return "AND_ASSIGN"
-	case OR_ASSIGN:
-		return "OR_ASSIGN"
-	case XOR_ASSIGN:
-		return "XOR_ASSIGN"
-	case SHL_ASSIGN:
-		return "SHL_ASSIGN"
-	case SHR_ASSIGN:
-		return "SHR_ASSIGN"
-	case AND_NOT_ASSIGN:
-		return "AND_NOT_ASSIGN"
-	case LAND:
-		return "LAND"
-	case LOR:
-		return "LOR"
-	case ARROW:
-		return "ARROW"
-	case INC:
-		return "INC"
-	case DEC:
-		return "DEC"
-	case EQL:
-		return "EQL"
-	case NEQ:
-		return "NEQ"
-	case LEQ:
-		return "LEQ"
-	case GEQ:
-		return "GEQ"
-	case DEFINE:
-		return "DEFINE"
-	case ELLIPSIS:
-		return "ELLIPSIS"
-	default:
-		return strings.ToUpper(s)
-	}
-}
+//TODO- func tokString(t token.Token) string {
+//TODO- 	if t == epsilon {
+//TODO- 		return "ε"
+//TODO- 	}
+//TODO-
+//TODO- 	s := t.String()
+//TODO- 	if len(s) == 1 {
+//TODO- 		return fmt.Sprintf("'%c'", s[0])
+//TODO- 	}
+//TODO-
+//TODO- 	switch t {
+//TODO- 	case SHL:
+//TODO- 		return "SHL"
+//TODO- 	case SHR:
+//TODO- 		return "SHR"
+//TODO- 	case AND_NOT:
+//TODO- 		return "AND_NOT"
+//TODO- 	case ADD_ASSIGN:
+//TODO- 		return "ADD_ASSIGN"
+//TODO- 	case SUB_ASSIGN:
+//TODO- 		return "SUB_ASSIGN"
+//TODO- 	case MUL_ASSIGN:
+//TODO- 		return "MUL_ASSIGN"
+//TODO- 	case QUO_ASSIGN:
+//TODO- 		return "QUO_ASSIGN"
+//TODO- 	case REM_ASSIGN:
+//TODO- 		return "REM_ASSIGN"
+//TODO- 	case AND_ASSIGN:
+//TODO- 		return "AND_ASSIGN"
+//TODO- 	case OR_ASSIGN:
+//TODO- 		return "OR_ASSIGN"
+//TODO- 	case XOR_ASSIGN:
+//TODO- 		return "XOR_ASSIGN"
+//TODO- 	case SHL_ASSIGN:
+//TODO- 		return "SHL_ASSIGN"
+//TODO- 	case SHR_ASSIGN:
+//TODO- 		return "SHR_ASSIGN"
+//TODO- 	case AND_NOT_ASSIGN:
+//TODO- 		return "AND_NOT_ASSIGN"
+//TODO- 	case LAND:
+//TODO- 		return "LAND"
+//TODO- 	case LOR:
+//TODO- 		return "LOR"
+//TODO- 	case ARROW:
+//TODO- 		return "ARROW"
+//TODO- 	case INC:
+//TODO- 		return "INC"
+//TODO- 	case DEC:
+//TODO- 		return "DEC"
+//TODO- 	case EQL:
+//TODO- 		return "EQL"
+//TODO- 	case NEQ:
+//TODO- 		return "NEQ"
+//TODO- 	case LEQ:
+//TODO- 		return "LEQ"
+//TODO- 	case GEQ:
+//TODO- 		return "GEQ"
+//TODO- 	case DEFINE:
+//TODO- 		return "DEFINE"
+//TODO- 	case ELLIPSIS:
+//TODO- 		return "ELLIPSIS"
+//TODO- 	default:
+//TODO- 		return strings.ToUpper(s)
+//TODO- 	}
+//TODO- }
 
 type ebnfParser struct {
 	f    *token.File
@@ -907,8 +846,9 @@ type ebnfParser struct {
 	toks []tok
 
 	budget   int
-	maxIndex int
 	indentN  int
+	index    int
+	maxIndex int
 
 	trcPEG bool
 }
@@ -955,22 +895,30 @@ func (p *ebnfParser) tok(s string) token.Token {
 	panic(todo("%q", s))
 }
 
-func (p *ebnfParser) c(ix int) tok {
+func (p *ebnfParser) c() tok {
 	if p.budget == 0 {
 		return p.toks[len(p.toks)-1]
 	}
 
 	p.budget--
-	return p.toks[ix]
+	p.maxIndex = mathutil.Max(p.maxIndex, p.index)
+	return p.toks[p.index]
+}
+
+func (p *ebnfParser) accept(b bool) bool {
+	if b {
+		p.index++
+	}
+	return b
 }
 
 func (p *ebnfParser) parse(start string) error {
-	ix, ok := p.parseExpression(0, p.g.g[start].Expr)
+	ok := p.parseExpression(p.g.g[start].Expr)
 	if p.budget == 0 {
 		return errorf("%s: resources exhausted", p.path)
 	}
 
-	if !ok || ix < len(p.toks)-1 {
+	if !ok || p.index < len(p.toks)-1 {
 		return errorf("%s: syntax error", p.errPosition())
 	}
 
@@ -981,88 +929,133 @@ func (p *ebnfParser) errPosition() token.Position {
 	return p.f.PositionFor(p.toks[p.maxIndex].pos, true)
 }
 
-func (p *ebnfParser) parseExpression(ix int, e ebnf.Expression) (r int, ok bool) {
-	var nm string
-	r = ix
-
-	defer func() {
-		p.maxIndex = mathutil.Max(p.maxIndex, ix)
-	}()
-
-	if p.trcPEG {
-		p.indent()
-		defer func(ix int) {
-			if nm == "" {
-				nm = ebnfString(e)
-			}
-			switch {
-			case ok:
-				trc("%s ACCEPTED %s at %s: - %s:", p.undent(), nm, pos(p.f.PositionFor(p.c(ix).pos, true)), pos(p.f.PositionFor(p.c(r).pos, true)))
-			default:
-				trc("%s REJECTED %s at %s[%d]: tok {%v}", p.undent(), nm, p.f.PositionFor(p.c(ix).pos, true), ix, p.c(ix))
-			}
-		}(ix)
-	}
+func (p *ebnfParser) parseExpression(e ebnf.Expression) bool {
+	index0 := p.index
+out:
 	switch x := e.(type) {
 	case ebnf.Sequence:
 		for _, v := range x {
-			if ix, ok = p.parseExpression(ix, v); !ok {
-				return r, false
+			if !p.parseExpression(v) {
+				break out
 			}
 		}
-		return ix, true
+		return true
 	case *ebnf.Name:
-		switch nm = x.String; {
+		switch nm := x.String; {
 		case token.IsExported(nm):
 			pr := p.g.g[nm]
-			fs := p.g.followSets[pr]
-			if _, ok := fs[p.c(ix).tok]; ok {
-				return p.parseExpression(ix, pr.Expr)
+			fs := p.g.productClosures[pr]
+			if _, ok := fs[p.c().tok]; ok {
+				if p.parseExpression(pr.Expr) {
+					return true
+				}
+
+				break out
 			}
 
-			_, epsilon := fs[epsilon]
-			if epsilon {
-				return ix, true
+			if _, hasEpsilon := fs[epsilon]; hasEpsilon {
+				return true
 			}
-
-			return ix, false
 		default:
-			if p.c(ix).tok == p.tok(x.String) {
-				ix++
+			if p.accept(p.c().tok == p.tok(x.String)) {
+				return true
 			}
-			return ix, ix != r
 		}
 	case *ebnf.Token:
 		switch {
 		case token.IsKeyword(x.String):
-			if p.c(ix).lit == x.String {
-				ix++
+			if p.accept(p.c().lit == x.String) {
+				return true
 			}
 		default:
-			if p.c(ix).tok == p.tok(x.String) {
-				ix++
+			if p.accept(p.c().tok == p.tok(x.String)) {
+				return true
 			}
 		}
-		return ix, ix != r
 	case *ebnf.Repetition:
 		for {
-			if ix, ok = p.parseExpression(ix, x.Body); !ok {
-				return ix, true
+			if !p.parseExpression(x.Body) {
+				return true
 			}
 		}
 	case *ebnf.Group:
-		return p.parseExpression(ix, x.Body)
+		if p.parseExpression(x.Body) {
+			return true
+		}
 	case ebnf.Alternative:
 		for _, v := range x {
-			if ix, ok := p.parseExpression(ix, v); ok {
-				return ix, true
+			if p.parseExpression(v) {
+				return true
 			}
 		}
-		return r, false
 	case *ebnf.Option:
-		ix, _ = p.parseExpression(ix, x.Body)
-		return ix, true
+		p.parseExpression(x.Body)
+		return true
 	default:
 		panic(todo("%T", x))
 	}
+	p.index = index0
+	return false
+}
+
+type parser struct {
+	f    *token.File
+	path string
+	toks []tok
+
+	ix int
+
+	closed bool
+}
+
+func newParser(path string, src []byte) (r *parser, err error) {
+	r = &parser{
+		path: path,
+	}
+	var s scanner.Scanner
+	fs := token.NewFileSet()
+	r.f = fs.AddFile(path, -1, len(src))
+	s.Init(r.f, src, func(pos token.Position, msg string) { err = errorf("%v: %s", pos, msg) }, 0)
+	for {
+		pos, t, lit := s.Scan()
+		r.toks = append(r.toks, tok{pos, t, lit})
+		if err != nil {
+			return nil, err
+		}
+
+		if t == EOF {
+			return r, nil
+		}
+	}
+}
+
+func (p *parser) errPosition() token.Position {
+	return p.f.PositionFor(p.toks[p.ix].pos, true)
+}
+
+func (p *parser) dbg(n int) string {
+	t := p.peek(n)
+	return fmt.Sprintf("%v: %v", p.f.PositionFor(t.pos, true), t)
+}
+
+func (p *parser) c() token.Token { return p.peek(0).tok }
+func (p *parser) close()         { p.closed = true }
+func (p *parser) n()             { p.ix++ }
+
+func (p *parser) peek(n int) tok {
+	if p.closed {
+		return p.toks[len(p.toks)-1]
+	}
+
+	return p.toks[p.ix+n]
+}
+
+func (p *parser) must(t token.Token) bool {
+	if p.c() != t {
+		p.close()
+		return false
+	}
+
+	p.n()
+	return true
 }
