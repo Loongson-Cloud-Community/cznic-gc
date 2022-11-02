@@ -1,48 +1,50 @@
-AddOp case '+', '-', '^', '|':
+AddOp case ADD, OR, SUB, XOR:
+AdditiveExpression case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+AdditiveExpressionPreBlock case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 AliasDecl case IDENT:
-Arguments case '(':
-ArrayLength case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-ArrayType case '[':
-AssignOp case '=', ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN:
-Assignment case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-AssignmentPreBlock case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-BaseType case '(', '*', '[', ARROW, CHAN, FUNC, IDENT, INTERFACE, MAP, STRUCT:
+Arguments case LPAREN:
+ArrayLength case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+ArrayType case LBRACK:
+AssignOp case ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN:
+Assignment case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+AssignmentPreBlock case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+BaseType case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 BasicLit case CHAR, FLOAT, IMAG, INT, STRING:
-BinaryOp case '%', '&', '*', '+', '-', '/', '<', '>', '^', '|', AND_NOT, EQL, GEQ, LAND, LEQ, LOR, NEQ, SHL, SHR:
-Block case '{':
+Block case LBRACE:
 BreakStmt case BREAK:
-Channel case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
+Channel case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 ChannelType case ARROW, CHAN:
 CommCase case CASE, DEFAULT:
 CommClause case CASE, DEFAULT:
-CompositeLit case '[', IDENT, MAP, STRUCT:
-Condition case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
+CompositeLit case IDENT, LBRACK, MAP, STRUCT:
+CompositeLitPreBlock case LBRACK, MAP, STRUCT:
+Condition case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 ConstDecl case CONST:
 ConstSpec case IDENT:
 ContinueStmt case CONTINUE:
-Conversion case '(', '*', '[', ARROW, CHAN, FUNC, IDENT, INTERFACE, MAP, STRUCT:
+Conversion case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 Declaration case CONST, TYPE, VAR:
 DeferStmt case DEFER:
-Element case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-ElementList case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-ElementType case '(', '*', '[', ARROW, CHAN, FUNC, IDENT, INTERFACE, MAP, STRUCT:
-EmbeddedField case '*', IDENT:
+Element case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+ElementList case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+ElementType case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+EmbeddedField case IDENT, MUL:
 EmptyStmt case ε:
 ExprCaseClause case CASE, DEFAULT:
 ExprSwitchCase case CASE, DEFAULT:
 ExprSwitchStmt case SWITCH:
-Expression case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-ExpressionList case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-ExpressionListPreBlock case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-ExpressionPreBlock case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-ExpressionStmt case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-ExpressionStmtPreBlock case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
+Expression case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+ExpressionList case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+ExpressionListPreBlock case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+ExpressionPreBlock case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+ExpressionStmt case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+ExpressionStmtPreBlock case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 FallthroughStmt case FALLTHROUGH:
-FieldDecl case '*', IDENT:
+FieldDecl case IDENT, MUL:
 FieldName case IDENT:
-ForClause case '!', '&', '(', '*', '+', '-', ';', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
+ForClause case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, SEMICOLON, STRING, STRUCT, SUB, XOR:
 ForStmt case FOR:
-FunctionBody case '{':
+FunctionBody case LBRACE:
 FunctionDecl case FUNC:
 FunctionLit case FUNC:
 FunctionName case IDENT:
@@ -53,89 +55,96 @@ IdentifierList case IDENT:
 IfStmt case IF:
 ImportDecl case IMPORT:
 ImportPath case STRING:
-ImportSpec case '.', IDENT, STRING:
-IncDecStmt case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-Index case '[':
-InitStmt case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT, ε:
-InterfaceElem case '(', '*', '[', '~', ARROW, CHAN, FUNC, IDENT, INTERFACE, MAP, STRUCT:
+ImportSpec case IDENT, PERIOD, STRING:
+IncDecStmt case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+Index case LBRACK:
+InitStmt case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR, ε:
+InterfaceElem case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT, TILDE:
 InterfaceType case INTERFACE:
-Key case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-KeyType case '(', '*', '[', ARROW, CHAN, FUNC, IDENT, INTERFACE, MAP, STRUCT:
-KeyedElement case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
+Key case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+KeyType case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+KeyedElement case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 Label case IDENT:
 LabeledStmt case IDENT:
-Literal case '[', CHAR, FLOAT, FUNC, IDENT, IMAG, INT, MAP, STRING, STRUCT:
-LiteralPreBlock case CHAR, FLOAT, FUNC, IMAG, INT, STRING:
-LiteralType case '[', IDENT, MAP, STRUCT:
-LiteralValue case '{':
+Literal case CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, MAP, STRING, STRUCT:
+LiteralPreBlock case CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT:
+LiteralType case IDENT, LBRACK, MAP, STRUCT:
+LiteralTypePreBlock case LBRACK, MAP, STRUCT:
+LiteralValue case LBRACE:
+LogicalAndExpression case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+LogicalAndExpressionPreBlock case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 MapType case MAP:
 MethodDecl case FUNC:
 MethodElem case IDENT:
-MethodExpr case '(', '*', '[', ARROW, CHAN, FUNC, IDENT, INTERFACE, MAP, STRUCT:
+MethodExpr case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 MethodName case IDENT:
-MulOp case '%', '&', '*', '/', AND_NOT, SHL, SHR:
-Operand case '(', '[', CHAR, FLOAT, FUNC, IDENT, IMAG, INT, MAP, STRING, STRUCT:
+MulOp case AND, AND_NOT, MUL, QUO, REM, SHL, SHR:
+MultiplicativeExpression case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+MultiplicativeExpressionPreBlock case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+Operand case CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, LPAREN, MAP, STRING, STRUCT:
 OperandName case IDENT:
-OperandPreBlock case '(', CHAR, FLOAT, FUNC, IDENT, IMAG, INT, STRING:
+OperandPreBlock case CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, LPAREN, MAP, STRING, STRUCT:
 PackageClause case PACKAGE:
 PackageName case IDENT:
-ParameterDecl case '(', '*', '[', ARROW, CHAN, ELLIPSIS, FUNC, IDENT, INTERFACE, MAP, STRUCT:
-ParameterList case '(', '*', '[', ARROW, CHAN, ELLIPSIS, FUNC, IDENT, INTERFACE, MAP, STRUCT:
-Parameters case '(':
-PointerType case '*':
-PostStmt case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT, ε:
-PrimaryExpr case '(', '*', '[', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-PrimaryExprPreBlock case '(', '*', '[', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
+ParameterDecl case ARROW, CHAN, ELLIPSIS, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+ParameterList case ARROW, CHAN, ELLIPSIS, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+Parameters case LPAREN:
+PointerType case MUL:
+PostStmt case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR, ε:
+PrimaryExpr case ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRING, STRUCT:
+PrimaryExprPreBlock case ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRING, STRUCT:
 QualifiedIdent case IDENT:
-RangeClause case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, RANGE, STRING, STRUCT:
-Receiver case '(':
-ReceiverType case '(', '*', '[', ARROW, CHAN, FUNC, IDENT, INTERFACE, MAP, STRUCT:
-RecvExpr case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-RecvStmt case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-RelOp case '<', '>', EQL, GEQ, LEQ, NEQ:
-Result case '(', '*', '[', ARROW, CHAN, FUNC, IDENT, INTERFACE, MAP, STRUCT:
+RangeClause case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, RANGE, STRING, STRUCT, SUB, XOR:
+Receiver case LPAREN:
+ReceiverType case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+RecvExpr case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+RecvStmt case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+RelOp case EQL, GEQ, GTR, LEQ, LSS, NEQ:
+RelationalExpression case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+RelationalExpressionPreBlock case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+Result case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 ReturnStmt case RETURN:
 SelectStmt case SELECT:
-Selector case '.':
-SendStmt case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-SendStmtPreBlock case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
+Selector case PERIOD:
+SendStmt case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+SendStmtPreBlock case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 ShortVarDecl case IDENT:
 ShortVarDeclPreBlock case IDENT:
-Signature case '(':
-SimpleStmt case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT, ε:
-SimpleStmtPreBlock case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT, ε:
-Slice case '[':
-SliceType case '[':
+Signature case LPAREN:
+SimpleStmt case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR, ε:
+SimpleStmtPreBlock case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR, ε:
+Slice case LBRACK:
+SliceType case LBRACK:
 SourceFile case PACKAGE:
-Statement case '!', '&', '(', '*', '+', '-', '[', '^', '{', ARROW, BREAK, CHAN, CHAR, CONST, CONTINUE, DEFER, FALLTHROUGH, FLOAT, FOR, FUNC, GO, GOTO, IDENT, IF, IMAG, INT, INTERFACE, MAP, RETURN, SELECT, STRING, STRUCT, SWITCH, TYPE, VAR, ε:
-StatementList case '!', '&', '(', '*', '+', '-', ';', '[', '^', '{', ARROW, BREAK, CHAN, CHAR, CONST, CONTINUE, DEFER, FALLTHROUGH, FLOAT, FOR, FUNC, GO, GOTO, IDENT, IF, IMAG, INT, INTERFACE, MAP, RETURN, SELECT, STRING, STRUCT, SWITCH, TYPE, VAR, ε:
+Statement case ADD, AND, ARROW, BREAK, CHAN, CHAR, CONST, CONTINUE, DEFER, FALLTHROUGH, FLOAT, FOR, FUNC, GO, GOTO, IDENT, IF, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, RETURN, SELECT, STRING, STRUCT, SUB, SWITCH, TYPE, VAR, XOR, ε:
+StatementList case ADD, AND, ARROW, BREAK, CHAN, CHAR, CONST, CONTINUE, DEFER, FALLTHROUGH, FLOAT, FOR, FUNC, GO, GOTO, IDENT, IF, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, RETURN, SELECT, SEMICOLON, STRING, STRUCT, SUB, SWITCH, TYPE, VAR, XOR, ε:
 StructType case STRUCT:
 SwitchStmt case SWITCH:
 Tag case STRING:
 TopLevelDecl case CONST, FUNC, TYPE, VAR:
-Type case '(', '*', '[', ARROW, CHAN, FUNC, IDENT, INTERFACE, MAP, STRUCT:
-TypeArgs case '[':
-TypeAssertion case '.':
+Type case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+TypeArgs case LBRACK:
+TypeAssertion case PERIOD:
 TypeCaseClause case CASE, DEFAULT:
-TypeConstraint case '(', '*', '[', '~', ARROW, CHAN, FUNC, IDENT, INTERFACE, MAP, STRUCT:
+TypeConstraint case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT, TILDE:
 TypeDecl case TYPE:
 TypeDef case IDENT:
-TypeElem case '(', '*', '[', '~', ARROW, CHAN, FUNC, IDENT, INTERFACE, MAP, STRUCT:
-TypeList case '(', '*', '[', ARROW, CHAN, FUNC, IDENT, INTERFACE, MAP, STRUCT:
-TypeLit case '*', '[', ARROW, CHAN, FUNC, INTERFACE, MAP, STRUCT:
+TypeElem case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT, TILDE:
+TypeList case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+TypeLit case ARROW, CHAN, FUNC, INTERFACE, LBRACK, MAP, MUL, STRUCT:
 TypeName case IDENT:
 TypeParamDecl case IDENT:
 TypeParamList case IDENT:
-TypeParameters case '[':
+TypeParameters case LBRACK:
 TypeSpec case IDENT:
 TypeSwitchCase case CASE, DEFAULT:
-TypeSwitchGuard case '(', '*', '[', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
+TypeSwitchGuard case ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRING, STRUCT:
 TypeSwitchStmt case SWITCH:
-TypeTerm case '(', '*', '[', '~', ARROW, CHAN, FUNC, IDENT, INTERFACE, MAP, STRUCT:
-UnaryExpr case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-UnaryExprPreBlock case '!', '&', '(', '*', '+', '-', '[', '^', ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, MAP, STRING, STRUCT:
-UnaryOp case '!', '&', '*', '+', '-', '^', ARROW:
-UnderlyingType case '~':
+TypeTerm case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT, TILDE:
+UnaryExpr case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+UnaryExprPreBlockPreBlock case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+UnaryOp case ADD, AND, ARROW, MUL, NOT, SUB, XOR:
+UnderlyingType case TILDE:
 VarDecl case VAR:
 VarSpec case IDENT:
 float_lit case FLOAT:

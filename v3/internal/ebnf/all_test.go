@@ -76,7 +76,7 @@ func testGrammar(t *testing.T, fn string) {
 	for nm, p := range peg.g {
 		var b []string
 		for k := range peg.followSets[p] {
-			b = append(b, tokString(k))
+			b = append(b, tokSource(k))
 		}
 		sort.Strings(b)
 		a = append(a, fmt.Sprintf("%s case %v:", nm, strings.Join(b, ", ")))
@@ -205,7 +205,6 @@ func testEBNFParser(p *parallel, t *testing.T, g *grammar, root string, gld *gol
 			p.addSkipped()
 			return nil
 		}
-
 		path := path0
 		p.exec(func() (err error) {
 			if *oTrc {
@@ -266,22 +265,23 @@ func isKnownBad(fn string, pos token.Position) bool {
 	return false
 }
 
-//TODO func TestParser(t *testing.T) {
-//TODO 	gld := newGolden(t, fmt.Sprintf("testdata/test_parse.golden"))
-//TODO
-//TODO 	defer gld.close()
-//TODO
-//TODO 	p := newParallel()
-//TODO 	t.Run("cd", func(t *testing.T) { testParser(p, t, ".", gld) })
-//TODO 	t.Run("goroot", func(t *testing.T) { testParser(p, t, runtime.GOROOT(), gld) })
-//TODO 	if err := p.wait(); err != nil {
-//TODO 		t.Error(err)
-//TODO 	}
-//TODO 	t.Logf("TOTAL files %v, skip %v, ok %v, fail %v", h(p.files), h(p.skipped), h(p.ok), h(p.fails))
-//TODO 	if p.fails != 0 {
-//TODO 		t.Logf("Shortest failing file: %s, %v tokens", p.minPath, p.minToks)
-//TODO 	}
-//TODO }
+func TestParser(t *testing.T) {
+	return //TODO-
+	gld := newGolden(t, fmt.Sprintf("testdata/test_parse.golden"))
+
+	defer gld.close()
+
+	p := newParallel()
+	t.Run("cd", func(t *testing.T) { testParser(p, t, ".", gld) })
+	t.Run("goroot", func(t *testing.T) { testParser(p, t, runtime.GOROOT(), gld) })
+	if err := p.wait(); err != nil {
+		t.Error(err)
+	}
+	t.Logf("TOTAL files %v, skip %v, ok %v, fail %v", h(p.files), h(p.skipped), h(p.ok), h(p.fails))
+	if p.fails != 0 {
+		t.Logf("Shortest failing file: %s, %v tokens", p.minPath, p.minToks)
+	}
+}
 
 func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 	if err := filepath.Walk(filepath.FromSlash(root), func(path0 string, info os.FileInfo, err error) error {

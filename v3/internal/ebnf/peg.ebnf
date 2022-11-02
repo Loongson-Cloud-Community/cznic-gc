@@ -1,93 +1,49 @@
-AddOp =
-	  "+"
-	| "-"
-	| "|"
-	| "^" .
+AddOp = "+" | "-" | "|" | "^" .
+AdditiveExpression = MultiplicativeExpression { AddOp MultiplicativeExpression } .
+AdditiveExpressionPreBlock = MultiplicativeExpressionPreBlock { AddOp MultiplicativeExpressionPreBlock } .
 AliasDecl = identifier "=" Type .
 Arguments = "(" [ ( ExpressionList | Type [ "," ExpressionList ] ) [ "..." ] [ "," ] ] ")" .
 ArrayLength = Expression .
 ArrayType = "[" ArrayLength "]" ElementType .
-AssignOp =
-	  "="
-	| "+="
-	| "-="
-	| "|="
-	| "^="
-	| "*="
-	| "/="
-	| "%="
-	| "<<="
-	| ">>="
-	| "&="
-	| "&^=" .
+AssignOp = "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" .
 Assignment = ExpressionList AssignOp ExpressionList .
 AssignmentPreBlock = ExpressionList AssignOp ExpressionListPreBlock .
 BaseType = Type .
-BasicLit =
-	  int_lit
-	| float_lit
-	| imaginary_lit
-	| rune_lit
-	| string_lit .
-BinaryOp =
-	  "||"
-	| "&&"
-	| RelOp
-	| AddOp
-	| MulOp .
+BasicLit = int_lit | float_lit | imaginary_lit | rune_lit | string_lit .
 Block = "{" StatementList "}" .
 BreakStmt = "break" [ Label ] .
 Channel = Expression .
-ChannelType =
-	  "<-" "chan" ElementType
-	| "chan" "<-" ElementType
-	| "chan" ElementType .
-CommCase =
-	  "case" ( SendStmt | RecvStmt )
-	| "default" .
+ChannelType = "<-" "chan" ElementType | "chan" "<-" ElementType | "chan" ElementType .
+CommCase = "case" ( SendStmt | RecvStmt ) | "default" .
 CommClause = CommCase ":" StatementList .
 CompositeLit = LiteralType LiteralValue .
+CompositeLitPreBlock = LiteralTypePreBlock LiteralValue .
 Condition = Expression .
 ConstDecl = "const" ( ConstSpec | "(" [ ConstSpec { ";" ConstSpec } [ ";" ] ] ")" ) .
 ConstSpec = IdentifierList [ [ Type ] "=" ExpressionList ] .
 ContinueStmt = "continue" [ Label ] .
 Conversion = Type "(" Expression [ "," ] ")" .
-Declaration =
-	  ConstDecl
-	| TypeDecl
-	| VarDecl .
+Declaration = ConstDecl | TypeDecl | VarDecl .
 DeferStmt = "defer" Expression .
-Element =
-	  Expression
-	| LiteralValue .
+Element = Expression | LiteralValue .
 ElementList = KeyedElement { "," KeyedElement } .
 ElementType = Type .
 EmbeddedField = [ "*" ] TypeName [ TypeArgs ] .
 EmptyStmt = .
 ExprCaseClause = ExprSwitchCase ":" StatementList .
-ExprSwitchCase =
-	  "case" ExpressionList
-	| "default" .
-ExprSwitchStmt =
-	  "switch" [ ExpressionPreBlock ] "{" { ExprCaseClause } "}"
-	| "switch" SimpleStmt ";" [ ExpressionPreBlock ] "{" { ExprCaseClause } "}" .
-Expression = UnaryExpr { BinaryOp Expression } .
+ExprSwitchCase = "case" ExpressionList | "default" .
+ExprSwitchStmt = "switch" [ ExpressionPreBlock ] "{" { ExprCaseClause } "}" | "switch" SimpleStmt ";" [ ExpressionPreBlock ] "{" { ExprCaseClause } "}" .
+Expression = LogicalAndExpression { "||" LogicalAndExpression } .
 ExpressionList = Expression { "," Expression } .
 ExpressionListPreBlock = ExpressionPreBlock { "," ExpressionPreBlock } .
-ExpressionPreBlock =
-	  UnaryExprPreBlock { BinaryOp ExpressionPreBlock }
-	| Expression .
+ExpressionPreBlock = LogicalAndExpressionPreBlock { "||" LogicalAndExpressionPreBlock } | Expression .
 ExpressionStmt = Expression .
 ExpressionStmtPreBlock = ExpressionPreBlock .
 FallthroughStmt = "fallthrough" .
 FieldDecl = ( IdentifierList Type | EmbeddedField ) [ Tag ] .
 FieldName = identifier .
 ForClause = [ InitStmt ] ";" [ Condition ] ";" [ PostStmt ] .
-ForStmt =
-	  "for" ForClause Block
-	| "for" RangeClause Block
-	| "for" ExpressionPreBlock Block
-	| "for" Block .
+ForStmt = "for" ForClause Block | "for" RangeClause Block | "for" ExpressionPreBlock Block | "for" Block .
 FunctionBody = Block .
 FunctionDecl = "func" FunctionName [ TypeParameters ] Signature [ FunctionBody ] .
 FunctionLit = "func" Signature FunctionBody .
@@ -96,79 +52,46 @@ FunctionType = "func" Signature .
 GoStmt = "go" Expression .
 GotoStmt = "goto" Label .
 IdentifierList = identifier { "," identifier } .
-IfStmt =
-	  "if" ExpressionPreBlock Block [ "else" ( IfStmt | Block ) ]
-	| "if" SimpleStmt ";" ExpressionPreBlock Block [ "else" ( IfStmt
-	| Block ) ] .
+IfStmt = "if" ExpressionPreBlock Block [ "else" ( IfStmt | Block ) ] | "if" SimpleStmt ";" ExpressionPreBlock Block [ "else" ( IfStmt | Block ) ] .
 ImportDecl = "import" ( ImportSpec | "(" { ImportSpec ";" } ")" ) .
 ImportPath = string_lit .
 ImportSpec = [ "." | PackageName ] ImportPath .
 IncDecStmt = Expression ( "++" | "--" ) .
 Index = "[" Expression "]" .
 InitStmt = SimpleStmt .
-InterfaceElem =
-	  MethodElem
-	| TypeElem .
+InterfaceElem = MethodElem | TypeElem .
 InterfaceType = "interface" "{" [ InterfaceElem { ";" InterfaceElem } [ ";" ] ] "}" .
-Key =
-	  Expression
-	| FieldName
-	| LiteralValue .
+Key = Expression | FieldName | LiteralValue .
 KeyType = Type .
 KeyedElement = [ Key ":" ] Element .
 Label = identifier .
 LabeledStmt = Label ":" Statement .
-Literal =
-	  BasicLit
-	| CompositeLit
-	| FunctionLit .
-LiteralPreBlock =
-	  BasicLit
-	| FunctionLit .
-LiteralType =
-	  StructType
-	| ArrayType
-	| "[" "..." "]" ElementType
-	| SliceType
-	| MapType
-	| TypeName [ TypeArgs ] .
+Literal = BasicLit | CompositeLit | FunctionLit .
+LiteralPreBlock = BasicLit | CompositeLitPreBlock | FunctionLit .
+LiteralType = StructType | ArrayType | "[" "..." "]" ElementType | SliceType | MapType | TypeName [ TypeArgs ] .
+LiteralTypePreBlock = StructType | ArrayType | "[" "..." "]" ElementType | SliceType | MapType .
 LiteralValue = "{" [ ElementList [ "," ] ] "}" .
+LogicalAndExpression = RelationalExpression { "&&" RelationalExpression } .
+LogicalAndExpressionPreBlock = RelationalExpressionPreBlock { "&&" RelationalExpressionPreBlock } .
 MapType = "map" "[" KeyType "]" ElementType .
 MethodDecl = "func" Receiver MethodName Signature [ FunctionBody ] .
 MethodElem = MethodName Signature .
 MethodExpr = ReceiverType "." MethodName .
 MethodName = identifier .
-MulOp =
-	  "*"
-	| "/"
-	| "%"
-	| "<<"
-	| ">>"
-	| "&"
-	| "&^" .
-Operand =
-	  Literal
-	| OperandName [ TypeArgs ]
-	| "(" Expression ")" .
-OperandName =
-	  QualifiedIdent
-	| identifier .
-OperandPreBlock =
-	  LiteralPreBlock
-	| OperandName [ TypeArgs ]
-	| "(" Expression ")" .
+MulOp = "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" .
+MultiplicativeExpression = UnaryExpr { MulOp UnaryExpr } .
+MultiplicativeExpressionPreBlock = UnaryExprPreBlockPreBlock { MulOp UnaryExprPreBlockPreBlock } .
+Operand = Literal | OperandName [ TypeArgs ] | "(" Expression ")" .
+OperandName = QualifiedIdent | identifier .
+OperandPreBlock = LiteralPreBlock | OperandName [ TypeArgs ] | "(" Expression ")" .
 PackageClause = "package" PackageName .
 PackageName = identifier .
-ParameterDecl =
-	  identifier "..." Type
-	| identifier Type
-	| "..." Type
-	| Type .
+ParameterDecl = identifier "..." Type | identifier Type | "..." Type | Type .
 ParameterList = ParameterDecl { "," ParameterDecl } .
 Parameters = "(" [ ParameterList [ "," ] ] ")" .
 PointerType = "*" BaseType .
 PostStmt = SimpleStmtPreBlock .
-PrimaryExpr = ( Operand | Conversion | MethodExpr ) { Selector 	| Index | Slice | TypeAssertion | Arguments } .
+PrimaryExpr = ( Operand | Conversion | MethodExpr ) { Selector | Index | Slice | TypeAssertion | Arguments } .
 PrimaryExprPreBlock = ( OperandPreBlock | Conversion | MethodExpr ) { Selector | Index | Slice | TypeAssertion | Arguments } .
 QualifiedIdent = PackageName "." identifier .
 RangeClause = [ ExpressionList "=" | IdentifierList ":=" ] "range" ExpressionPreBlock .
@@ -176,16 +99,10 @@ Receiver = Parameters .
 ReceiverType = Type .
 RecvExpr = Expression .
 RecvStmt = [ ExpressionList "=" | IdentifierList ":=" ] RecvExpr .
-RelOp =
-	  "=="
-	| "!="
-	| "<"
-	| "<="
-	| ">"
-	| ">=" .
-Result =
-	  Parameters
-	| Type .
+RelOp = "==" | "!=" | "<" | "<=" | ">" | ">=" .
+RelationalExpression = AdditiveExpression { RelOp AdditiveExpression } .
+RelationalExpressionPreBlock = AdditiveExpressionPreBlock { RelOp AdditiveExpressionPreBlock } .
+Result = Parameters | Type .
 ReturnStmt = "return" [ ExpressionList ] .
 SelectStmt = "select" "{" { CommClause } "}" .
 Selector = "." identifier .
@@ -194,108 +111,41 @@ SendStmtPreBlock = Channel "<-" ExpressionPreBlock .
 ShortVarDecl = IdentifierList ":=" ExpressionList .
 ShortVarDeclPreBlock = IdentifierList ":=" ExpressionListPreBlock .
 Signature = Parameters [ Result ] .
-SimpleStmt =
-	  Assignment
-	| ShortVarDecl
-	| IncDecStmt
-	| SendStmt
-	| ExpressionStmt
-	| EmptyStmt .
-SimpleStmtPreBlock =
-	  AssignmentPreBlock
-	| ShortVarDeclPreBlock
-	| IncDecStmt
-	| SendStmtPreBlock
-	| ExpressionStmtPreBlock
-	| EmptyStmt .
-Slice =
-	  "[" [ Expression ] ":" [ Expression ] "]"
-	| "[" [ Expression ] ":" Expression ":" Expression "]" .
+SimpleStmt = Assignment | ShortVarDecl | IncDecStmt | SendStmt | ExpressionStmt | EmptyStmt . 
+SimpleStmtPreBlock = AssignmentPreBlock | ShortVarDeclPreBlock | IncDecStmt | SendStmtPreBlock | ExpressionStmtPreBlock | EmptyStmt .
+Slice = "[" [ Expression ] ":" [ Expression ] "]" | "[" [ Expression ] ":" Expression ":" Expression "]" .
 SliceType = "[" "]" ElementType .
 SourceFile = PackageClause ";" { ImportDecl ";" } { TopLevelDecl ";" } .
-Statement =
-	  Declaration
-	| LabeledStmt
-	| GoStmt
-	| ReturnStmt
-	| BreakStmt
-	| ContinueStmt
-	| GotoStmt
-	| FallthroughStmt
-	| Block
-	| IfStmt
-	| SwitchStmt
-	| SelectStmt
-	| ForStmt
-	| DeferStmt
-	| SimpleStmt .
+Statement = Declaration | LabeledStmt | GoStmt | ReturnStmt | BreakStmt | ContinueStmt | GotoStmt | FallthroughStmt | Block | IfStmt | SwitchStmt | SelectStmt | ForStmt | DeferStmt | SimpleStmt .
 StatementList = [ Statement { ";" Statement } [ ";" ] ] .
 StructType = "struct" "{" [ FieldDecl { ";" FieldDecl } [ ";" ] ] "}" .
-SwitchStmt =
-	  ExprSwitchStmt
-	| TypeSwitchStmt .
+SwitchStmt = ExprSwitchStmt | TypeSwitchStmt .
 Tag = string_lit .
-TopLevelDecl = Declaration
-	| FunctionDecl
-	| MethodDecl .
-Type =
-	  TypeName [ TypeArgs ]
-	| TypeLit
-	| "(" Type ")" .
+TopLevelDecl = Declaration | FunctionDecl | MethodDecl .
+Type = TypeName [ TypeArgs ] | TypeLit | "(" Type ")" .
 TypeArgs = "[" TypeList [ "," ] "]" .
 TypeAssertion = "." "(" Type ")" .
 TypeCaseClause = TypeSwitchCase ":" StatementList .
 TypeConstraint = TypeElem .
-TypeDecl =
-	  "type" ( TypeSpec
-	| "(" [ TypeSpec { ";" TypeSpec } [ ";" ] ] ")" ) .
+TypeDecl = "type" ( TypeSpec | "(" [ TypeSpec { ";" TypeSpec } [ ";" ] ] ")" ) .
 TypeDef = identifier [ TypeParameters ] Type .
 TypeElem = TypeTerm { "|" TypeTerm } .
 TypeList = Type { "," Type } .
-TypeLit =
-	  ArrayType
-	| StructType
-	| PointerType
-	| FunctionType
-	| InterfaceType
-	| SliceType
-	| MapType
-	| ChannelType .
-TypeName =
-	  QualifiedIdent
-	| identifier .
+TypeLit = ArrayType | StructType | PointerType | FunctionType | InterfaceType | SliceType | MapType | ChannelType .
+TypeName = QualifiedIdent | identifier .
 TypeParamDecl = IdentifierList TypeConstraint .
 TypeParamList = TypeParamDecl { "," TypeParamDecl } .
 TypeParameters = "[" TypeParamList [ "," ] "]" .
-TypeSpec =
-	  AliasDecl
-	| TypeDef .
-TypeSwitchCase =
-	  "case" TypeList
-	| "default" .
+TypeSpec = AliasDecl | TypeDef .
+TypeSwitchCase = "case" TypeList | "default" .
 TypeSwitchGuard = [ identifier ":=" ] PrimaryExpr "." "(" "type" ")" .
 TypeSwitchStmt = "switch" [ SimpleStmt ";" ] TypeSwitchGuard "{" { TypeCaseClause } "}" .
-TypeTerm =
-	  Type
-	| UnderlyingType .
-UnaryExpr =
-	  PrimaryExpr
-	| UnaryOp UnaryExpr .
-UnaryExprPreBlock =
-	  PrimaryExprPreBlock
-	| UnaryOp UnaryExprPreBlock .
-UnaryOp =
-	  "+"
-	| "-"
-	| "!"
-	| "^"
-	| "*"
-	| "&"
-	| "<-" .
+TypeTerm = Type | UnderlyingType .
+UnaryExpr = PrimaryExpr | UnaryOp UnaryExpr .
+UnaryExprPreBlockPreBlock = PrimaryExprPreBlock | UnaryOp UnaryExprPreBlockPreBlock .
+UnaryOp = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
 UnderlyingType = "~" Type .
-VarDecl =
-	  "var" ( VarSpec
-	| "(" [ VarSpec { ";" VarSpec } [ ";" ] ] ")" ) .
+VarDecl = "var" ( VarSpec | "(" [ VarSpec { ";" VarSpec } [ ";" ] ] ")" ) .
 VarSpec = IdentifierList ( Type [ "=" ExpressionList ] | "=" ExpressionList ) .
 float_lit = .
 identifier = .

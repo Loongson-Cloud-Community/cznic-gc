@@ -22,90 +22,198 @@ import (
 
 const epsilon = -1
 
+// The list of tokens.
+const (
+	// Special tokens
+	ILLEGAL = token.ILLEGAL
+	EOF     = token.EOF
+	COMMENT = token.COMMENT
+
+	// Identifiers and basic type literals
+	// (these tokens stand for classes of literals)
+	IDENT  = token.IDENT  // main
+	INT    = token.INT    // 12345
+	FLOAT  = token.FLOAT  // 123.45
+	IMAG   = token.IMAG   // 123.45i
+	CHAR   = token.CHAR   // 'a'
+	STRING = token.STRING // "abc"
+
+	// Operators and delimiters
+	ADD = token.ADD // +
+	SUB = token.SUB // -
+	MUL = token.MUL // *
+	QUO = token.QUO // /
+	REM = token.REM // %
+
+	AND     = token.AND     // &
+	OR      = token.OR      // |
+	XOR     = token.XOR     // ^
+	SHL     = token.SHL     // <<
+	SHR     = token.SHR     // >>
+	AND_NOT = token.AND_NOT // &^
+
+	ADD_ASSIGN = token.ADD_ASSIGN // +=
+	SUB_ASSIGN = token.SUB_ASSIGN // -=
+	MUL_ASSIGN = token.MUL_ASSIGN // *=
+	QUO_ASSIGN = token.QUO_ASSIGN // /=
+	REM_ASSIGN = token.REM_ASSIGN // %=
+
+	AND_ASSIGN     = token.AND_ASSIGN     // &=
+	OR_ASSIGN      = token.OR_ASSIGN      // |=
+	XOR_ASSIGN     = token.XOR_ASSIGN     // ^=
+	SHL_ASSIGN     = token.SHL_ASSIGN     // <<=
+	SHR_ASSIGN     = token.SHR_ASSIGN     // >>=
+	AND_NOT_ASSIGN = token.AND_NOT_ASSIGN // &^=
+
+	LAND  = token.LAND  // &&
+	LOR   = token.LOR   // ||
+	ARROW = token.ARROW // <-
+	INC   = token.INC   // ++
+	DEC   = token.DEC   // --
+
+	EQL    = token.EQL    // ==
+	LSS    = token.LSS    // <
+	GTR    = token.GTR    // >
+	ASSIGN = token.ASSIGN // =
+	NOT    = token.NOT    // !
+
+	NEQ      = token.NEQ      // !=
+	LEQ      = token.LEQ      // <=
+	GEQ      = token.GEQ      // >=
+	DEFINE   = token.DEFINE   // :=
+	ELLIPSIS = token.ELLIPSIS // ...
+
+	LPAREN = token.LPAREN // (
+	LBRACK = token.LBRACK // [
+	LBRACE = token.LBRACE // {
+	COMMA  = token.COMMA  // ,
+	PERIOD = token.PERIOD // .
+
+	RPAREN    = token.RPAREN    // )
+	RBRACK    = token.RBRACK    // ]
+	RBRACE    = token.RBRACE    // }
+	SEMICOLON = token.SEMICOLON // ;
+	COLON     = token.COLON     // :
+
+	// Keywords
+	BREAK    = token.BREAK
+	CASE     = token.CASE
+	CHAN     = token.CHAN
+	CONST    = token.CONST
+	CONTINUE = token.CONTINUE
+
+	DEFAULT     = token.DEFAULT
+	DEFER       = token.DEFER
+	ELSE        = token.ELSE
+	FALLTHROUGH = token.FALLTHROUGH
+	FOR         = token.FOR
+
+	FUNC   = token.FUNC
+	GO     = token.GO
+	GOTO   = token.GOTO
+	IF     = token.IF
+	IMPORT = token.IMPORT
+
+	INTERFACE = token.INTERFACE
+	MAP       = token.MAP
+	PACKAGE   = token.PACKAGE
+	RANGE     = token.RANGE
+	RETURN    = token.RETURN
+
+	SELECT = token.SELECT
+	STRUCT = token.STRUCT
+	SWITCH = token.SWITCH
+	TYPE   = token.TYPE
+	VAR    = token.VAR
+
+	// additional tokens, handled in an ad-hoc manner
+	TILDE = token.TILDE
+)
+
 var (
 	trcTODOs       bool
 	extendedErrors = true
 
 	toks = map[string]token.Token{
-		"!":             token.NOT,
-		"!=":            token.NEQ,
-		"%":             token.REM,
-		"%=":            token.REM_ASSIGN,
-		"&":             token.AND,
-		"&&":            token.LAND,
-		"&=":            token.AND_ASSIGN,
-		"&^":            token.AND_NOT,
-		"&^=":           token.AND_NOT_ASSIGN,
-		"(":             token.LPAREN,
-		")":             token.RPAREN,
-		"*":             token.MUL,
-		"*=":            token.MUL_ASSIGN,
-		"+":             token.ADD,
-		"++":            token.INC,
-		"+=":            token.ADD_ASSIGN,
-		",":             token.COMMA,
-		"-":             token.SUB,
-		"--":            token.DEC,
-		"-=":            token.SUB_ASSIGN,
-		".":             token.PERIOD,
-		"...":           token.ELLIPSIS,
-		"/":             token.QUO,
-		"/=":            token.QUO_ASSIGN,
-		":":             token.COLON,
-		":=":            token.DEFINE,
-		";":             token.SEMICOLON,
-		"<":             token.LSS,
-		"<-":            token.ARROW,
-		"<<":            token.SHL,
-		"<<=":           token.SHL_ASSIGN,
-		"<=":            token.LEQ,
-		"=":             token.ASSIGN,
-		"==":            token.EQL,
-		">":             token.GTR,
-		">=":            token.GEQ,
-		">>":            token.SHR,
-		">>=":           token.SHR_ASSIGN,
-		"[":             token.LBRACK,
-		"]":             token.RBRACK,
-		"^":             token.XOR,
-		"^=":            token.XOR_ASSIGN,
-		"break":         token.BREAK,
-		"case":          token.CASE,
-		"chan":          token.CHAN,
-		"const":         token.CONST,
-		"continue":      token.CONTINUE,
-		"default":       token.DEFAULT,
-		"defer":         token.DEFER,
-		"else":          token.ELSE,
-		"fallthrough":   token.FALLTHROUGH,
-		"float_lit":     token.FLOAT,
-		"for":           token.FOR,
-		"func":          token.FUNC,
-		"go":            token.GO,
-		"goto":          token.GOTO,
-		"identifier":    token.IDENT,
-		"if":            token.IF,
-		"imaginary_lit": token.IMAG,
-		"import":        token.IMPORT,
-		"int_lit":       token.INT,
-		"interface":     token.INTERFACE,
-		"map":           token.MAP,
-		"package":       token.PACKAGE,
-		"range":         token.RANGE,
-		"return":        token.RETURN,
-		"rune_lit":      token.CHAR,
-		"select":        token.SELECT,
-		"string_lit":    token.STRING,
-		"struct":        token.STRUCT,
-		"switch":        token.SWITCH,
-		"type":          token.TYPE,
-		"var":           token.VAR,
-		"{":             token.LBRACE,
-		"|":             token.OR,
-		"|=":            token.OR_ASSIGN,
-		"||":            token.LOR,
-		"}":             token.RBRACE,
-		"~":             token.TILDE,
+		"!":             NOT,
+		"!=":            NEQ,
+		"%":             REM,
+		"%=":            REM_ASSIGN,
+		"&":             AND,
+		"&&":            LAND,
+		"&=":            AND_ASSIGN,
+		"&^":            AND_NOT,
+		"&^=":           AND_NOT_ASSIGN,
+		"(":             LPAREN,
+		")":             RPAREN,
+		"*":             MUL,
+		"*=":            MUL_ASSIGN,
+		"+":             ADD,
+		"++":            INC,
+		"+=":            ADD_ASSIGN,
+		",":             COMMA,
+		"-":             SUB,
+		"--":            DEC,
+		"-=":            SUB_ASSIGN,
+		".":             PERIOD,
+		"...":           ELLIPSIS,
+		"/":             QUO,
+		"/=":            QUO_ASSIGN,
+		":":             COLON,
+		":=":            DEFINE,
+		";":             SEMICOLON,
+		"<":             LSS,
+		"<-":            ARROW,
+		"<<":            SHL,
+		"<<=":           SHL_ASSIGN,
+		"<=":            LEQ,
+		"=":             ASSIGN,
+		"==":            EQL,
+		">":             GTR,
+		">=":            GEQ,
+		">>":            SHR,
+		">>=":           SHR_ASSIGN,
+		"[":             LBRACK,
+		"]":             RBRACK,
+		"^":             XOR,
+		"^=":            XOR_ASSIGN,
+		"break":         BREAK,
+		"case":          CASE,
+		"chan":          CHAN,
+		"const":         CONST,
+		"continue":      CONTINUE,
+		"default":       DEFAULT,
+		"defer":         DEFER,
+		"else":          ELSE,
+		"fallthrough":   FALLTHROUGH,
+		"float_lit":     FLOAT,
+		"for":           FOR,
+		"func":          FUNC,
+		"go":            GO,
+		"goto":          GOTO,
+		"identifier":    IDENT,
+		"if":            IF,
+		"imaginary_lit": IMAG,
+		"import":        IMPORT,
+		"int_lit":       INT,
+		"interface":     INTERFACE,
+		"map":           MAP,
+		"package":       PACKAGE,
+		"range":         RANGE,
+		"return":        RETURN,
+		"rune_lit":      CHAR,
+		"select":        SELECT,
+		"string_lit":    STRING,
+		"struct":        STRUCT,
+		"switch":        SWITCH,
+		"type":          TYPE,
+		"var":           VAR,
+		"{":             LBRACE,
+		"|":             OR,
+		"|=":            OR_ASSIGN,
+		"||":            LOR,
+		"}":             RBRACE,
+		"~":             TILDE,
 	}
 )
 
@@ -356,6 +464,7 @@ func (p *parallel) wait() error {
 func leftRecursive(g ebnf.Grammar, start string) (r [][]*ebnf.Production) {
 	p := g[start]
 	m := map[*ebnf.Production]int{p: 1}
+	n := map[*ebnf.Production]int{p: 1}
 	detected := map[*ebnf.Production]struct{}{}
 
 	var f func(ebnf.Expression, int, []*ebnf.Production) int
@@ -378,7 +487,7 @@ func leftRecursive(g ebnf.Grammar, start string) (r [][]*ebnf.Production) {
 			}
 
 			sv := m[p]
-			defer func() { m[p] = sv }()
+			defer func() { m[p] = sv; n[p] = 1 }()
 
 			if sv == pos {
 				detected[p] = struct{}{}
@@ -393,6 +502,10 @@ func leftRecursive(g ebnf.Grammar, start string) (r [][]*ebnf.Production) {
 
 			if sv != 0 {
 				return pos
+			}
+
+			if n[p] != 0 {
+				return pos + 1
 			}
 
 			m[p] = pos
@@ -546,6 +659,181 @@ func pos(p token.Position) token.Position {
 	return p
 }
 
+func tokSource(t token.Token) string {
+	if t == epsilon {
+		return "ε"
+	}
+
+	switch t {
+	case ILLEGAL:
+		return "ILLEGAL"
+	case EOF:
+		return "EOF"
+	case COMMENT:
+		return "COMMENT"
+	case IDENT:
+		return "IDENT"
+	case INT:
+		return "INT"
+	case FLOAT:
+		return "FLOAT"
+	case IMAG:
+		return "IMAG"
+	case CHAR:
+		return "CHAR"
+	case STRING:
+		return "STRING"
+	case ADD:
+		return "ADD"
+	case SUB:
+		return "SUB"
+	case MUL:
+		return "MUL"
+	case QUO:
+		return "QUO"
+	case REM:
+		return "REM"
+	case AND:
+		return "AND"
+	case OR:
+		return "OR"
+	case XOR:
+		return "XOR"
+	case SHL:
+		return "SHL"
+	case SHR:
+		return "SHR"
+	case AND_NOT:
+		return "AND_NOT"
+	case ADD_ASSIGN:
+		return "ADD_ASSIGN"
+	case SUB_ASSIGN:
+		return "SUB_ASSIGN"
+	case MUL_ASSIGN:
+		return "MUL_ASSIGN"
+	case QUO_ASSIGN:
+		return "QUO_ASSIGN"
+	case REM_ASSIGN:
+		return "REM_ASSIGN"
+	case AND_ASSIGN:
+		return "AND_ASSIGN"
+	case OR_ASSIGN:
+		return "OR_ASSIGN"
+	case XOR_ASSIGN:
+		return "XOR_ASSIGN"
+	case SHL_ASSIGN:
+		return "SHL_ASSIGN"
+	case SHR_ASSIGN:
+		return "SHR_ASSIGN"
+	case AND_NOT_ASSIGN:
+		return "AND_NOT_ASSIGN"
+	case LAND:
+		return "LAND"
+	case LOR:
+		return "LOR"
+	case ARROW:
+		return "ARROW"
+	case INC:
+		return "INC"
+	case DEC:
+		return "DEC"
+	case EQL:
+		return "EQL"
+	case LSS:
+		return "LSS"
+	case GTR:
+		return "GTR"
+	case ASSIGN:
+		return "ASSIGN"
+	case NOT:
+		return "NOT"
+	case NEQ:
+		return "NEQ"
+	case LEQ:
+		return "LEQ"
+	case GEQ:
+		return "GEQ"
+	case DEFINE:
+		return "DEFINE"
+	case ELLIPSIS:
+		return "ELLIPSIS"
+	case LPAREN:
+		return "LPAREN"
+	case LBRACK:
+		return "LBRACK"
+	case LBRACE:
+		return "LBRACE"
+	case COMMA:
+		return "COMMA"
+	case PERIOD:
+		return "PERIOD"
+	case RPAREN:
+		return "RPAREN"
+	case RBRACK:
+		return "RBRACK"
+	case RBRACE:
+		return "RBRACE"
+	case SEMICOLON:
+		return "SEMICOLON"
+	case COLON:
+		return "COLON"
+	case BREAK:
+		return "BREAK"
+	case CASE:
+		return "CASE"
+	case CHAN:
+		return "CHAN"
+	case CONST:
+		return "CONST"
+	case CONTINUE:
+		return "CONTINUE"
+	case DEFAULT:
+		return "DEFAULT"
+	case DEFER:
+		return "DEFER"
+	case ELSE:
+		return "ELSE"
+	case FALLTHROUGH:
+		return "FALLTHROUGH"
+	case FOR:
+		return "FOR"
+	case FUNC:
+		return "FUNC"
+	case GO:
+		return "GO"
+	case GOTO:
+		return "GOTO"
+	case IF:
+		return "IF"
+	case IMPORT:
+		return "IMPORT"
+	case INTERFACE:
+		return "INTERFACE"
+	case MAP:
+		return "MAP"
+	case PACKAGE:
+		return "PACKAGE"
+	case RANGE:
+		return "RANGE"
+	case RETURN:
+		return "RETURN"
+	case SELECT:
+		return "SELECT"
+	case STRUCT:
+		return "STRUCT"
+	case SWITCH:
+		return "SWITCH"
+	case TYPE:
+		return "TYPE"
+	case VAR:
+		return "VAR"
+	case TILDE:
+		return "TILDE"
+	default:
+		panic(todo("", int(t), t))
+	}
+}
+
 func tokString(t token.Token) string {
 	if t == epsilon {
 		return "ε"
@@ -557,55 +845,55 @@ func tokString(t token.Token) string {
 	}
 
 	switch t {
-	case token.SHL:
+	case SHL:
 		return "SHL"
-	case token.SHR:
+	case SHR:
 		return "SHR"
-	case token.AND_NOT:
+	case AND_NOT:
 		return "AND_NOT"
-	case token.ADD_ASSIGN:
+	case ADD_ASSIGN:
 		return "ADD_ASSIGN"
-	case token.SUB_ASSIGN:
+	case SUB_ASSIGN:
 		return "SUB_ASSIGN"
-	case token.MUL_ASSIGN:
+	case MUL_ASSIGN:
 		return "MUL_ASSIGN"
-	case token.QUO_ASSIGN:
+	case QUO_ASSIGN:
 		return "QUO_ASSIGN"
-	case token.REM_ASSIGN:
+	case REM_ASSIGN:
 		return "REM_ASSIGN"
-	case token.AND_ASSIGN:
+	case AND_ASSIGN:
 		return "AND_ASSIGN"
-	case token.OR_ASSIGN:
+	case OR_ASSIGN:
 		return "OR_ASSIGN"
-	case token.XOR_ASSIGN:
+	case XOR_ASSIGN:
 		return "XOR_ASSIGN"
-	case token.SHL_ASSIGN:
+	case SHL_ASSIGN:
 		return "SHL_ASSIGN"
-	case token.SHR_ASSIGN:
+	case SHR_ASSIGN:
 		return "SHR_ASSIGN"
-	case token.AND_NOT_ASSIGN:
+	case AND_NOT_ASSIGN:
 		return "AND_NOT_ASSIGN"
-	case token.LAND:
+	case LAND:
 		return "LAND"
-	case token.LOR:
+	case LOR:
 		return "LOR"
-	case token.ARROW:
+	case ARROW:
 		return "ARROW"
-	case token.INC:
+	case INC:
 		return "INC"
-	case token.DEC:
+	case DEC:
 		return "DEC"
-	case token.EQL:
+	case EQL:
 		return "EQL"
-	case token.NEQ:
+	case NEQ:
 		return "NEQ"
-	case token.LEQ:
+	case LEQ:
 		return "LEQ"
-	case token.GEQ:
+	case GEQ:
 		return "GEQ"
-	case token.DEFINE:
+	case DEFINE:
 		return "DEFINE"
-	case token.ELLIPSIS:
+	case ELLIPSIS:
 		return "ELLIPSIS"
 	default:
 		return strings.ToUpper(s)
