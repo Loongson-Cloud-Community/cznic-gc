@@ -1,4 +1,4 @@
-.PHONY:	clean edit editor test
+.PHONY:	clean edit editor test gen
 
 clean:
 	rm -f log-* cpu.test mem.test *.out
@@ -11,6 +11,11 @@ edit:
 editor:
 	gofmt -l -s -w *.go
 	go test -c -o /dev/null 2>&1 | tee log-editor
+
+gen:
+	echo "package main; type SourceFileNode struct{}; func (p *parser) sourceFile() *SourceFileNode { return nil }" > parser.go
+	go test -v -gen -run TestGen 2>&1 | tee log-gen
+	gofmt -l -s -w *.go
 
 test:
 	go test -v -failfast 2>&1 | tee log-test

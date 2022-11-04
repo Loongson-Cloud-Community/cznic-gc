@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -270,21 +272,40 @@ func trc(s string, args ...interface{}) string {
 	return r
 }
 
-//TODO- func printEBNF(w io.Writer, g ebnf.Grammar) {
-//TODO- 	var a []string
-//TODO- 	for k := range g {
-//TODO- 		a = append(a, k)
-//TODO- 	}
-//TODO- 	sort.Strings(a)
-//TODO- 	for _, k := range a {
-//TODO- 		p := g[k]
-//TODO- 		fmt.Fprintf(w, "%s = ", p.Name.String)
-//TODO- 		if p.Expr != nil {
-//TODO- 			printEBNFExpression(w, p.Expr)
-//TODO- 		}
-//TODO- 		fmt.Fprintf(w, " .\n")
-//TODO- 	}
-//TODO- }
+func unexport(s string) (r string) {
+	switch r = strings.ToLower(s[:1]) + s[1:]; r {
+	case "type":
+		return "type1"
+	default:
+		return r
+	}
+}
+
+func extractPos(s string) (p token.Position, ok bool) {
+	var prefix string
+	if len(s) > 1 && s[1] == ':' { // c:\foo
+		prefix = s[:2]
+		s = s[2:]
+	}
+	// "testdata/parser/bug/001.c:1193: ..."
+	a := strings.Split(s, ":")
+	// ["testdata/parser/bug/001.c" "1193" "..."]
+	if len(a) < 2 {
+		return p, false
+	}
+
+	line, err := strconv.Atoi(a[1])
+	if err != nil {
+		return p, false
+	}
+
+	col, err := strconv.Atoi(a[2])
+	if err != nil {
+		col = 1
+	}
+
+	return token.Position{Filename: prefix + a[0], Line: line, Column: col}, true
+}
 
 func ebnfString(e ebnf.Expression) string {
 	var b strings.Builder
@@ -305,9 +326,6 @@ func printEBNFExpression(w io.Writer, e ebnf.Expression) {
 		fmt.Fprintf(w, "%s", x.String)
 	case *ebnf.Token:
 		s := x.String
-		s = strings.ReplaceAll(s, "&lt;", "<")
-		s = strings.ReplaceAll(s, "&gt;", ">")
-		s = strings.ReplaceAll(s, "&amp;", "&")
 		fmt.Fprintf(w, "%q", s)
 	case *ebnf.Option:
 		fmt.Fprintf(w, "[ ")
@@ -456,6 +474,23 @@ func (p *parallel) wait() error {
 
 type closure map[token.Token]struct{}
 
+func (c closure) caseStr() string {
+	var a []string
+	var e string
+	for k := range c {
+		switch k {
+		case epsilon:
+			e = " /* ε */"
+		default:
+			a = append(a, tokSource(k))
+		}
+	}
+	sort.Strings(a)
+	return strings.Join(a, ", ") + e
+}
+
+func (c closure) hasEpsilon() (r bool) { _, r = c[epsilon]; return r }
+
 func (c *closure) add(t token.Token) closure {
 	m := *c
 	if m == nil {
@@ -507,7 +542,14 @@ func newGrammar(name, start string, src []byte) (r *grammar, err error) {
 	}
 	for nm, p := range r.g {
 		if token.IsExported(nm) {
-			c := r.closure0(nm, p.Expr, map[string]struct{}{})
+			var c closure
+			e := p.Expr
+			switch {
+			case e == nil:
+				c.add(epsilon)
+			default:
+				c = r.closure0(nm, e, map[string]struct{}{})
+			}
 			r.exprClosures[ebnfString(p.Expr)] = c
 			r.productClosures[p] = c
 		}
@@ -515,7 +557,19 @@ func newGrammar(name, start string, src []byte) (r *grammar, err error) {
 	return r, nil
 }
 
+func (p *grammar) tok(s string) token.Token {
+	if r, ok := toks[s]; ok {
+		return r
+	}
+
+	panic(todo("%q", s))
+}
+
 func (g *grammar) exprClosure(e ebnf.Expression) (r closure) {
+	if e == nil {
+		panic(todo(""))
+	}
+
 	k := ebnfString(e)
 	if r, ok := g.exprClosures[k]; ok {
 		return r
@@ -527,6 +581,10 @@ func (g *grammar) exprClosure(e ebnf.Expression) (r closure) {
 }
 
 func (g *grammar) closure0(prod string, e ebnf.Expression, m map[string]struct{}) (r closure) {
+	if e == nil {
+		panic(todo(""))
+	}
+
 	k := ebnfString(e)
 	if _, ok := m[k]; ok {
 		return nil
@@ -551,10 +609,17 @@ func (g *grammar) closure0(prod string, e ebnf.Expression, m map[string]struct{}
 		p := g.g[nm]
 		e := p.Expr
 		if token.IsExported(nm) {
+			if e == nil {
+				return r.add(epsilon)
+			}
+
 			return r.union(g.closure0(prod, e, m))
 		}
 
-		return r.add(toks[nm])
+		if x, ok := toks[nm]; ok {
+			r.add(x)
+		}
+		return r
 	case *ebnf.Option:
 		r.add(epsilon)
 		return r.union(g.closure0(prod, x.Body, m))
@@ -572,9 +637,7 @@ func (g *grammar) closure0(prod string, e ebnf.Expression, m map[string]struct{}
 		}
 		return r
 	case *ebnf.Token:
-		return r.add(toks[x.String])
-	case nil:
-		return r.add(epsilon)
+		return r.add(g.tok(x.String))
 	}
 	panic(todo("%q %T %s", prod, e, k))
 }
@@ -953,7 +1016,7 @@ out:
 				break out
 			}
 
-			if _, hasEpsilon := fs[epsilon]; hasEpsilon {
+			if fs.hasEpsilon() {
 				return true
 			}
 		default:
@@ -962,15 +1025,8 @@ out:
 			}
 		}
 	case *ebnf.Token:
-		switch {
-		case token.IsKeyword(x.String):
-			if p.accept(p.c().lit == x.String) {
-				return true
-			}
-		default:
-			if p.accept(p.c().tok == p.tok(x.String)) {
-				return true
-			}
+		if p.accept(p.c().tok == p.tok(x.String)) {
+			return true
 		}
 	case *ebnf.Repetition:
 		for {
@@ -1003,14 +1059,17 @@ type parser struct {
 	path string
 	toks []tok
 
-	ix int
+	budget int
+	ix     int
+	maxIx  int
 
 	closed bool
 }
 
 func newParser(path string, src []byte) (r *parser, err error) {
 	r = &parser{
-		path: path,
+		budget: 1e7,
+		path:   path,
 	}
 	var s scanner.Scanner
 	fs := token.NewFileSet()
@@ -1030,32 +1089,29 @@ func newParser(path string, src []byte) (r *parser, err error) {
 }
 
 func (p *parser) errPosition() token.Position {
-	return p.f.PositionFor(p.toks[p.ix].pos, true)
+	return p.f.PositionFor(p.toks[p.maxIx].pos, true)
 }
 
-func (p *parser) dbg(n int) string {
-	t := p.peek(n)
-	return fmt.Sprintf("%v: %v", p.f.PositionFor(t.pos, true), t)
-}
-
-func (p *parser) c() token.Token { return p.peek(0).tok }
-func (p *parser) close()         { p.closed = true }
-func (p *parser) n()             { p.ix++ }
-
-func (p *parser) peek(n int) tok {
-	if p.closed {
+func (p *parser) c() tok {
+	if p.budget <= 0 {
 		return p.toks[len(p.toks)-1]
 	}
 
-	return p.toks[p.ix+n]
+	p.maxIx = mathutil.Max(p.maxIx, p.ix)
+	return p.toks[p.ix]
 }
 
-func (p *parser) must(t token.Token) bool {
-	if p.c() != t {
-		p.close()
-		return false
+func (p *parser) back(ix int) { p.ix = ix }
+
+func (p *parser) parse() (err error) {
+	ast := p.sourceFile()
+	if p.budget == 0 {
+		return errorf("%s: resources exhausted", p.path)
 	}
 
-	p.n()
-	return true
+	if ast == nil || p.ix < len(p.toks)-1 {
+		return errorf("%s: syntax error", p.errPosition())
+	}
+
+	return nil
 }

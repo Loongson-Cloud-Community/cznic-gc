@@ -21,6 +21,7 @@ const (
 )
 
 var (
+	oGen    = flag.Bool("gen", false, "")
 	oRE     = flag.String("re", "", "")
 	oTrc    = flag.Bool("trc", false, "")
 	oTrcPEG = flag.Bool("trcpeg", false, "")
@@ -44,7 +45,10 @@ func TestSpecEBNF(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	g, err := newGrammar("spec", startProduction, b)
+	s := strings.ReplaceAll(string(b), "&lt;", "<")
+	s = strings.ReplaceAll(s, "&gt;", ">")
+	s = strings.ReplaceAll(s, "&amp;", "&")
+	g, err := newGrammar("spec", startProduction, []byte(s))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +80,20 @@ func testGrammar(t *testing.T, fn string) {
 	var a []string
 	for nm, p := range peg.g {
 		var b []string
-		for k := range peg.exprClosure(p.Expr) {
+		var c closure
+		e := p.Expr
+		switch {
+		case token.IsExported(nm):
+			if e == nil {
+				c.add(epsilon)
+				break
+			}
+
+			c = peg.exprClosure(e)
+		default:
+			c.add(peg.tok(nm))
+		}
+		for k := range c {
 			b = append(b, tokSource(k))
 		}
 		sort.Strings(b)
@@ -263,7 +280,6 @@ func isKnownBad(fn string, pos token.Position) bool {
 }
 
 func TestParser(t *testing.T) {
-	return //TODO-
 	gld := newGolden(t, "testdata/test_parse.golden")
 
 	defer gld.close()
@@ -299,6 +315,15 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 		}
 
 		p.addFile()
+		switch s := filepath.ToSlash(path0); {
+		case
+			strings.HasSuffix(s, "test/fixedbugs/issue29264.go"), //TODO
+			strings.HasSuffix(s, "test/fixedbugs/issue29312.go"): //TODO
+
+			p.addSkipped()
+			return nil
+		}
+
 		path := path0
 		p.exec(func() (err error) {
 			if *oTrc {
@@ -330,6 +355,88 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 			if err := pp.parse(); err != nil {
 				if isKnownBad(path, pp.errPosition()) {
 					pp = nil
+					p.addSkipped()
+					return nil
+				}
+
+				return errorf("%s", err)
+			}
+
+			p.addOk()
+			gld.w("%s\n", path)
+			return nil
+		})
+		return nil
+	}); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestGen(t *testing.T) {
+	if !*oGen {
+		t.Skip("enable with -gen")
+	}
+
+	if err := generate("parser.go", pegEBNF); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGoParser(t *testing.T) {
+	gld := newGolden(t, "testdata/test_parse.go.golden")
+
+	defer gld.close()
+
+	p := newParallel()
+	t.Run("cd", func(t *testing.T) { testGoParser(p, t, ".", gld) })
+	t.Run("goroot", func(t *testing.T) { testGoParser(p, t, runtime.GOROOT(), gld) })
+	if err := p.wait(); err != nil {
+		t.Error(err)
+	}
+	t.Logf("TOTAL files %v, skip %v, ok %v, fail %v", h(p.files), h(p.skipped), h(p.ok), h(p.fails))
+	if p.fails != 0 {
+		t.Logf("Shortest failing file: %s, %v tokens", p.minPath, p.minToks)
+	}
+}
+
+func testGoParser(p *parallel, t *testing.T, root string, gld *golden) {
+	if err := filepath.Walk(filepath.FromSlash(root), func(path0 string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		if re != nil && !re.MatchString(path0) {
+			return nil
+		}
+
+		if filepath.Ext(path0) != ".go" {
+			return nil
+		}
+
+		p.addFile()
+		path := path0
+		p.exec(func() (err error) {
+			if *oTrc {
+				fmt.Fprintln(os.Stderr, path)
+			}
+
+			defer func() {
+				if err != nil {
+					p.addFail()
+				}
+			}()
+
+			b, err := os.ReadFile(path)
+			if err != nil {
+				return errorf("%s: %v", path, err)
+			}
+
+			if _, err = goparser.ParseFile(token.NewFileSet(), path, b, goparser.SkipObjectResolution); err != nil {
+				if pos, ok := extractPos(err.Error()); !ok || isKnownBad(path, pos) {
 					p.addSkipped()
 					return nil
 				}

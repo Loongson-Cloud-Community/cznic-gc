@@ -147,9 +147,9 @@ UnaryOp case ADD, AND, ARROW, MUL, NOT, SUB, XOR:
 UnderlyingType case TILDE:
 VarDecl case VAR:
 VarSpec case IDENT:
-float_lit case ε:
-identifier case ε:
-imaginary_lit case ε:
-int_lit case ε:
-rune_lit case ε:
-string_lit case ε:
+float_lit case FLOAT:
+identifier case IDENT:
+imaginary_lit case IMAG:
+int_lit case INT:
+rune_lit case CHAR:
+string_lit case STRING:
