@@ -3,55 +3,45 @@
 package main
 
 // AddOpNode represents
-
+//
 //	AddOp = "+" | "-" | "|" | "^" .
-type AddOpNode = struct{}
+type AddOpNode = struct{ noder }
 
 func (p *parser) addOp() *AddOpNode {
 	ix := p.ix
-	// true: ADD
-	// true: SUB
-	// true: OR
-	// true: XOR
-	// single: ADD, OR, SUB, XOR
-	// multi:
 	// ebnf.Alternative: "+" | "-" | "|" | "^"
-	{
+	switch p.c().tok {
+	case ADD: // 0
 		if p.c().tok == ADD {
 			p.ix++
 			p.budget--
 		} else {
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case SUB: // 1
 		if p.c().tok == SUB {
 			p.ix++
 			p.budget--
 		} else {
-			goto _3
+			goto _0
 		}
-		goto _1
-	_3:
+	case OR: // 2
 		if p.c().tok == OR {
 			p.ix++
 			p.budget--
 		} else {
-			goto _4
+			goto _0
 		}
-		goto _1
-	_4:
+	case XOR: // 3
 		if p.c().tok == XOR {
 			p.ix++
 			p.budget--
 		} else {
-			goto _5
+			goto _0
 		}
-		goto _1
-	_5:
+	default:
 		goto _0
 	}
-_1:
 	return &AddOpNode{}
 	goto _0
 _0:
@@ -60,9 +50,9 @@ _0:
 }
 
 // AdditiveExpressionNode represents
-
+//
 //	AdditiveExpression = MultiplicativeExpression { AddOp MultiplicativeExpression } .
-type AdditiveExpressionNode = struct{}
+type AdditiveExpressionNode = struct{ noder }
 
 func (p *parser) additiveExpression() *AdditiveExpressionNode {
 	ix := p.ix
@@ -117,9 +107,9 @@ _0:
 }
 
 // AdditiveExpressionPreBlockNode represents
-
+//
 //	AdditiveExpressionPreBlock = MultiplicativeExpressionPreBlock { AddOp MultiplicativeExpressionPreBlock } .
-type AdditiveExpressionPreBlockNode = struct{}
+type AdditiveExpressionPreBlockNode = struct{ noder }
 
 func (p *parser) additiveExpressionPreBlock() *AdditiveExpressionPreBlockNode {
 	ix := p.ix
@@ -174,9 +164,9 @@ _0:
 }
 
 // AliasDeclNode represents
-
+//
 //	AliasDecl = identifier "=" Type .
-type AliasDeclNode = struct{}
+type AliasDeclNode = struct{ noder }
 
 func (p *parser) aliasDecl() *AliasDeclNode {
 	ix := p.ix
@@ -216,9 +206,9 @@ _0:
 }
 
 // ArgumentsNode represents
-
+//
 //	Arguments = "(" [ ( ExpressionList | Type [ "," ExpressionList ] ) [ "..." ] [ "," ] ] ")" .
-type ArgumentsNode = struct{}
+type ArgumentsNode = struct{ noder }
 
 func (p *parser) arguments() *ArgumentsNode {
 	ix := p.ix
@@ -241,22 +231,30 @@ func (p *parser) arguments() *ArgumentsNode {
 				// *ebnf.Group: ( ExpressionList | Type [ "," ExpressionList ] )
 				switch p.c().tok {
 				case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-					// false: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-					// false: ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
-					// single: ADD, AND, CHAR, FLOAT, IMAG, INT, NOT, STRING, SUB, XOR
-					// multi: ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
 					// ebnf.Alternative: ExpressionList | Type [ "," ExpressionList ]
-					{
+					switch p.c().tok {
+					case ADD, AND, CHAR, FLOAT, IMAG, INT, NOT, STRING, SUB, XOR: // 0
 						switch p.c().tok {
 						case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 							if p.expressionList() == nil {
-								goto _3
+								p.back(ix)
+								goto _1
 							}
 						default:
-							goto _3
+							p.back(ix)
+							goto _1
 						}
-						goto _2
-					_3:
+					case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT: // 0 1
+						switch p.c().tok {
+						case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+							if p.expressionList() == nil {
+								goto _2
+							}
+						default:
+							goto _2
+						}
+						break
+					_2:
 						// ebnf.Sequence: Type [ "," ExpressionList ]
 						{
 							ix := p.ix
@@ -264,11 +262,11 @@ func (p *parser) arguments() *ArgumentsNode {
 							case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 								if p.type1() == nil {
 									p.back(ix)
-									goto _4
+									goto _3
 								}
 							default:
 								p.back(ix)
-								goto _4
+								goto _3
 							}
 							// *ebnf.Option: [ "," ExpressionList ]
 							switch p.c().tok {
@@ -281,29 +279,30 @@ func (p *parser) arguments() *ArgumentsNode {
 										p.budget--
 									} else {
 										p.back(ix)
-										goto _5
+										goto _4
 									}
 									switch p.c().tok {
 									case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 										if p.expressionList() == nil {
 											p.back(ix)
-											goto _5
+											goto _4
 										}
 									default:
 										p.back(ix)
-										goto _5
+										goto _4
 									}
 								}
 							}
-						_5:
+						_4:
 						}
-						goto _2
-					_4:
+						break
+					_3:
+						p.back(ix)
+						goto _1
+					default:
 						p.back(ix)
 						goto _1
 					}
-				_2:
-					;
 				default:
 					p.back(ix)
 					goto _1
@@ -315,10 +314,10 @@ func (p *parser) arguments() *ArgumentsNode {
 						p.ix++
 						p.budget--
 					} else {
-						goto _6
+						goto _5
 					}
 				}
-			_6:
+			_5:
 				// *ebnf.Option: [ "," ]
 				switch p.c().tok {
 				case COMMA:
@@ -326,10 +325,10 @@ func (p *parser) arguments() *ArgumentsNode {
 						p.ix++
 						p.budget--
 					} else {
-						goto _7
+						goto _6
 					}
 				}
-			_7:
+			_6:
 			}
 		}
 	_1:
@@ -349,9 +348,9 @@ _0:
 }
 
 // ArrayLengthNode represents
-
+//
 //	ArrayLength = Expression .
-type ArrayLengthNode = struct{}
+type ArrayLengthNode = struct{ noder }
 
 func (p *parser) arrayLength() *ArrayLengthNode {
 	ix := p.ix
@@ -371,9 +370,9 @@ _0:
 }
 
 // ArrayTypeNode represents
-
+//
 //	ArrayType = "[" ArrayLength "]" ElementType .
-type ArrayTypeNode = struct{}
+type ArrayTypeNode = struct{ noder }
 
 func (p *parser) arrayType() *ArrayTypeNode {
 	ix := p.ix
@@ -423,127 +422,101 @@ _0:
 }
 
 // AssignOpNode represents
-
+//
 //	AssignOp = "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" .
-type AssignOpNode = struct{}
+type AssignOpNode = struct{ noder }
 
 func (p *parser) assignOp() *AssignOpNode {
 	ix := p.ix
-	// true: ASSIGN
-	// true: ADD_ASSIGN
-	// true: SUB_ASSIGN
-	// true: OR_ASSIGN
-	// true: XOR_ASSIGN
-	// true: MUL_ASSIGN
-	// true: QUO_ASSIGN
-	// true: REM_ASSIGN
-	// true: SHL_ASSIGN
-	// true: SHR_ASSIGN
-	// true: AND_ASSIGN
-	// true: AND_NOT_ASSIGN
-	// single: ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN
-	// multi:
 	// ebnf.Alternative: "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^="
-	{
+	switch p.c().tok {
+	case ASSIGN: // 0
 		if p.c().tok == ASSIGN {
 			p.ix++
 			p.budget--
 		} else {
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case ADD_ASSIGN: // 1
 		if p.c().tok == ADD_ASSIGN {
 			p.ix++
 			p.budget--
 		} else {
-			goto _3
+			goto _0
 		}
-		goto _1
-	_3:
+	case SUB_ASSIGN: // 2
 		if p.c().tok == SUB_ASSIGN {
 			p.ix++
 			p.budget--
 		} else {
-			goto _4
+			goto _0
 		}
-		goto _1
-	_4:
+	case OR_ASSIGN: // 3
 		if p.c().tok == OR_ASSIGN {
 			p.ix++
 			p.budget--
 		} else {
-			goto _5
+			goto _0
 		}
-		goto _1
-	_5:
+	case XOR_ASSIGN: // 4
 		if p.c().tok == XOR_ASSIGN {
 			p.ix++
 			p.budget--
 		} else {
-			goto _6
+			goto _0
 		}
-		goto _1
-	_6:
+	case MUL_ASSIGN: // 5
 		if p.c().tok == MUL_ASSIGN {
 			p.ix++
 			p.budget--
 		} else {
-			goto _7
+			goto _0
 		}
-		goto _1
-	_7:
+	case QUO_ASSIGN: // 6
 		if p.c().tok == QUO_ASSIGN {
 			p.ix++
 			p.budget--
 		} else {
-			goto _8
+			goto _0
 		}
-		goto _1
-	_8:
+	case REM_ASSIGN: // 7
 		if p.c().tok == REM_ASSIGN {
 			p.ix++
 			p.budget--
 		} else {
-			goto _9
+			goto _0
 		}
-		goto _1
-	_9:
+	case SHL_ASSIGN: // 8
 		if p.c().tok == SHL_ASSIGN {
 			p.ix++
 			p.budget--
 		} else {
-			goto _10
+			goto _0
 		}
-		goto _1
-	_10:
+	case SHR_ASSIGN: // 9
 		if p.c().tok == SHR_ASSIGN {
 			p.ix++
 			p.budget--
 		} else {
-			goto _11
+			goto _0
 		}
-		goto _1
-	_11:
+	case AND_ASSIGN: // 10
 		if p.c().tok == AND_ASSIGN {
 			p.ix++
 			p.budget--
 		} else {
-			goto _12
+			goto _0
 		}
-		goto _1
-	_12:
+	case AND_NOT_ASSIGN: // 11
 		if p.c().tok == AND_NOT_ASSIGN {
 			p.ix++
 			p.budget--
 		} else {
-			goto _13
+			goto _0
 		}
-		goto _1
-	_13:
+	default:
 		goto _0
 	}
-_1:
 	return &AssignOpNode{}
 	goto _0
 _0:
@@ -552,9 +525,9 @@ _0:
 }
 
 // AssignmentNode represents
-
+//
 //	Assignment = ExpressionList AssignOp ExpressionList .
-type AssignmentNode = struct{}
+type AssignmentNode = struct{ noder }
 
 func (p *parser) assignment() *AssignmentNode {
 	ix := p.ix
@@ -600,9 +573,9 @@ _0:
 }
 
 // AssignmentPreBlockNode represents
-
+//
 //	AssignmentPreBlock = ExpressionList AssignOp ExpressionListPreBlock .
-type AssignmentPreBlockNode = struct{}
+type AssignmentPreBlockNode = struct{ noder }
 
 func (p *parser) assignmentPreBlock() *AssignmentPreBlockNode {
 	ix := p.ix
@@ -648,9 +621,9 @@ _0:
 }
 
 // BaseTypeNode represents
-
+//
 //	BaseType = Type .
-type BaseTypeNode = struct{}
+type BaseTypeNode = struct{ noder }
 
 func (p *parser) baseType() *BaseTypeNode {
 	ix := p.ix
@@ -670,64 +643,52 @@ _0:
 }
 
 // BasicLitNode represents
-
+//
 //	BasicLit = int_lit | float_lit | imaginary_lit | rune_lit | string_lit .
-type BasicLitNode = struct{}
+type BasicLitNode = struct{ noder }
 
 func (p *parser) basicLit() *BasicLitNode {
 	ix := p.ix
-	// true: INT
-	// true: FLOAT
-	// true: IMAG
-	// true: CHAR
-	// true: STRING
-	// single: CHAR, FLOAT, IMAG, INT, STRING
-	// multi:
 	// ebnf.Alternative: int_lit | float_lit | imaginary_lit | rune_lit | string_lit
-	{
+	switch p.c().tok {
+	case INT: // 0
 		if p.c().tok == INT {
 			p.ix++
 			p.budget--
 		} else {
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case FLOAT: // 1
 		if p.c().tok == FLOAT {
 			p.ix++
 			p.budget--
 		} else {
-			goto _3
+			goto _0
 		}
-		goto _1
-	_3:
+	case IMAG: // 2
 		if p.c().tok == IMAG {
 			p.ix++
 			p.budget--
 		} else {
-			goto _4
+			goto _0
 		}
-		goto _1
-	_4:
+	case CHAR: // 3
 		if p.c().tok == CHAR {
 			p.ix++
 			p.budget--
 		} else {
-			goto _5
+			goto _0
 		}
-		goto _1
-	_5:
+	case STRING: // 4
 		if p.c().tok == STRING {
 			p.ix++
 			p.budget--
 		} else {
-			goto _6
+			goto _0
 		}
-		goto _1
-	_6:
+	default:
 		goto _0
 	}
-_1:
 	return &BasicLitNode{}
 	goto _0
 _0:
@@ -736,9 +697,9 @@ _0:
 }
 
 // BlockNode represents
-
+//
 //	Block = "{" StatementList "}" .
-type BlockNode = struct{}
+type BlockNode = struct{ noder }
 
 func (p *parser) block() *BlockNode {
 	ix := p.ix
@@ -775,9 +736,9 @@ _0:
 }
 
 // BreakStmtNode represents
-
+//
 //	BreakStmt = "break" [ Label ] .
-type BreakStmtNode = struct{}
+type BreakStmtNode = struct{ noder }
 
 func (p *parser) breakStmt() *BreakStmtNode {
 	ix := p.ix
@@ -813,9 +774,9 @@ _0:
 }
 
 // ChannelNode represents
-
+//
 //	Channel = Expression .
-type ChannelNode = struct{}
+type ChannelNode = struct{ noder }
 
 func (p *parser) channel() *ChannelNode {
 	ix := p.ix
@@ -835,19 +796,15 @@ _0:
 }
 
 // ChannelTypeNode represents
-
+//
 //	ChannelType = "<-" "chan" ElementType | "chan" "<-" ElementType | "chan" ElementType .
-type ChannelTypeNode = struct{}
+type ChannelTypeNode = struct{ noder }
 
 func (p *parser) channelType() *ChannelTypeNode {
 	ix := p.ix
-	// true: ARROW
-	// false: CHAN
-	// false: CHAN
-	// single: ARROW
-	// multi: CHAN
 	// ebnf.Alternative: "<-" "chan" ElementType | "chan" "<-" ElementType | "chan" ElementType
-	{
+	switch p.c().tok {
+	case ARROW: // 0
 		// ebnf.Sequence: "<-" "chan" ElementType
 		{
 			ix := p.ix
@@ -856,28 +813,27 @@ func (p *parser) channelType() *ChannelTypeNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _2
+				goto _0
 			}
 			if p.c().tok == CHAN {
 				p.ix++
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _2
+				goto _0
 			}
 			switch p.c().tok {
 			case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 				if p.elementType() == nil {
 					p.back(ix)
-					goto _2
+					goto _0
 				}
 			default:
 				p.back(ix)
-				goto _2
+				goto _0
 			}
 		}
-		goto _1
-	_2:
+	case CHAN: // 1 2
 		// ebnf.Sequence: "chan" "<-" ElementType
 		{
 			ix := p.ix
@@ -886,28 +842,28 @@ func (p *parser) channelType() *ChannelTypeNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _3
+				goto _1
 			}
 			if p.c().tok == ARROW {
 				p.ix++
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _3
+				goto _1
 			}
 			switch p.c().tok {
 			case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 				if p.elementType() == nil {
 					p.back(ix)
-					goto _3
+					goto _1
 				}
 			default:
 				p.back(ix)
-				goto _3
+				goto _1
 			}
 		}
-		goto _1
-	_3:
+		break
+	_1:
 		// ebnf.Sequence: "chan" ElementType
 		{
 			ix := p.ix
@@ -916,24 +872,25 @@ func (p *parser) channelType() *ChannelTypeNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _4
+				goto _2
 			}
 			switch p.c().tok {
 			case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 				if p.elementType() == nil {
 					p.back(ix)
-					goto _4
+					goto _2
 				}
 			default:
 				p.back(ix)
-				goto _4
+				goto _2
 			}
 		}
-		goto _1
-	_4:
+		break
+	_2:
+		goto _0
+	default:
 		goto _0
 	}
-_1:
 	return &ChannelTypeNode{}
 	goto _0
 _0:
@@ -942,18 +899,15 @@ _0:
 }
 
 // CommCaseNode represents
-
+//
 //	CommCase = "case" ( SendStmt | RecvStmt ) | "default" .
-type CommCaseNode = struct{}
+type CommCaseNode = struct{ noder }
 
 func (p *parser) commCase() *CommCaseNode {
 	ix := p.ix
-	// true: CASE
-	// true: DEFAULT
-	// single: CASE, DEFAULT
-	// multi:
 	// ebnf.Alternative: "case" ( SendStmt | RecvStmt ) | "default"
-	{
+	switch p.c().tok {
+	case CASE: // 0
 		// ebnf.Sequence: "case" ( SendStmt | RecvStmt )
 		{
 			ix := p.ix
@@ -962,60 +916,55 @@ func (p *parser) commCase() *CommCaseNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _2
+				goto _0
 			}
 			// *ebnf.Group: ( SendStmt | RecvStmt )
 			switch p.c().tok {
 			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-				// false: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-				// false: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-				// single:
-				// multi: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
 				// ebnf.Alternative: SendStmt | RecvStmt
-				{
+				switch p.c().tok {
+				case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR: // 0 1
 					switch p.c().tok {
 					case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 						if p.sendStmt() == nil {
-							goto _4
+							goto _1
 						}
 					default:
-						goto _4
+						goto _1
 					}
-					goto _3
-				_4:
+					break
+				_1:
 					switch p.c().tok {
 					case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 						if p.recvStmt() == nil {
-							goto _5
+							goto _2
 						}
 					default:
-						goto _5
+						goto _2
 					}
-					goto _3
-				_5:
+					break
+				_2:
 					p.back(ix)
-					goto _2
+					goto _0
+				default:
+					p.back(ix)
+					goto _0
 				}
-			_3:
-				;
 			default:
 				p.back(ix)
-				goto _2
+				goto _0
 			}
 		}
-		goto _1
-	_2:
+	case DEFAULT: // 1
 		if p.c().tok == DEFAULT {
 			p.ix++
 			p.budget--
 		} else {
-			goto _6
+			goto _0
 		}
-		goto _1
-	_6:
+	default:
 		goto _0
 	}
-_1:
 	return &CommCaseNode{}
 	goto _0
 _0:
@@ -1024,9 +973,9 @@ _0:
 }
 
 // CommClauseNode represents
-
+//
 //	CommClause = CommCase ":" StatementList .
-type CommClauseNode = struct{}
+type CommClauseNode = struct{ noder }
 
 func (p *parser) commClause() *CommClauseNode {
 	ix := p.ix
@@ -1066,9 +1015,9 @@ _0:
 }
 
 // CompositeLitNode represents
-
+//
 //	CompositeLit = LiteralType LiteralValue .
-type CompositeLitNode = struct{}
+type CompositeLitNode = struct{ noder }
 
 func (p *parser) compositeLit() *CompositeLitNode {
 	ix := p.ix
@@ -1104,9 +1053,9 @@ _0:
 }
 
 // CompositeLitPreBlockNode represents
-
+//
 //	CompositeLitPreBlock = LiteralTypePreBlock LiteralValue .
-type CompositeLitPreBlockNode = struct{}
+type CompositeLitPreBlockNode = struct{ noder }
 
 func (p *parser) compositeLitPreBlock() *CompositeLitPreBlockNode {
 	ix := p.ix
@@ -1142,9 +1091,9 @@ _0:
 }
 
 // ConditionNode represents
-
+//
 //	Condition = Expression .
-type ConditionNode = struct{}
+type ConditionNode = struct{ noder }
 
 func (p *parser) condition() *ConditionNode {
 	ix := p.ix
@@ -1164,9 +1113,9 @@ _0:
 }
 
 // ConstDeclNode represents
-
+//
 //	ConstDecl = "const" ( ConstSpec | "(" [ ConstSpec { ";" ConstSpec } [ ";" ] ] ")" ) .
-type ConstDeclNode = struct{}
+type ConstDeclNode = struct{ noder }
 
 func (p *parser) constDecl() *ConstDeclNode {
 	ix := p.ix
@@ -1183,22 +1132,20 @@ func (p *parser) constDecl() *ConstDeclNode {
 		// *ebnf.Group: ( ConstSpec | "(" [ ConstSpec { ";" ConstSpec } [ ";" ] ] ")" )
 		switch p.c().tok {
 		case IDENT, LPAREN:
-			// true: IDENT
-			// true: LPAREN
-			// single: IDENT, LPAREN
-			// multi:
 			// ebnf.Alternative: ConstSpec | "(" [ ConstSpec { ";" ConstSpec } [ ";" ] ] ")"
-			{
+			switch p.c().tok {
+			case IDENT: // 0
 				switch p.c().tok {
 				case IDENT:
 					if p.constSpec() == nil {
-						goto _2
+						p.back(ix)
+						goto _0
 					}
 				default:
-					goto _2
+					p.back(ix)
+					goto _0
 				}
-				goto _1
-			_2:
+			case LPAREN: // 1
 				// ebnf.Sequence: "(" [ ConstSpec { ";" ConstSpec } [ ";" ] ] ")"
 				{
 					ix := p.ix
@@ -1207,7 +1154,8 @@ func (p *parser) constDecl() *ConstDeclNode {
 						p.budget--
 					} else {
 						p.back(ix)
-						goto _3
+						p.back(ix)
+						goto _0
 					}
 					// *ebnf.Option: [ ConstSpec { ";" ConstSpec } [ ";" ] ]
 					switch p.c().tok {
@@ -1219,13 +1167,13 @@ func (p *parser) constDecl() *ConstDeclNode {
 							case IDENT:
 								if p.constSpec() == nil {
 									p.back(ix)
-									goto _4
+									goto _1
 								}
 							default:
 								p.back(ix)
-								goto _4
+								goto _1
 							}
-						_5:
+						_2:
 							// *ebnf.Repetition: { ";" ConstSpec }
 							switch p.c().tok {
 							case SEMICOLON:
@@ -1236,21 +1184,21 @@ func (p *parser) constDecl() *ConstDeclNode {
 									p.budget--
 								} else {
 									p.back(ix)
-									goto _6
+									goto _3
 								}
 								switch p.c().tok {
 								case IDENT:
 									if p.constSpec() == nil {
 										p.back(ix)
-										goto _6
+										goto _3
 									}
 								default:
 									p.back(ix)
-									goto _6
+									goto _3
 								}
-								goto _5
+								goto _2
 							}
-						_6:
+						_3:
 							// *ebnf.Option: [ ";" ]
 							switch p.c().tok {
 							case SEMICOLON:
@@ -1258,28 +1206,26 @@ func (p *parser) constDecl() *ConstDeclNode {
 									p.ix++
 									p.budget--
 								} else {
-									goto _7
+									goto _4
 								}
 							}
-						_7:
+						_4:
 						}
 					}
-				_4:
+				_1:
 					if p.c().tok == RPAREN {
 						p.ix++
 						p.budget--
 					} else {
 						p.back(ix)
-						goto _3
+						p.back(ix)
+						goto _0
 					}
 				}
-				goto _1
-			_3:
+			default:
 				p.back(ix)
 				goto _0
 			}
-		_1:
-			;
 		default:
 			p.back(ix)
 			goto _0
@@ -1293,9 +1239,9 @@ _0:
 }
 
 // ConstSpecNode represents
-
+//
 //	ConstSpec = IdentifierList [ [ Type ] "=" ExpressionList ] .
-type ConstSpecNode = struct{}
+type ConstSpecNode = struct{ noder }
 
 func (p *parser) constSpec() *ConstSpecNode {
 	ix := p.ix
@@ -1360,9 +1306,9 @@ _0:
 }
 
 // ContinueStmtNode represents
-
+//
 //	ContinueStmt = "continue" [ Label ] .
-type ContinueStmtNode = struct{}
+type ContinueStmtNode = struct{ noder }
 
 func (p *parser) continueStmt() *ContinueStmtNode {
 	ix := p.ix
@@ -1398,9 +1344,9 @@ _0:
 }
 
 // ConversionNode represents
-
+//
 //	Conversion = Type "(" Expression [ "," ] ")" .
-type ConversionNode = struct{}
+type ConversionNode = struct{ noder }
 
 func (p *parser) conversion() *ConversionNode {
 	ix := p.ix
@@ -1461,52 +1407,44 @@ _0:
 }
 
 // DeclarationNode represents
-
+//
 //	Declaration = ConstDecl | TypeDecl | VarDecl .
-type DeclarationNode = struct{}
+type DeclarationNode = struct{ noder }
 
 func (p *parser) declaration() *DeclarationNode {
 	ix := p.ix
-	// true: CONST
-	// true: TYPE
-	// true: VAR
-	// single: CONST, TYPE, VAR
-	// multi:
 	// ebnf.Alternative: ConstDecl | TypeDecl | VarDecl
-	{
+	switch p.c().tok {
+	case CONST: // 0
 		switch p.c().tok {
 		case CONST:
 			if p.constDecl() == nil {
-				goto _2
+				goto _0
 			}
 		default:
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case TYPE: // 1
 		switch p.c().tok {
 		case TYPE:
 			if p.typeDecl() == nil {
-				goto _3
+				goto _0
 			}
 		default:
-			goto _3
+			goto _0
 		}
-		goto _1
-	_3:
+	case VAR: // 2
 		switch p.c().tok {
 		case VAR:
 			if p.varDecl() == nil {
-				goto _4
+				goto _0
 			}
 		default:
-			goto _4
+			goto _0
 		}
-		goto _1
-	_4:
+	default:
 		goto _0
 	}
-_1:
 	return &DeclarationNode{}
 	goto _0
 _0:
@@ -1515,9 +1453,9 @@ _0:
 }
 
 // DeferStmtNode represents
-
+//
 //	DeferStmt = "defer" Expression .
-type DeferStmtNode = struct{}
+type DeferStmtNode = struct{ noder }
 
 func (p *parser) deferStmt() *DeferStmtNode {
 	ix := p.ix
@@ -1550,41 +1488,35 @@ _0:
 }
 
 // ElementNode represents
-
+//
 //	Element = Expression | LiteralValue .
-type ElementNode = struct{}
+type ElementNode = struct{ noder }
 
 func (p *parser) element() *ElementNode {
 	ix := p.ix
-	// true: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-	// true: LBRACE
-	// single: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-	// multi:
 	// ebnf.Alternative: Expression | LiteralValue
-	{
+	switch p.c().tok {
+	case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR: // 0
 		switch p.c().tok {
 		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 			if p.expression() == nil {
-				goto _2
+				goto _0
 			}
 		default:
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case LBRACE: // 1
 		switch p.c().tok {
 		case LBRACE:
 			if p.literalValue() == nil {
-				goto _3
+				goto _0
 			}
 		default:
-			goto _3
+			goto _0
 		}
-		goto _1
-	_3:
+	default:
 		goto _0
 	}
-_1:
 	return &ElementNode{}
 	goto _0
 _0:
@@ -1593,9 +1525,9 @@ _0:
 }
 
 // ElementListNode represents
-
+//
 //	ElementList = KeyedElement { "," KeyedElement } .
-type ElementListNode = struct{}
+type ElementListNode = struct{ noder }
 
 func (p *parser) elementList() *ElementListNode {
 	ix := p.ix
@@ -1647,9 +1579,9 @@ _0:
 }
 
 // ElementTypeNode represents
-
+//
 //	ElementType = Type .
-type ElementTypeNode = struct{}
+type ElementTypeNode = struct{ noder }
 
 func (p *parser) elementType() *ElementTypeNode {
 	ix := p.ix
@@ -1669,9 +1601,9 @@ _0:
 }
 
 // EmbeddedFieldNode represents
-
+//
 //	EmbeddedField = [ "*" ] TypeName [ TypeArgs ] .
-type EmbeddedFieldNode = struct{}
+type EmbeddedFieldNode = struct{ noder }
 
 func (p *parser) embeddedField() *EmbeddedFieldNode {
 	ix := p.ix
@@ -1721,18 +1653,18 @@ _0:
 }
 
 // EmptyStmtNode represents
-
+//
 //	EmptyStmt =  .
-type EmptyStmtNode = struct{}
+type EmptyStmtNode = struct{ noder }
 
 func (p *parser) emptyStmt() *EmptyStmtNode {
 	return &EmptyStmtNode{}
 }
 
 // ExprCaseClauseNode represents
-
+//
 //	ExprCaseClause = ExprSwitchCase ":" StatementList .
-type ExprCaseClauseNode = struct{}
+type ExprCaseClauseNode = struct{ noder }
 
 func (p *parser) exprCaseClause() *ExprCaseClauseNode {
 	ix := p.ix
@@ -1772,18 +1704,15 @@ _0:
 }
 
 // ExprSwitchCaseNode represents
-
+//
 //	ExprSwitchCase = "case" ExpressionList | "default" .
-type ExprSwitchCaseNode = struct{}
+type ExprSwitchCaseNode = struct{ noder }
 
 func (p *parser) exprSwitchCase() *ExprSwitchCaseNode {
 	ix := p.ix
-	// true: CASE
-	// true: DEFAULT
-	// single: CASE, DEFAULT
-	// multi:
 	// ebnf.Alternative: "case" ExpressionList | "default"
-	{
+	switch p.c().tok {
+	case CASE: // 0
 		// ebnf.Sequence: "case" ExpressionList
 		{
 			ix := p.ix
@@ -1792,32 +1721,29 @@ func (p *parser) exprSwitchCase() *ExprSwitchCaseNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _2
+				goto _0
 			}
 			switch p.c().tok {
 			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 				if p.expressionList() == nil {
 					p.back(ix)
-					goto _2
+					goto _0
 				}
 			default:
 				p.back(ix)
-				goto _2
+				goto _0
 			}
 		}
-		goto _1
-	_2:
+	case DEFAULT: // 1
 		if p.c().tok == DEFAULT {
 			p.ix++
 			p.budget--
 		} else {
-			goto _3
+			goto _0
 		}
-		goto _1
-	_3:
+	default:
 		goto _0
 	}
-_1:
 	return &ExprSwitchCaseNode{}
 	goto _0
 _0:
@@ -1826,18 +1752,15 @@ _0:
 }
 
 // ExprSwitchStmtNode represents
-
+//
 //	ExprSwitchStmt = "switch" [ ExpressionPreBlock ] "{" { ExprCaseClause } "}" | "switch" SimpleStmt ";" [ ExpressionPreBlock ] "{" { ExprCaseClause } "}" .
-type ExprSwitchStmtNode = struct{}
+type ExprSwitchStmtNode = struct{ noder }
 
 func (p *parser) exprSwitchStmt() *ExprSwitchStmtNode {
 	ix := p.ix
-	// false: SWITCH
-	// false: SWITCH
-	// single:
-	// multi: SWITCH
 	// ebnf.Alternative: "switch" [ ExpressionPreBlock ] "{" { ExprCaseClause } "}" | "switch" SimpleStmt ";" [ ExpressionPreBlock ] "{" { ExprCaseClause } "}"
-	{
+	switch p.c().tok {
+	case SWITCH: // 0 1
 		// ebnf.Sequence: "switch" [ ExpressionPreBlock ] "{" { ExprCaseClause } "}"
 		{
 			ix := p.ix
@@ -1846,7 +1769,7 @@ func (p *parser) exprSwitchStmt() *ExprSwitchStmtNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _2
+				goto _1
 			}
 			// *ebnf.Option: [ ExpressionPreBlock ]
 			switch p.c().tok {
@@ -1854,45 +1777,45 @@ func (p *parser) exprSwitchStmt() *ExprSwitchStmtNode {
 				switch p.c().tok {
 				case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 					if p.expressionPreBlock() == nil {
-						goto _3
+						goto _2
 					}
 				default:
-					goto _3
+					goto _2
 				}
 			}
-		_3:
+		_2:
 			if p.c().tok == LBRACE {
 				p.ix++
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _2
+				goto _1
 			}
-		_4:
+		_3:
 			// *ebnf.Repetition: { ExprCaseClause }
 			switch p.c().tok {
 			case CASE, DEFAULT:
 				switch p.c().tok {
 				case CASE, DEFAULT:
 					if p.exprCaseClause() == nil {
-						goto _5
+						goto _4
 					}
 				default:
-					goto _5
+					goto _4
 				}
-				goto _4
+				goto _3
 			}
-		_5:
+		_4:
 			if p.c().tok == RBRACE {
 				p.ix++
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _2
+				goto _1
 			}
 		}
-		goto _1
-	_2:
+		break
+	_1:
 		// ebnf.Sequence: "switch" SimpleStmt ";" [ ExpressionPreBlock ] "{" { ExprCaseClause } "}"
 		{
 			ix := p.ix
@@ -1901,13 +1824,13 @@ func (p *parser) exprSwitchStmt() *ExprSwitchStmtNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _6
+				goto _5
 			}
 			switch p.c().tok {
 			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR /* ε */ :
 				if p.simpleStmt() == nil {
 					p.back(ix)
-					goto _6
+					goto _5
 				}
 			}
 			if p.c().tok == SEMICOLON {
@@ -1915,7 +1838,7 @@ func (p *parser) exprSwitchStmt() *ExprSwitchStmtNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _6
+				goto _5
 			}
 			// *ebnf.Option: [ ExpressionPreBlock ]
 			switch p.c().tok {
@@ -1923,48 +1846,49 @@ func (p *parser) exprSwitchStmt() *ExprSwitchStmtNode {
 				switch p.c().tok {
 				case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 					if p.expressionPreBlock() == nil {
-						goto _7
+						goto _6
 					}
 				default:
-					goto _7
+					goto _6
 				}
 			}
-		_7:
+		_6:
 			if p.c().tok == LBRACE {
 				p.ix++
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _6
+				goto _5
 			}
-		_8:
+		_7:
 			// *ebnf.Repetition: { ExprCaseClause }
 			switch p.c().tok {
 			case CASE, DEFAULT:
 				switch p.c().tok {
 				case CASE, DEFAULT:
 					if p.exprCaseClause() == nil {
-						goto _9
+						goto _8
 					}
 				default:
-					goto _9
+					goto _8
 				}
-				goto _8
+				goto _7
 			}
-		_9:
+		_8:
 			if p.c().tok == RBRACE {
 				p.ix++
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _6
+				goto _5
 			}
 		}
-		goto _1
-	_6:
+		break
+	_5:
+		goto _0
+	default:
 		goto _0
 	}
-_1:
 	return &ExprSwitchStmtNode{}
 	goto _0
 _0:
@@ -1973,9 +1897,9 @@ _0:
 }
 
 // ExpressionNode represents
-
+//
 //	Expression = LogicalAndExpression { "||" LogicalAndExpression } .
-type ExpressionNode = struct{}
+type ExpressionNode = struct{ noder }
 
 func (p *parser) expression() *ExpressionNode {
 	ix := p.ix
@@ -2027,9 +1951,9 @@ _0:
 }
 
 // ExpressionListNode represents
-
+//
 //	ExpressionList = Expression { "," Expression } .
-type ExpressionListNode = struct{}
+type ExpressionListNode = struct{ noder }
 
 func (p *parser) expressionList() *ExpressionListNode {
 	ix := p.ix
@@ -2081,9 +2005,9 @@ _0:
 }
 
 // ExpressionListPreBlockNode represents
-
+//
 //	ExpressionListPreBlock = ExpressionPreBlock { "," ExpressionPreBlock } .
-type ExpressionListPreBlockNode = struct{}
+type ExpressionListPreBlockNode = struct{ noder }
 
 func (p *parser) expressionListPreBlock() *ExpressionListPreBlockNode {
 	ix := p.ix
@@ -2135,18 +2059,15 @@ _0:
 }
 
 // ExpressionPreBlockNode represents
-
+//
 //	ExpressionPreBlock = LogicalAndExpressionPreBlock { "||" LogicalAndExpressionPreBlock } | Expression .
-type ExpressionPreBlockNode = struct{}
+type ExpressionPreBlockNode = struct{ noder }
 
 func (p *parser) expressionPreBlock() *ExpressionPreBlockNode {
 	ix := p.ix
-	// false: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-	// false: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-	// single:
-	// multi: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
 	// ebnf.Alternative: LogicalAndExpressionPreBlock { "||" LogicalAndExpressionPreBlock } | Expression
-	{
+	switch p.c().tok {
+	case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR: // 0 1
 		// ebnf.Sequence: LogicalAndExpressionPreBlock { "||" LogicalAndExpressionPreBlock }
 		{
 			ix := p.ix
@@ -2154,13 +2075,13 @@ func (p *parser) expressionPreBlock() *ExpressionPreBlockNode {
 			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 				if p.logicalAndExpressionPreBlock() == nil {
 					p.back(ix)
-					goto _2
+					goto _1
 				}
 			default:
 				p.back(ix)
-				goto _2
+				goto _1
 			}
-		_3:
+		_2:
 			// *ebnf.Repetition: { "||" LogicalAndExpressionPreBlock }
 			switch p.c().tok {
 			case LOR:
@@ -2171,37 +2092,38 @@ func (p *parser) expressionPreBlock() *ExpressionPreBlockNode {
 					p.budget--
 				} else {
 					p.back(ix)
-					goto _4
+					goto _3
 				}
 				switch p.c().tok {
 				case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 					if p.logicalAndExpressionPreBlock() == nil {
 						p.back(ix)
-						goto _4
+						goto _3
 					}
 				default:
 					p.back(ix)
-					goto _4
+					goto _3
 				}
-				goto _3
+				goto _2
 			}
-		_4:
+		_3:
 		}
-		goto _1
-	_2:
+		break
+	_1:
 		switch p.c().tok {
 		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 			if p.expression() == nil {
-				goto _5
+				goto _4
 			}
 		default:
-			goto _5
+			goto _4
 		}
-		goto _1
-	_5:
+		break
+	_4:
+		goto _0
+	default:
 		goto _0
 	}
-_1:
 	return &ExpressionPreBlockNode{}
 	goto _0
 _0:
@@ -2210,9 +2132,9 @@ _0:
 }
 
 // ExpressionStmtNode represents
-
+//
 //	ExpressionStmt = Expression .
-type ExpressionStmtNode = struct{}
+type ExpressionStmtNode = struct{ noder }
 
 func (p *parser) expressionStmt() *ExpressionStmtNode {
 	ix := p.ix
@@ -2232,9 +2154,9 @@ _0:
 }
 
 // ExpressionStmtPreBlockNode represents
-
+//
 //	ExpressionStmtPreBlock = ExpressionPreBlock .
-type ExpressionStmtPreBlockNode = struct{}
+type ExpressionStmtPreBlockNode = struct{ noder }
 
 func (p *parser) expressionStmtPreBlock() *ExpressionStmtPreBlockNode {
 	ix := p.ix
@@ -2254,9 +2176,9 @@ _0:
 }
 
 // FallthroughStmtNode represents
-
+//
 //	FallthroughStmt = "fallthrough" .
-type FallthroughStmtNode = struct{}
+type FallthroughStmtNode = struct{ noder }
 
 func (p *parser) fallthroughStmt() *FallthroughStmtNode {
 	ix := p.ix
@@ -2274,9 +2196,9 @@ _0:
 }
 
 // FieldDeclNode represents
-
+//
 //	FieldDecl = ( IdentifierList Type | EmbeddedField ) [ Tag ] .
-type FieldDeclNode = struct{}
+type FieldDeclNode = struct{ noder }
 
 func (p *parser) fieldDecl() *FieldDeclNode {
 	ix := p.ix
@@ -2286,12 +2208,9 @@ func (p *parser) fieldDecl() *FieldDeclNode {
 		// *ebnf.Group: ( IdentifierList Type | EmbeddedField )
 		switch p.c().tok {
 		case IDENT, MUL:
-			// false: IDENT
-			// false: IDENT, MUL
-			// single: MUL
-			// multi: IDENT
 			// ebnf.Alternative: IdentifierList Type | EmbeddedField
-			{
+			switch p.c().tok {
+			case IDENT: // 0 1
 				// ebnf.Sequence: IdentifierList Type
 				{
 					ix := p.ix
@@ -2299,40 +2218,52 @@ func (p *parser) fieldDecl() *FieldDeclNode {
 					case IDENT:
 						if p.identifierList() == nil {
 							p.back(ix)
-							goto _2
+							goto _1
 						}
 					default:
 						p.back(ix)
-						goto _2
+						goto _1
 					}
 					switch p.c().tok {
 					case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 						if p.type1() == nil {
 							p.back(ix)
-							goto _2
+							goto _1
 						}
 					default:
 						p.back(ix)
-						goto _2
+						goto _1
 					}
 				}
-				goto _1
-			_2:
+				break
+			_1:
 				switch p.c().tok {
 				case IDENT, MUL:
 					if p.embeddedField() == nil {
-						goto _3
+						goto _2
 					}
 				default:
-					goto _3
+					goto _2
 				}
-				goto _1
-			_3:
+				break
+			_2:
+				p.back(ix)
+				goto _0
+			case MUL: // 1
+				switch p.c().tok {
+				case IDENT, MUL:
+					if p.embeddedField() == nil {
+						p.back(ix)
+						goto _0
+					}
+				default:
+					p.back(ix)
+					goto _0
+				}
+			default:
 				p.back(ix)
 				goto _0
 			}
-		_1:
-			;
 		default:
 			p.back(ix)
 			goto _0
@@ -2343,13 +2274,13 @@ func (p *parser) fieldDecl() *FieldDeclNode {
 			switch p.c().tok {
 			case STRING:
 				if p.tag() == nil {
-					goto _4
+					goto _3
 				}
 			default:
-				goto _4
+				goto _3
 			}
 		}
-	_4:
+	_3:
 	}
 	return &FieldDeclNode{}
 	goto _0
@@ -2359,9 +2290,9 @@ _0:
 }
 
 // FieldNameNode represents
-
+//
 //	FieldName = identifier .
-type FieldNameNode = struct{}
+type FieldNameNode = struct{ noder }
 
 func (p *parser) fieldName() *FieldNameNode {
 	ix := p.ix
@@ -2379,9 +2310,9 @@ _0:
 }
 
 // ForClauseNode represents
-
+//
 //	ForClause = [ InitStmt ] ";" [ Condition ] ";" [ PostStmt ] .
-type ForClauseNode = struct{}
+type ForClauseNode = struct{ noder }
 
 func (p *parser) forClause() *ForClauseNode {
 	ix := p.ix
@@ -2446,20 +2377,15 @@ _0:
 }
 
 // ForStmtNode represents
-
+//
 //	ForStmt = "for" ForClause Block | "for" RangeClause Block | "for" ExpressionPreBlock Block | "for" Block .
-type ForStmtNode = struct{}
+type ForStmtNode = struct{ noder }
 
 func (p *parser) forStmt() *ForStmtNode {
 	ix := p.ix
-	// false: FOR
-	// false: FOR
-	// false: FOR
-	// false: FOR
-	// single:
-	// multi: FOR
 	// ebnf.Alternative: "for" ForClause Block | "for" RangeClause Block | "for" ExpressionPreBlock Block | "for" Block
-	{
+	switch p.c().tok {
+	case FOR: // 0 1 2 3
 		// ebnf.Sequence: "for" ForClause Block
 		{
 			ix := p.ix
@@ -2468,31 +2394,31 @@ func (p *parser) forStmt() *ForStmtNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _2
+				goto _1
 			}
 			switch p.c().tok {
 			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, SEMICOLON, STRING, STRUCT, SUB, XOR:
 				if p.forClause() == nil {
 					p.back(ix)
-					goto _2
+					goto _1
 				}
 			default:
 				p.back(ix)
-				goto _2
+				goto _1
 			}
 			switch p.c().tok {
 			case LBRACE:
 				if p.block() == nil {
 					p.back(ix)
-					goto _2
+					goto _1
 				}
 			default:
 				p.back(ix)
-				goto _2
+				goto _1
 			}
 		}
-		goto _1
-	_2:
+		break
+	_1:
 		// ebnf.Sequence: "for" RangeClause Block
 		{
 			ix := p.ix
@@ -2501,31 +2427,31 @@ func (p *parser) forStmt() *ForStmtNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _3
+				goto _2
 			}
 			switch p.c().tok {
 			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, RANGE, STRING, STRUCT, SUB, XOR:
 				if p.rangeClause() == nil {
 					p.back(ix)
-					goto _3
+					goto _2
 				}
 			default:
 				p.back(ix)
-				goto _3
+				goto _2
 			}
 			switch p.c().tok {
 			case LBRACE:
 				if p.block() == nil {
 					p.back(ix)
-					goto _3
+					goto _2
 				}
 			default:
 				p.back(ix)
-				goto _3
+				goto _2
 			}
 		}
-		goto _1
-	_3:
+		break
+	_2:
 		// ebnf.Sequence: "for" ExpressionPreBlock Block
 		{
 			ix := p.ix
@@ -2534,31 +2460,31 @@ func (p *parser) forStmt() *ForStmtNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _4
+				goto _3
 			}
 			switch p.c().tok {
 			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 				if p.expressionPreBlock() == nil {
 					p.back(ix)
-					goto _4
+					goto _3
 				}
 			default:
 				p.back(ix)
-				goto _4
+				goto _3
 			}
 			switch p.c().tok {
 			case LBRACE:
 				if p.block() == nil {
 					p.back(ix)
-					goto _4
+					goto _3
 				}
 			default:
 				p.back(ix)
-				goto _4
+				goto _3
 			}
 		}
-		goto _1
-	_4:
+		break
+	_3:
 		// ebnf.Sequence: "for" Block
 		{
 			ix := p.ix
@@ -2567,24 +2493,25 @@ func (p *parser) forStmt() *ForStmtNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _5
+				goto _4
 			}
 			switch p.c().tok {
 			case LBRACE:
 				if p.block() == nil {
 					p.back(ix)
-					goto _5
+					goto _4
 				}
 			default:
 				p.back(ix)
-				goto _5
+				goto _4
 			}
 		}
-		goto _1
-	_5:
+		break
+	_4:
+		goto _0
+	default:
 		goto _0
 	}
-_1:
 	return &ForStmtNode{}
 	goto _0
 _0:
@@ -2593,9 +2520,9 @@ _0:
 }
 
 // FunctionBodyNode represents
-
+//
 //	FunctionBody = Block .
-type FunctionBodyNode = struct{}
+type FunctionBodyNode = struct{ noder }
 
 func (p *parser) functionBody() *FunctionBodyNode {
 	ix := p.ix
@@ -2615,9 +2542,9 @@ _0:
 }
 
 // FunctionDeclNode represents
-
+//
 //	FunctionDecl = "func" FunctionName [ TypeParameters ] Signature [ FunctionBody ] .
-type FunctionDeclNode = struct{}
+type FunctionDeclNode = struct{ noder }
 
 func (p *parser) functionDecl() *FunctionDeclNode {
 	ix := p.ix
@@ -2686,9 +2613,9 @@ _0:
 }
 
 // FunctionLitNode represents
-
+//
 //	FunctionLit = "func" Signature FunctionBody .
-type FunctionLitNode = struct{}
+type FunctionLitNode = struct{ noder }
 
 func (p *parser) functionLit() *FunctionLitNode {
 	ix := p.ix
@@ -2731,9 +2658,9 @@ _0:
 }
 
 // FunctionNameNode represents
-
+//
 //	FunctionName = identifier .
-type FunctionNameNode = struct{}
+type FunctionNameNode = struct{ noder }
 
 func (p *parser) functionName() *FunctionNameNode {
 	ix := p.ix
@@ -2751,9 +2678,9 @@ _0:
 }
 
 // FunctionTypeNode represents
-
+//
 //	FunctionType = "func" Signature .
-type FunctionTypeNode = struct{}
+type FunctionTypeNode = struct{ noder }
 
 func (p *parser) functionType() *FunctionTypeNode {
 	ix := p.ix
@@ -2786,9 +2713,9 @@ _0:
 }
 
 // GoStmtNode represents
-
+//
 //	GoStmt = "go" Expression .
-type GoStmtNode = struct{}
+type GoStmtNode = struct{ noder }
 
 func (p *parser) goStmt() *GoStmtNode {
 	ix := p.ix
@@ -2821,9 +2748,9 @@ _0:
 }
 
 // GotoStmtNode represents
-
+//
 //	GotoStmt = "goto" Label .
-type GotoStmtNode = struct{}
+type GotoStmtNode = struct{ noder }
 
 func (p *parser) gotoStmt() *GotoStmtNode {
 	ix := p.ix
@@ -2856,9 +2783,9 @@ _0:
 }
 
 // IdentifierListNode represents
-
+//
 //	IdentifierList = identifier { "," identifier } .
-type IdentifierListNode = struct{}
+type IdentifierListNode = struct{ noder }
 
 func (p *parser) identifierList() *IdentifierListNode {
 	ix := p.ix
@@ -2904,18 +2831,15 @@ _0:
 }
 
 // IfStmtNode represents
-
+//
 //	IfStmt = "if" ExpressionPreBlock Block [ "else" ( IfStmt | Block ) ] | "if" SimpleStmt ";" ExpressionPreBlock Block [ "else" ( IfStmt | Block ) ] .
-type IfStmtNode = struct{}
+type IfStmtNode = struct{ noder }
 
 func (p *parser) ifStmt() *IfStmtNode {
 	ix := p.ix
-	// false: IF
-	// false: IF
-	// single:
-	// multi: IF
 	// ebnf.Alternative: "if" ExpressionPreBlock Block [ "else" ( IfStmt | Block ) ] | "if" SimpleStmt ";" ExpressionPreBlock Block [ "else" ( IfStmt | Block ) ]
-	{
+	switch p.c().tok {
+	case IF: // 0 1
 		// ebnf.Sequence: "if" ExpressionPreBlock Block [ "else" ( IfStmt | Block ) ]
 		{
 			ix := p.ix
@@ -2924,27 +2848,27 @@ func (p *parser) ifStmt() *IfStmtNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _2
+				goto _1
 			}
 			switch p.c().tok {
 			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 				if p.expressionPreBlock() == nil {
 					p.back(ix)
-					goto _2
+					goto _1
 				}
 			default:
 				p.back(ix)
-				goto _2
+				goto _1
 			}
 			switch p.c().tok {
 			case LBRACE:
 				if p.block() == nil {
 					p.back(ix)
-					goto _2
+					goto _1
 				}
 			default:
 				p.back(ix)
-				goto _2
+				goto _1
 			}
 			// *ebnf.Option: [ "else" ( IfStmt | Block ) ]
 			switch p.c().tok {
@@ -2957,52 +2881,49 @@ func (p *parser) ifStmt() *IfStmtNode {
 						p.budget--
 					} else {
 						p.back(ix)
-						goto _3
+						goto _2
 					}
 					// *ebnf.Group: ( IfStmt | Block )
 					switch p.c().tok {
 					case IF, LBRACE:
-						// true: IF
-						// true: LBRACE
-						// single: IF, LBRACE
-						// multi:
 						// ebnf.Alternative: IfStmt | Block
-						{
+						switch p.c().tok {
+						case IF: // 0
 							switch p.c().tok {
 							case IF:
 								if p.ifStmt() == nil {
-									goto _5
+									p.back(ix)
+									goto _2
 								}
 							default:
-								goto _5
+								p.back(ix)
+								goto _2
 							}
-							goto _4
-						_5:
+						case LBRACE: // 1
 							switch p.c().tok {
 							case LBRACE:
 								if p.block() == nil {
-									goto _6
+									p.back(ix)
+									goto _2
 								}
 							default:
-								goto _6
+								p.back(ix)
+								goto _2
 							}
-							goto _4
-						_6:
+						default:
 							p.back(ix)
-							goto _3
+							goto _2
 						}
-					_4:
-						;
 					default:
 						p.back(ix)
-						goto _3
+						goto _2
 					}
 				}
 			}
-		_3:
+		_2:
 		}
-		goto _1
-	_2:
+		break
+	_1:
 		// ebnf.Sequence: "if" SimpleStmt ";" ExpressionPreBlock Block [ "else" ( IfStmt | Block ) ]
 		{
 			ix := p.ix
@@ -3011,13 +2932,13 @@ func (p *parser) ifStmt() *IfStmtNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _7
+				goto _3
 			}
 			switch p.c().tok {
 			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR /* ε */ :
 				if p.simpleStmt() == nil {
 					p.back(ix)
-					goto _7
+					goto _3
 				}
 			}
 			if p.c().tok == SEMICOLON {
@@ -3025,27 +2946,27 @@ func (p *parser) ifStmt() *IfStmtNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _7
+				goto _3
 			}
 			switch p.c().tok {
 			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 				if p.expressionPreBlock() == nil {
 					p.back(ix)
-					goto _7
+					goto _3
 				}
 			default:
 				p.back(ix)
-				goto _7
+				goto _3
 			}
 			switch p.c().tok {
 			case LBRACE:
 				if p.block() == nil {
 					p.back(ix)
-					goto _7
+					goto _3
 				}
 			default:
 				p.back(ix)
-				goto _7
+				goto _3
 			}
 			// *ebnf.Option: [ "else" ( IfStmt | Block ) ]
 			switch p.c().tok {
@@ -3058,55 +2979,53 @@ func (p *parser) ifStmt() *IfStmtNode {
 						p.budget--
 					} else {
 						p.back(ix)
-						goto _8
+						goto _4
 					}
 					// *ebnf.Group: ( IfStmt | Block )
 					switch p.c().tok {
 					case IF, LBRACE:
-						// true: IF
-						// true: LBRACE
-						// single: IF, LBRACE
-						// multi:
 						// ebnf.Alternative: IfStmt | Block
-						{
+						switch p.c().tok {
+						case IF: // 0
 							switch p.c().tok {
 							case IF:
 								if p.ifStmt() == nil {
-									goto _10
+									p.back(ix)
+									goto _4
 								}
 							default:
-								goto _10
+								p.back(ix)
+								goto _4
 							}
-							goto _9
-						_10:
+						case LBRACE: // 1
 							switch p.c().tok {
 							case LBRACE:
 								if p.block() == nil {
-									goto _11
+									p.back(ix)
+									goto _4
 								}
 							default:
-								goto _11
+								p.back(ix)
+								goto _4
 							}
-							goto _9
-						_11:
+						default:
 							p.back(ix)
-							goto _8
+							goto _4
 						}
-					_9:
-						;
 					default:
 						p.back(ix)
-						goto _8
+						goto _4
 					}
 				}
 			}
-		_8:
+		_4:
 		}
-		goto _1
-	_7:
+		break
+	_3:
+		goto _0
+	default:
 		goto _0
 	}
-_1:
 	return &IfStmtNode{}
 	goto _0
 _0:
@@ -3115,9 +3034,9 @@ _0:
 }
 
 // ImportDeclNode represents
-
+//
 //	ImportDecl = "import" ( ImportSpec | "(" { ImportSpec ";" } ")" ) .
-type ImportDeclNode = struct{}
+type ImportDeclNode = struct{ noder }
 
 func (p *parser) importDecl() *ImportDeclNode {
 	ix := p.ix
@@ -3134,22 +3053,20 @@ func (p *parser) importDecl() *ImportDeclNode {
 		// *ebnf.Group: ( ImportSpec | "(" { ImportSpec ";" } ")" )
 		switch p.c().tok {
 		case IDENT, LPAREN, PERIOD, STRING:
-			// true: IDENT, PERIOD, STRING
-			// true: LPAREN
-			// single: IDENT, LPAREN, PERIOD, STRING
-			// multi:
 			// ebnf.Alternative: ImportSpec | "(" { ImportSpec ";" } ")"
-			{
+			switch p.c().tok {
+			case IDENT, PERIOD, STRING: // 0
 				switch p.c().tok {
 				case IDENT, PERIOD, STRING:
 					if p.importSpec() == nil {
-						goto _2
+						p.back(ix)
+						goto _0
 					}
 				default:
-					goto _2
+					p.back(ix)
+					goto _0
 				}
-				goto _1
-			_2:
+			case LPAREN: // 1
 				// ebnf.Sequence: "(" { ImportSpec ";" } ")"
 				{
 					ix := p.ix
@@ -3158,9 +3075,10 @@ func (p *parser) importDecl() *ImportDeclNode {
 						p.budget--
 					} else {
 						p.back(ix)
-						goto _3
+						p.back(ix)
+						goto _0
 					}
-				_4:
+				_1:
 					// *ebnf.Repetition: { ImportSpec ";" }
 					switch p.c().tok {
 					case IDENT, PERIOD, STRING:
@@ -3170,37 +3088,35 @@ func (p *parser) importDecl() *ImportDeclNode {
 						case IDENT, PERIOD, STRING:
 							if p.importSpec() == nil {
 								p.back(ix)
-								goto _5
+								goto _2
 							}
 						default:
 							p.back(ix)
-							goto _5
+							goto _2
 						}
 						if p.c().tok == SEMICOLON {
 							p.ix++
 							p.budget--
 						} else {
 							p.back(ix)
-							goto _5
+							goto _2
 						}
-						goto _4
+						goto _1
 					}
-				_5:
+				_2:
 					if p.c().tok == RPAREN {
 						p.ix++
 						p.budget--
 					} else {
 						p.back(ix)
-						goto _3
+						p.back(ix)
+						goto _0
 					}
 				}
-				goto _1
-			_3:
+			default:
 				p.back(ix)
 				goto _0
 			}
-		_1:
-			;
 		default:
 			p.back(ix)
 			goto _0
@@ -3214,9 +3130,9 @@ _0:
 }
 
 // ImportPathNode represents
-
+//
 //	ImportPath = string_lit .
-type ImportPathNode = struct{}
+type ImportPathNode = struct{ noder }
 
 func (p *parser) importPath() *ImportPathNode {
 	ix := p.ix
@@ -3234,9 +3150,9 @@ _0:
 }
 
 // ImportSpecNode represents
-
+//
 //	ImportSpec = [ "." | PackageName ] ImportPath .
-type ImportSpecNode = struct{}
+type ImportSpecNode = struct{ noder }
 
 func (p *parser) importSpec() *ImportSpecNode {
 	ix := p.ix
@@ -3246,33 +3162,27 @@ func (p *parser) importSpec() *ImportSpecNode {
 		// *ebnf.Option: [ "." | PackageName ]
 		switch p.c().tok {
 		case IDENT, PERIOD:
-			// true: PERIOD
-			// true: IDENT
-			// single: IDENT, PERIOD
-			// multi:
 			// ebnf.Alternative: "." | PackageName
-			{
+			switch p.c().tok {
+			case PERIOD: // 0
 				if p.c().tok == PERIOD {
 					p.ix++
 					p.budget--
 				} else {
-					goto _3
+					goto _1
 				}
-				goto _2
-			_3:
+			case IDENT: // 1
 				switch p.c().tok {
 				case IDENT:
 					if p.packageName() == nil {
-						goto _4
+						goto _1
 					}
 				default:
-					goto _4
+					goto _1
 				}
-				goto _2
-			_4:
+			default:
 				goto _1
 			}
-		_2:
 		}
 	_1:
 		switch p.c().tok {
@@ -3294,9 +3204,9 @@ _0:
 }
 
 // IncDecStmtNode represents
-
+//
 //	IncDecStmt = Expression ( "++" | "--" ) .
-type IncDecStmtNode = struct{}
+type IncDecStmtNode = struct{ noder }
 
 func (p *parser) incDecStmt() *IncDecStmtNode {
 	ix := p.ix
@@ -3316,33 +3226,28 @@ func (p *parser) incDecStmt() *IncDecStmtNode {
 		// *ebnf.Group: ( "++" | "--" )
 		switch p.c().tok {
 		case DEC, INC:
-			// true: INC
-			// true: DEC
-			// single: DEC, INC
-			// multi:
 			// ebnf.Alternative: "++" | "--"
-			{
+			switch p.c().tok {
+			case INC: // 0
 				if p.c().tok == INC {
 					p.ix++
 					p.budget--
 				} else {
-					goto _2
+					p.back(ix)
+					goto _0
 				}
-				goto _1
-			_2:
+			case DEC: // 1
 				if p.c().tok == DEC {
 					p.ix++
 					p.budget--
 				} else {
-					goto _3
+					p.back(ix)
+					goto _0
 				}
-				goto _1
-			_3:
+			default:
 				p.back(ix)
 				goto _0
 			}
-		_1:
-			;
 		default:
 			p.back(ix)
 			goto _0
@@ -3356,9 +3261,9 @@ _0:
 }
 
 // IndexNode represents
-
+//
 //	Index = "[" Expression "]" .
-type IndexNode = struct{}
+type IndexNode = struct{ noder }
 
 func (p *parser) index() *IndexNode {
 	ix := p.ix
@@ -3398,9 +3303,9 @@ _0:
 }
 
 // InitStmtNode represents
-
+//
 //	InitStmt = SimpleStmt .
-type InitStmtNode = struct{}
+type InitStmtNode = struct{ noder }
 
 func (p *parser) initStmt() *InitStmtNode {
 	ix := p.ix
@@ -3418,41 +3323,48 @@ _0:
 }
 
 // InterfaceElemNode represents
-
+//
 //	InterfaceElem = MethodElem | TypeElem .
-type InterfaceElemNode = struct{}
+type InterfaceElemNode = struct{ noder }
 
 func (p *parser) interfaceElem() *InterfaceElemNode {
 	ix := p.ix
-	// false: IDENT
-	// false: ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT, TILDE
-	// single: ARROW, CHAN, FUNC, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT, TILDE
-	// multi: IDENT
 	// ebnf.Alternative: MethodElem | TypeElem
-	{
+	switch p.c().tok {
+	case IDENT: // 0 1
 		switch p.c().tok {
 		case IDENT:
 			if p.methodElem() == nil {
+				goto _1
+			}
+		default:
+			goto _1
+		}
+		break
+	_1:
+		switch p.c().tok {
+		case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT, TILDE:
+			if p.typeElem() == nil {
 				goto _2
 			}
 		default:
 			goto _2
 		}
-		goto _1
+		break
 	_2:
+		goto _0
+	case ARROW, CHAN, FUNC, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT, TILDE: // 1
 		switch p.c().tok {
 		case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT, TILDE:
 			if p.typeElem() == nil {
-				goto _3
+				goto _0
 			}
 		default:
-			goto _3
+			goto _0
 		}
-		goto _1
-	_3:
+	default:
 		goto _0
 	}
-_1:
 	return &InterfaceElemNode{}
 	goto _0
 _0:
@@ -3461,9 +3373,9 @@ _0:
 }
 
 // InterfaceTypeNode represents
-
+//
 //	InterfaceType = "interface" "{" [ InterfaceElem { ";" InterfaceElem } [ ";" ] ] "}" .
-type InterfaceTypeNode = struct{}
+type InterfaceTypeNode = struct{ noder }
 
 func (p *parser) interfaceType() *InterfaceTypeNode {
 	ix := p.ix
@@ -3556,52 +3468,57 @@ _0:
 }
 
 // KeyNode represents
-
+//
 //	Key = Expression | FieldName | LiteralValue .
-type KeyNode = struct{}
+type KeyNode = struct{ noder }
 
 func (p *parser) key() *KeyNode {
 	ix := p.ix
-	// false: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-	// false: IDENT
-	// true: LBRACE
-	// single: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-	// multi: IDENT
 	// ebnf.Alternative: Expression | FieldName | LiteralValue
-	{
+	switch p.c().tok {
+	case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR: // 0
 		switch p.c().tok {
 		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 			if p.expression() == nil {
+				goto _0
+			}
+		default:
+			goto _0
+		}
+	case IDENT: // 0 1
+		switch p.c().tok {
+		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+			if p.expression() == nil {
+				goto _1
+			}
+		default:
+			goto _1
+		}
+		break
+	_1:
+		switch p.c().tok {
+		case IDENT:
+			if p.fieldName() == nil {
 				goto _2
 			}
 		default:
 			goto _2
 		}
-		goto _1
+		break
 	_2:
-		switch p.c().tok {
-		case IDENT:
-			if p.fieldName() == nil {
-				goto _3
-			}
-		default:
-			goto _3
-		}
-		goto _1
-	_3:
+		goto _0
+	case LBRACE: // 2
 		switch p.c().tok {
 		case LBRACE:
 			if p.literalValue() == nil {
-				goto _4
+				goto _0
 			}
 		default:
-			goto _4
+			goto _0
 		}
-		goto _1
-	_4:
+	default:
 		goto _0
 	}
-_1:
 	return &KeyNode{}
 	goto _0
 _0:
@@ -3610,9 +3527,9 @@ _0:
 }
 
 // KeyTypeNode represents
-
+//
 //	KeyType = Type .
-type KeyTypeNode = struct{}
+type KeyTypeNode = struct{ noder }
 
 func (p *parser) keyType() *KeyTypeNode {
 	ix := p.ix
@@ -3632,9 +3549,9 @@ _0:
 }
 
 // KeyedElementNode represents
-
+//
 //	KeyedElement = [ Key ":" ] Element .
-type KeyedElementNode = struct{}
+type KeyedElementNode = struct{ noder }
 
 func (p *parser) keyedElement() *KeyedElementNode {
 	ix := p.ix
@@ -3686,9 +3603,9 @@ _0:
 }
 
 // LabelNode represents
-
+//
 //	Label = identifier .
-type LabelNode = struct{}
+type LabelNode = struct{ noder }
 
 func (p *parser) label() *LabelNode {
 	ix := p.ix
@@ -3706,9 +3623,9 @@ _0:
 }
 
 // LabeledStmtNode represents
-
+//
 //	LabeledStmt = Label ":" Statement .
-type LabeledStmtNode = struct{}
+type LabeledStmtNode = struct{ noder }
 
 func (p *parser) labeledStmt() *LabeledStmtNode {
 	ix := p.ix
@@ -3748,52 +3665,44 @@ _0:
 }
 
 // LiteralNode represents
-
+//
 //	Literal = BasicLit | CompositeLit | FunctionLit .
-type LiteralNode = struct{}
+type LiteralNode = struct{ noder }
 
 func (p *parser) literal() *LiteralNode {
 	ix := p.ix
-	// true: CHAR, FLOAT, IMAG, INT, STRING
-	// true: IDENT, LBRACK, MAP, STRUCT
-	// true: FUNC
-	// single: CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, MAP, STRING, STRUCT
-	// multi:
 	// ebnf.Alternative: BasicLit | CompositeLit | FunctionLit
-	{
+	switch p.c().tok {
+	case CHAR, FLOAT, IMAG, INT, STRING: // 0
 		switch p.c().tok {
 		case CHAR, FLOAT, IMAG, INT, STRING:
 			if p.basicLit() == nil {
-				goto _2
+				goto _0
 			}
 		default:
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case IDENT, LBRACK, MAP, STRUCT: // 1
 		switch p.c().tok {
 		case IDENT, LBRACK, MAP, STRUCT:
 			if p.compositeLit() == nil {
-				goto _3
+				goto _0
 			}
 		default:
-			goto _3
+			goto _0
 		}
-		goto _1
-	_3:
+	case FUNC: // 2
 		switch p.c().tok {
 		case FUNC:
 			if p.functionLit() == nil {
-				goto _4
+				goto _0
 			}
 		default:
-			goto _4
+			goto _0
 		}
-		goto _1
-	_4:
+	default:
 		goto _0
 	}
-_1:
 	return &LiteralNode{}
 	goto _0
 _0:
@@ -3802,52 +3711,44 @@ _0:
 }
 
 // LiteralPreBlockNode represents
-
+//
 //	LiteralPreBlock = BasicLit | CompositeLitPreBlock | FunctionLit .
-type LiteralPreBlockNode = struct{}
+type LiteralPreBlockNode = struct{ noder }
 
 func (p *parser) literalPreBlock() *LiteralPreBlockNode {
 	ix := p.ix
-	// true: CHAR, FLOAT, IMAG, INT, STRING
-	// true: LBRACK, MAP, STRUCT
-	// true: FUNC
-	// single: CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT
-	// multi:
 	// ebnf.Alternative: BasicLit | CompositeLitPreBlock | FunctionLit
-	{
+	switch p.c().tok {
+	case CHAR, FLOAT, IMAG, INT, STRING: // 0
 		switch p.c().tok {
 		case CHAR, FLOAT, IMAG, INT, STRING:
 			if p.basicLit() == nil {
-				goto _2
+				goto _0
 			}
 		default:
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case LBRACK, MAP, STRUCT: // 1
 		switch p.c().tok {
 		case LBRACK, MAP, STRUCT:
 			if p.compositeLitPreBlock() == nil {
-				goto _3
+				goto _0
 			}
 		default:
-			goto _3
+			goto _0
 		}
-		goto _1
-	_3:
+	case FUNC: // 2
 		switch p.c().tok {
 		case FUNC:
 			if p.functionLit() == nil {
-				goto _4
+				goto _0
 			}
 		default:
-			goto _4
+			goto _0
 		}
-		goto _1
-	_4:
+	default:
 		goto _0
 	}
-_1:
 	return &LiteralPreBlockNode{}
 	goto _0
 _0:
@@ -3856,42 +3757,34 @@ _0:
 }
 
 // LiteralTypeNode represents
-
+//
 //	LiteralType = StructType | ArrayType | "[" "..." "]" ElementType | SliceType | MapType | TypeName [ TypeArgs ] .
-type LiteralTypeNode = struct{}
+type LiteralTypeNode = struct{ noder }
 
 func (p *parser) literalType() *LiteralTypeNode {
 	ix := p.ix
-	// true: STRUCT
-	// false: LBRACK
-	// false: LBRACK
-	// false: LBRACK
-	// true: MAP
-	// true: IDENT
-	// single: IDENT, MAP, STRUCT
-	// multi: LBRACK
 	// ebnf.Alternative: StructType | ArrayType | "[" "..." "]" ElementType | SliceType | MapType | TypeName [ TypeArgs ]
-	{
+	switch p.c().tok {
+	case STRUCT: // 0
 		switch p.c().tok {
 		case STRUCT:
 			if p.structType() == nil {
-				goto _2
+				goto _0
 			}
 		default:
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case LBRACK: // 1 2 3
 		switch p.c().tok {
 		case LBRACK:
 			if p.arrayType() == nil {
-				goto _3
+				goto _1
 			}
 		default:
-			goto _3
+			goto _1
 		}
-		goto _1
-	_3:
+		break
+	_1:
 		// ebnf.Sequence: "[" "..." "]" ElementType
 		{
 			ix := p.ix
@@ -3900,55 +3793,56 @@ func (p *parser) literalType() *LiteralTypeNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _4
+				goto _2
 			}
 			if p.c().tok == ELLIPSIS {
 				p.ix++
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _4
+				goto _2
 			}
 			if p.c().tok == RBRACK {
 				p.ix++
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _4
+				goto _2
 			}
 			switch p.c().tok {
 			case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 				if p.elementType() == nil {
 					p.back(ix)
-					goto _4
+					goto _2
 				}
 			default:
 				p.back(ix)
-				goto _4
+				goto _2
 			}
 		}
-		goto _1
-	_4:
+		break
+	_2:
 		switch p.c().tok {
 		case LBRACK:
 			if p.sliceType() == nil {
-				goto _5
+				goto _3
 			}
 		default:
-			goto _5
+			goto _3
 		}
-		goto _1
-	_5:
+		break
+	_3:
+		goto _0
+	case MAP: // 4
 		switch p.c().tok {
 		case MAP:
 			if p.mapType() == nil {
-				goto _6
+				goto _0
 			}
 		default:
-			goto _6
+			goto _0
 		}
-		goto _1
-	_6:
+	case IDENT: // 5
 		// ebnf.Sequence: TypeName [ TypeArgs ]
 		{
 			ix := p.ix
@@ -3956,11 +3850,11 @@ func (p *parser) literalType() *LiteralTypeNode {
 			case IDENT:
 				if p.typeName() == nil {
 					p.back(ix)
-					goto _7
+					goto _0
 				}
 			default:
 				p.back(ix)
-				goto _7
+				goto _0
 			}
 			// *ebnf.Option: [ TypeArgs ]
 			switch p.c().tok {
@@ -3968,19 +3862,17 @@ func (p *parser) literalType() *LiteralTypeNode {
 				switch p.c().tok {
 				case LBRACK:
 					if p.typeArgs() == nil {
-						goto _8
+						goto _4
 					}
 				default:
-					goto _8
+					goto _4
 				}
 			}
-		_8:
+		_4:
 		}
-		goto _1
-	_7:
+	default:
 		goto _0
 	}
-_1:
 	return &LiteralTypeNode{}
 	goto _0
 _0:
@@ -3989,41 +3881,34 @@ _0:
 }
 
 // LiteralTypePreBlockNode represents
-
+//
 //	LiteralTypePreBlock = StructType | ArrayType | "[" "..." "]" ElementType | SliceType | MapType .
-type LiteralTypePreBlockNode = struct{}
+type LiteralTypePreBlockNode = struct{ noder }
 
 func (p *parser) literalTypePreBlock() *LiteralTypePreBlockNode {
 	ix := p.ix
-	// true: STRUCT
-	// false: LBRACK
-	// false: LBRACK
-	// false: LBRACK
-	// true: MAP
-	// single: MAP, STRUCT
-	// multi: LBRACK
 	// ebnf.Alternative: StructType | ArrayType | "[" "..." "]" ElementType | SliceType | MapType
-	{
+	switch p.c().tok {
+	case STRUCT: // 0
 		switch p.c().tok {
 		case STRUCT:
 			if p.structType() == nil {
-				goto _2
+				goto _0
 			}
 		default:
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case LBRACK: // 1 2 3
 		switch p.c().tok {
 		case LBRACK:
 			if p.arrayType() == nil {
-				goto _3
+				goto _1
 			}
 		default:
-			goto _3
+			goto _1
 		}
-		goto _1
-	_3:
+		break
+	_1:
 		// ebnf.Sequence: "[" "..." "]" ElementType
 		{
 			ix := p.ix
@@ -4032,58 +3917,58 @@ func (p *parser) literalTypePreBlock() *LiteralTypePreBlockNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _4
+				goto _2
 			}
 			if p.c().tok == ELLIPSIS {
 				p.ix++
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _4
+				goto _2
 			}
 			if p.c().tok == RBRACK {
 				p.ix++
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _4
+				goto _2
 			}
 			switch p.c().tok {
 			case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 				if p.elementType() == nil {
 					p.back(ix)
-					goto _4
+					goto _2
 				}
 			default:
 				p.back(ix)
-				goto _4
+				goto _2
 			}
 		}
-		goto _1
-	_4:
+		break
+	_2:
 		switch p.c().tok {
 		case LBRACK:
 			if p.sliceType() == nil {
-				goto _5
+				goto _3
 			}
 		default:
-			goto _5
+			goto _3
 		}
-		goto _1
-	_5:
+		break
+	_3:
+		goto _0
+	case MAP: // 4
 		switch p.c().tok {
 		case MAP:
 			if p.mapType() == nil {
-				goto _6
+				goto _0
 			}
 		default:
-			goto _6
+			goto _0
 		}
-		goto _1
-	_6:
+	default:
 		goto _0
 	}
-_1:
 	return &LiteralTypePreBlockNode{}
 	goto _0
 _0:
@@ -4092,9 +3977,9 @@ _0:
 }
 
 // LiteralValueNode represents
-
+//
 //	LiteralValue = "{" [ ElementList [ "," ] ] "}" .
-type LiteralValueNode = struct{}
+type LiteralValueNode = struct{ noder }
 
 func (p *parser) literalValue() *LiteralValueNode {
 	ix := p.ix
@@ -4154,9 +4039,9 @@ _0:
 }
 
 // LogicalAndExpressionNode represents
-
+//
 //	LogicalAndExpression = RelationalExpression { "&&" RelationalExpression } .
-type LogicalAndExpressionNode = struct{}
+type LogicalAndExpressionNode = struct{ noder }
 
 func (p *parser) logicalAndExpression() *LogicalAndExpressionNode {
 	ix := p.ix
@@ -4208,9 +4093,9 @@ _0:
 }
 
 // LogicalAndExpressionPreBlockNode represents
-
+//
 //	LogicalAndExpressionPreBlock = RelationalExpressionPreBlock { "&&" RelationalExpressionPreBlock } .
-type LogicalAndExpressionPreBlockNode = struct{}
+type LogicalAndExpressionPreBlockNode = struct{ noder }
 
 func (p *parser) logicalAndExpressionPreBlock() *LogicalAndExpressionPreBlockNode {
 	ix := p.ix
@@ -4262,9 +4147,9 @@ _0:
 }
 
 // MapTypeNode represents
-
+//
 //	MapType = "map" "[" KeyType "]" ElementType .
-type MapTypeNode = struct{}
+type MapTypeNode = struct{ noder }
 
 func (p *parser) mapType() *MapTypeNode {
 	ix := p.ix
@@ -4321,9 +4206,9 @@ _0:
 }
 
 // MethodDeclNode represents
-
+//
 //	MethodDecl = "func" Receiver MethodName Signature [ FunctionBody ] .
-type MethodDeclNode = struct{}
+type MethodDeclNode = struct{ noder }
 
 func (p *parser) methodDecl() *MethodDeclNode {
 	ix := p.ix
@@ -4389,9 +4274,9 @@ _0:
 }
 
 // MethodElemNode represents
-
+//
 //	MethodElem = MethodName Signature .
-type MethodElemNode = struct{}
+type MethodElemNode = struct{ noder }
 
 func (p *parser) methodElem() *MethodElemNode {
 	ix := p.ix
@@ -4427,9 +4312,9 @@ _0:
 }
 
 // MethodExprNode represents
-
+//
 //	MethodExpr = ReceiverType "." MethodName .
-type MethodExprNode = struct{}
+type MethodExprNode = struct{ noder }
 
 func (p *parser) methodExpr() *MethodExprNode {
 	ix := p.ix
@@ -4472,9 +4357,9 @@ _0:
 }
 
 // MethodNameNode represents
-
+//
 //	MethodName = identifier .
-type MethodNameNode = struct{}
+type MethodNameNode = struct{ noder }
 
 func (p *parser) methodName() *MethodNameNode {
 	ix := p.ix
@@ -4492,82 +4377,66 @@ _0:
 }
 
 // MulOpNode represents
-
+//
 //	MulOp = "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" .
-type MulOpNode = struct{}
+type MulOpNode = struct{ noder }
 
 func (p *parser) mulOp() *MulOpNode {
 	ix := p.ix
-	// true: MUL
-	// true: QUO
-	// true: REM
-	// true: SHL
-	// true: SHR
-	// true: AND
-	// true: AND_NOT
-	// single: AND, AND_NOT, MUL, QUO, REM, SHL, SHR
-	// multi:
 	// ebnf.Alternative: "*" | "/" | "%" | "<<" | ">>" | "&" | "&^"
-	{
+	switch p.c().tok {
+	case MUL: // 0
 		if p.c().tok == MUL {
 			p.ix++
 			p.budget--
 		} else {
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case QUO: // 1
 		if p.c().tok == QUO {
 			p.ix++
 			p.budget--
 		} else {
-			goto _3
+			goto _0
 		}
-		goto _1
-	_3:
+	case REM: // 2
 		if p.c().tok == REM {
 			p.ix++
 			p.budget--
 		} else {
-			goto _4
+			goto _0
 		}
-		goto _1
-	_4:
+	case SHL: // 3
 		if p.c().tok == SHL {
 			p.ix++
 			p.budget--
 		} else {
-			goto _5
+			goto _0
 		}
-		goto _1
-	_5:
+	case SHR: // 4
 		if p.c().tok == SHR {
 			p.ix++
 			p.budget--
 		} else {
-			goto _6
+			goto _0
 		}
-		goto _1
-	_6:
+	case AND: // 5
 		if p.c().tok == AND {
 			p.ix++
 			p.budget--
 		} else {
-			goto _7
+			goto _0
 		}
-		goto _1
-	_7:
+	case AND_NOT: // 6
 		if p.c().tok == AND_NOT {
 			p.ix++
 			p.budget--
 		} else {
-			goto _8
+			goto _0
 		}
-		goto _1
-	_8:
+	default:
 		goto _0
 	}
-_1:
 	return &MulOpNode{}
 	goto _0
 _0:
@@ -4576,9 +4445,9 @@ _0:
 }
 
 // MultiplicativeExpressionNode represents
-
+//
 //	MultiplicativeExpression = UnaryExpr { MulOp UnaryExpr } .
-type MultiplicativeExpressionNode = struct{}
+type MultiplicativeExpressionNode = struct{ noder }
 
 func (p *parser) multiplicativeExpression() *MultiplicativeExpressionNode {
 	ix := p.ix
@@ -4633,9 +4502,9 @@ _0:
 }
 
 // MultiplicativeExpressionPreBlockNode represents
-
+//
 //	MultiplicativeExpressionPreBlock = UnaryExprPreBlockPreBlock { MulOp UnaryExprPreBlockPreBlock } .
-type MultiplicativeExpressionPreBlockNode = struct{}
+type MultiplicativeExpressionPreBlockNode = struct{ noder }
 
 func (p *parser) multiplicativeExpressionPreBlock() *MultiplicativeExpressionPreBlockNode {
 	ix := p.ix
@@ -4690,29 +4559,34 @@ _0:
 }
 
 // OperandNode represents
-
+//
 //	Operand = Literal | OperandName [ TypeArgs ] | "(" Expression ")" .
-type OperandNode = struct{}
+type OperandNode = struct{ noder }
 
 func (p *parser) operand() *OperandNode {
 	ix := p.ix
-	// false: CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, MAP, STRING, STRUCT
-	// false: IDENT
-	// true: LPAREN
-	// single: CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, LPAREN, MAP, STRING, STRUCT
-	// multi: IDENT
 	// ebnf.Alternative: Literal | OperandName [ TypeArgs ] | "(" Expression ")"
-	{
+	switch p.c().tok {
+	case CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT: // 0
 		switch p.c().tok {
 		case CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, MAP, STRING, STRUCT:
 			if p.literal() == nil {
-				goto _2
+				goto _0
 			}
 		default:
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case IDENT: // 0 1
+		switch p.c().tok {
+		case CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, MAP, STRING, STRUCT:
+			if p.literal() == nil {
+				goto _1
+			}
+		default:
+			goto _1
+		}
+		break
+	_1:
 		// ebnf.Sequence: OperandName [ TypeArgs ]
 		{
 			ix := p.ix
@@ -4720,11 +4594,11 @@ func (p *parser) operand() *OperandNode {
 			case IDENT:
 				if p.operandName() == nil {
 					p.back(ix)
-					goto _3
+					goto _2
 				}
 			default:
 				p.back(ix)
-				goto _3
+				goto _2
 			}
 			// *ebnf.Option: [ TypeArgs ]
 			switch p.c().tok {
@@ -4732,16 +4606,18 @@ func (p *parser) operand() *OperandNode {
 				switch p.c().tok {
 				case LBRACK:
 					if p.typeArgs() == nil {
-						goto _4
+						goto _3
 					}
 				default:
-					goto _4
+					goto _3
 				}
 			}
-		_4:
+		_3:
 		}
-		goto _1
-	_3:
+		break
+	_2:
+		goto _0
+	case LPAREN: // 2
 		// ebnf.Sequence: "(" Expression ")"
 		{
 			ix := p.ix
@@ -4750,31 +4626,29 @@ func (p *parser) operand() *OperandNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _5
+				goto _0
 			}
 			switch p.c().tok {
 			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 				if p.expression() == nil {
 					p.back(ix)
-					goto _5
+					goto _0
 				}
 			default:
 				p.back(ix)
-				goto _5
+				goto _0
 			}
 			if p.c().tok == RPAREN {
 				p.ix++
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _5
+				goto _0
 			}
 		}
-		goto _1
-	_5:
+	default:
 		goto _0
 	}
-_1:
 	return &OperandNode{}
 	goto _0
 _0:
@@ -4783,39 +4657,37 @@ _0:
 }
 
 // OperandNameNode represents
-
+//
 //	OperandName = QualifiedIdent | identifier .
-type OperandNameNode = struct{}
+type OperandNameNode = struct{ noder }
 
 func (p *parser) operandName() *OperandNameNode {
 	ix := p.ix
-	// false: IDENT
-	// false: IDENT
-	// single:
-	// multi: IDENT
 	// ebnf.Alternative: QualifiedIdent | identifier
-	{
+	switch p.c().tok {
+	case IDENT: // 0 1
 		switch p.c().tok {
 		case IDENT:
 			if p.qualifiedIdent() == nil {
-				goto _2
+				goto _1
 			}
 		default:
-			goto _2
+			goto _1
 		}
-		goto _1
-	_2:
+		break
+	_1:
 		if p.c().tok == IDENT {
 			p.ix++
 			p.budget--
 		} else {
-			goto _3
+			goto _2
 		}
-		goto _1
-	_3:
+		break
+	_2:
+		goto _0
+	default:
 		goto _0
 	}
-_1:
 	return &OperandNameNode{}
 	goto _0
 _0:
@@ -4824,29 +4696,24 @@ _0:
 }
 
 // OperandPreBlockNode represents
-
+//
 //	OperandPreBlock = LiteralPreBlock | OperandName [ TypeArgs ] | "(" Expression ")" .
-type OperandPreBlockNode = struct{}
+type OperandPreBlockNode = struct{ noder }
 
 func (p *parser) operandPreBlock() *OperandPreBlockNode {
 	ix := p.ix
-	// true: CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT
-	// true: IDENT
-	// true: LPAREN
-	// single: CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, LPAREN, MAP, STRING, STRUCT
-	// multi:
 	// ebnf.Alternative: LiteralPreBlock | OperandName [ TypeArgs ] | "(" Expression ")"
-	{
+	switch p.c().tok {
+	case CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT: // 0
 		switch p.c().tok {
 		case CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT:
 			if p.literalPreBlock() == nil {
-				goto _2
+				goto _0
 			}
 		default:
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case IDENT: // 1
 		// ebnf.Sequence: OperandName [ TypeArgs ]
 		{
 			ix := p.ix
@@ -4854,11 +4721,11 @@ func (p *parser) operandPreBlock() *OperandPreBlockNode {
 			case IDENT:
 				if p.operandName() == nil {
 					p.back(ix)
-					goto _3
+					goto _0
 				}
 			default:
 				p.back(ix)
-				goto _3
+				goto _0
 			}
 			// *ebnf.Option: [ TypeArgs ]
 			switch p.c().tok {
@@ -4866,16 +4733,15 @@ func (p *parser) operandPreBlock() *OperandPreBlockNode {
 				switch p.c().tok {
 				case LBRACK:
 					if p.typeArgs() == nil {
-						goto _4
+						goto _1
 					}
 				default:
-					goto _4
+					goto _1
 				}
 			}
-		_4:
+		_1:
 		}
-		goto _1
-	_3:
+	case LPAREN: // 2
 		// ebnf.Sequence: "(" Expression ")"
 		{
 			ix := p.ix
@@ -4884,31 +4750,29 @@ func (p *parser) operandPreBlock() *OperandPreBlockNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _5
+				goto _0
 			}
 			switch p.c().tok {
 			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 				if p.expression() == nil {
 					p.back(ix)
-					goto _5
+					goto _0
 				}
 			default:
 				p.back(ix)
-				goto _5
+				goto _0
 			}
 			if p.c().tok == RPAREN {
 				p.ix++
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _5
+				goto _0
 			}
 		}
-		goto _1
-	_5:
+	default:
 		goto _0
 	}
-_1:
 	return &OperandPreBlockNode{}
 	goto _0
 _0:
@@ -4917,9 +4781,9 @@ _0:
 }
 
 // PackageClauseNode represents
-
+//
 //	PackageClause = "package" PackageName .
-type PackageClauseNode = struct{}
+type PackageClauseNode = struct{ noder }
 
 func (p *parser) packageClause() *PackageClauseNode {
 	ix := p.ix
@@ -4952,9 +4816,9 @@ _0:
 }
 
 // PackageNameNode represents
-
+//
 //	PackageName = identifier .
-type PackageNameNode = struct{}
+type PackageNameNode = struct{ noder }
 
 func (p *parser) packageName() *PackageNameNode {
 	ix := p.ix
@@ -4972,20 +4836,15 @@ _0:
 }
 
 // ParameterDeclNode represents
-
+//
 //	ParameterDecl = identifier "..." Type | identifier Type | "..." Type | Type .
-type ParameterDeclNode = struct{}
+type ParameterDeclNode = struct{ noder }
 
 func (p *parser) parameterDecl() *ParameterDeclNode {
 	ix := p.ix
-	// false: IDENT
-	// false: IDENT
-	// true: ELLIPSIS
-	// false: ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
-	// single: ARROW, CHAN, ELLIPSIS, FUNC, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
-	// multi: IDENT
 	// ebnf.Alternative: identifier "..." Type | identifier Type | "..." Type | Type
-	{
+	switch p.c().tok {
+	case IDENT: // 0 1 3
 		// ebnf.Sequence: identifier "..." Type
 		{
 			ix := p.ix
@@ -4994,9 +4853,32 @@ func (p *parser) parameterDecl() *ParameterDeclNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _2
+				goto _1
 			}
 			if p.c().tok == ELLIPSIS {
+				p.ix++
+				p.budget--
+			} else {
+				p.back(ix)
+				goto _1
+			}
+			switch p.c().tok {
+			case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+				if p.type1() == nil {
+					p.back(ix)
+					goto _1
+				}
+			default:
+				p.back(ix)
+				goto _1
+			}
+		}
+		break
+	_1:
+		// ebnf.Sequence: identifier Type
+		{
+			ix := p.ix
+			if p.c().tok == IDENT {
 				p.ix++
 				p.budget--
 			} else {
@@ -5014,31 +4896,20 @@ func (p *parser) parameterDecl() *ParameterDeclNode {
 				goto _2
 			}
 		}
-		goto _1
+		break
 	_2:
-		// ebnf.Sequence: identifier Type
-		{
-			ix := p.ix
-			if p.c().tok == IDENT {
-				p.ix++
-				p.budget--
-			} else {
-				p.back(ix)
+		switch p.c().tok {
+		case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+			if p.type1() == nil {
 				goto _3
 			}
-			switch p.c().tok {
-			case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
-				if p.type1() == nil {
-					p.back(ix)
-					goto _3
-				}
-			default:
-				p.back(ix)
-				goto _3
-			}
+		default:
+			goto _3
 		}
-		goto _1
+		break
 	_3:
+		goto _0
+	case ELLIPSIS: // 2
 		// ebnf.Sequence: "..." Type
 		{
 			ix := p.ix
@@ -5047,34 +4918,31 @@ func (p *parser) parameterDecl() *ParameterDeclNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _4
+				goto _0
 			}
 			switch p.c().tok {
 			case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 				if p.type1() == nil {
 					p.back(ix)
-					goto _4
+					goto _0
 				}
 			default:
 				p.back(ix)
-				goto _4
+				goto _0
 			}
 		}
-		goto _1
-	_4:
+	case ARROW, CHAN, FUNC, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT: // 3
 		switch p.c().tok {
 		case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 			if p.type1() == nil {
-				goto _5
+				goto _0
 			}
 		default:
-			goto _5
+			goto _0
 		}
-		goto _1
-	_5:
+	default:
 		goto _0
 	}
-_1:
 	return &ParameterDeclNode{}
 	goto _0
 _0:
@@ -5083,9 +4951,9 @@ _0:
 }
 
 // ParameterListNode represents
-
+//
 //	ParameterList = ParameterDecl { "," ParameterDecl } .
-type ParameterListNode = struct{}
+type ParameterListNode = struct{ noder }
 
 func (p *parser) parameterList() *ParameterListNode {
 	ix := p.ix
@@ -5137,9 +5005,9 @@ _0:
 }
 
 // ParametersNode represents
-
+//
 //	Parameters = "(" [ ParameterList [ "," ] ] ")" .
-type ParametersNode = struct{}
+type ParametersNode = struct{ noder }
 
 func (p *parser) parameters() *ParametersNode {
 	ix := p.ix
@@ -5199,9 +5067,9 @@ _0:
 }
 
 // PointerTypeNode represents
-
+//
 //	PointerType = "*" BaseType .
-type PointerTypeNode = struct{}
+type PointerTypeNode = struct{ noder }
 
 func (p *parser) pointerType() *PointerTypeNode {
 	ix := p.ix
@@ -5234,9 +5102,9 @@ _0:
 }
 
 // PostStmtNode represents
-
+//
 //	PostStmt = SimpleStmtPreBlock .
-type PostStmtNode = struct{}
+type PostStmtNode = struct{ noder }
 
 func (p *parser) postStmt() *PostStmtNode {
 	ix := p.ix
@@ -5254,9 +5122,9 @@ _0:
 }
 
 // PrimaryExprNode represents
-
+//
 //	PrimaryExpr = ( Operand | Conversion | MethodExpr ) { Selector | Index | Slice | TypeAssertion | Arguments } .
-type PrimaryExprNode = struct{}
+type PrimaryExprNode = struct{ noder }
 
 func (p *parser) primaryExpr() *PrimaryExprNode {
 	ix := p.ix
@@ -5266,65 +5134,90 @@ func (p *parser) primaryExpr() *PrimaryExprNode {
 		// *ebnf.Group: ( Operand | Conversion | MethodExpr )
 		switch p.c().tok {
 		case ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRING, STRUCT:
-			// false: CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, LPAREN, MAP, STRING, STRUCT
-			// false: ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
-			// false: ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
-			// single: CHAR, FLOAT, IMAG, INT, STRING
-			// multi: ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
 			// ebnf.Alternative: Operand | Conversion | MethodExpr
-			{
+			switch p.c().tok {
+			case CHAR, FLOAT, IMAG, INT, STRING: // 0
 				switch p.c().tok {
 				case CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, LPAREN, MAP, STRING, STRUCT:
 					if p.operand() == nil {
+						p.back(ix)
+						goto _0
+					}
+				default:
+					p.back(ix)
+					goto _0
+				}
+			case FUNC, IDENT, LBRACK, LPAREN, MAP, STRUCT: // 0 1 2
+				switch p.c().tok {
+				case CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, LPAREN, MAP, STRING, STRUCT:
+					if p.operand() == nil {
+						goto _1
+					}
+				default:
+					goto _1
+				}
+				break
+			_1:
+				switch p.c().tok {
+				case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+					if p.conversion() == nil {
 						goto _2
 					}
 				default:
 					goto _2
 				}
-				goto _1
+				break
 			_2:
 				switch p.c().tok {
 				case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
-					if p.conversion() == nil {
+					if p.methodExpr() == nil {
 						goto _3
 					}
 				default:
 					goto _3
 				}
-				goto _1
+				break
 			_3:
+				p.back(ix)
+				goto _0
+			case ARROW, CHAN, INTERFACE, MUL: // 1 2
 				switch p.c().tok {
 				case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
-					if p.methodExpr() == nil {
+					if p.conversion() == nil {
 						goto _4
 					}
 				default:
 					goto _4
 				}
-				goto _1
+				break
 			_4:
+				switch p.c().tok {
+				case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+					if p.methodExpr() == nil {
+						goto _5
+					}
+				default:
+					goto _5
+				}
+				break
+			_5:
+				p.back(ix)
+				goto _0
+			default:
 				p.back(ix)
 				goto _0
 			}
-		_1:
-			;
 		default:
 			p.back(ix)
 			goto _0
 		}
-	_5:
+	_6:
 		// *ebnf.Repetition: { Selector | Index | Slice | TypeAssertion | Arguments }
 		switch p.c().tok {
 		case LBRACK, LPAREN, PERIOD:
-			// false: PERIOD
-			// false: LBRACK
-			// false: LBRACK
-			// false: PERIOD
-			// true: LPAREN
-			// single: LPAREN
-			// multi: LBRACK, PERIOD
 			// ebnf.Alternative: Selector | Index | Slice | TypeAssertion | Arguments
-			{
+			switch p.c().tok {
+			case PERIOD: // 0 3
 				switch p.c().tok {
 				case PERIOD:
 					if p.selector() == nil {
@@ -5333,54 +5226,56 @@ func (p *parser) primaryExpr() *PrimaryExprNode {
 				default:
 					goto _8
 				}
-				goto _7
+				break
 			_8:
 				switch p.c().tok {
-				case LBRACK:
-					if p.index() == nil {
+				case PERIOD:
+					if p.typeAssertion() == nil {
 						goto _9
 					}
 				default:
 					goto _9
 				}
-				goto _7
+				break
 			_9:
+				goto _7
+			case LBRACK: // 1 2
 				switch p.c().tok {
 				case LBRACK:
-					if p.slice() == nil {
+					if p.index() == nil {
 						goto _10
 					}
 				default:
 					goto _10
 				}
-				goto _7
+				break
 			_10:
 				switch p.c().tok {
-				case PERIOD:
-					if p.typeAssertion() == nil {
+				case LBRACK:
+					if p.slice() == nil {
 						goto _11
 					}
 				default:
 					goto _11
 				}
-				goto _7
+				break
 			_11:
+				goto _7
+			case LPAREN: // 4
 				switch p.c().tok {
 				case LPAREN:
 					if p.arguments() == nil {
-						goto _12
+						goto _7
 					}
 				default:
-					goto _12
+					goto _7
 				}
+			default:
 				goto _7
-			_12:
-				goto _6
 			}
-		_7:
-			goto _5
+			goto _6
 		}
-	_6:
+	_7:
 	}
 	return &PrimaryExprNode{}
 	goto _0
@@ -5390,9 +5285,9 @@ _0:
 }
 
 // PrimaryExprPreBlockNode represents
-
+//
 //	PrimaryExprPreBlock = ( OperandPreBlock | Conversion | MethodExpr ) { Selector | Index | Slice | TypeAssertion | Arguments } .
-type PrimaryExprPreBlockNode = struct{}
+type PrimaryExprPreBlockNode = struct{ noder }
 
 func (p *parser) primaryExprPreBlock() *PrimaryExprPreBlockNode {
 	ix := p.ix
@@ -5402,65 +5297,90 @@ func (p *parser) primaryExprPreBlock() *PrimaryExprPreBlockNode {
 		// *ebnf.Group: ( OperandPreBlock | Conversion | MethodExpr )
 		switch p.c().tok {
 		case ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRING, STRUCT:
-			// false: CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, LPAREN, MAP, STRING, STRUCT
-			// false: ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
-			// false: ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
-			// single: CHAR, FLOAT, IMAG, INT, STRING
-			// multi: ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
 			// ebnf.Alternative: OperandPreBlock | Conversion | MethodExpr
-			{
+			switch p.c().tok {
+			case CHAR, FLOAT, IMAG, INT, STRING: // 0
 				switch p.c().tok {
 				case CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, LPAREN, MAP, STRING, STRUCT:
 					if p.operandPreBlock() == nil {
+						p.back(ix)
+						goto _0
+					}
+				default:
+					p.back(ix)
+					goto _0
+				}
+			case FUNC, IDENT, LBRACK, LPAREN, MAP, STRUCT: // 0 1 2
+				switch p.c().tok {
+				case CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, LPAREN, MAP, STRING, STRUCT:
+					if p.operandPreBlock() == nil {
+						goto _1
+					}
+				default:
+					goto _1
+				}
+				break
+			_1:
+				switch p.c().tok {
+				case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+					if p.conversion() == nil {
 						goto _2
 					}
 				default:
 					goto _2
 				}
-				goto _1
+				break
 			_2:
 				switch p.c().tok {
 				case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
-					if p.conversion() == nil {
+					if p.methodExpr() == nil {
 						goto _3
 					}
 				default:
 					goto _3
 				}
-				goto _1
+				break
 			_3:
+				p.back(ix)
+				goto _0
+			case ARROW, CHAN, INTERFACE, MUL: // 1 2
 				switch p.c().tok {
 				case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
-					if p.methodExpr() == nil {
+					if p.conversion() == nil {
 						goto _4
 					}
 				default:
 					goto _4
 				}
-				goto _1
+				break
 			_4:
+				switch p.c().tok {
+				case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+					if p.methodExpr() == nil {
+						goto _5
+					}
+				default:
+					goto _5
+				}
+				break
+			_5:
+				p.back(ix)
+				goto _0
+			default:
 				p.back(ix)
 				goto _0
 			}
-		_1:
-			;
 		default:
 			p.back(ix)
 			goto _0
 		}
-	_5:
+	_6:
 		// *ebnf.Repetition: { Selector | Index | Slice | TypeAssertion | Arguments }
 		switch p.c().tok {
 		case LBRACK, LPAREN, PERIOD:
-			// false: PERIOD
-			// false: LBRACK
-			// false: LBRACK
-			// false: PERIOD
-			// true: LPAREN
-			// single: LPAREN
-			// multi: LBRACK, PERIOD
 			// ebnf.Alternative: Selector | Index | Slice | TypeAssertion | Arguments
-			{
+			switch p.c().tok {
+			case PERIOD: // 0 3
 				switch p.c().tok {
 				case PERIOD:
 					if p.selector() == nil {
@@ -5469,54 +5389,56 @@ func (p *parser) primaryExprPreBlock() *PrimaryExprPreBlockNode {
 				default:
 					goto _8
 				}
-				goto _7
+				break
 			_8:
 				switch p.c().tok {
-				case LBRACK:
-					if p.index() == nil {
+				case PERIOD:
+					if p.typeAssertion() == nil {
 						goto _9
 					}
 				default:
 					goto _9
 				}
-				goto _7
+				break
 			_9:
+				goto _7
+			case LBRACK: // 1 2
 				switch p.c().tok {
 				case LBRACK:
-					if p.slice() == nil {
+					if p.index() == nil {
 						goto _10
 					}
 				default:
 					goto _10
 				}
-				goto _7
+				break
 			_10:
 				switch p.c().tok {
-				case PERIOD:
-					if p.typeAssertion() == nil {
+				case LBRACK:
+					if p.slice() == nil {
 						goto _11
 					}
 				default:
 					goto _11
 				}
-				goto _7
+				break
 			_11:
+				goto _7
+			case LPAREN: // 4
 				switch p.c().tok {
 				case LPAREN:
 					if p.arguments() == nil {
-						goto _12
+						goto _7
 					}
 				default:
-					goto _12
+					goto _7
 				}
+			default:
 				goto _7
-			_12:
-				goto _6
 			}
-		_7:
-			goto _5
+			goto _6
 		}
-	_6:
+	_7:
 	}
 	return &PrimaryExprPreBlockNode{}
 	goto _0
@@ -5526,9 +5448,9 @@ _0:
 }
 
 // QualifiedIdentNode represents
-
+//
 //	QualifiedIdent = PackageName "." identifier .
-type QualifiedIdentNode = struct{}
+type QualifiedIdentNode = struct{ noder }
 
 func (p *parser) qualifiedIdent() *QualifiedIdentNode {
 	ix := p.ix
@@ -5568,9 +5490,9 @@ _0:
 }
 
 // RangeClauseNode represents
-
+//
 //	RangeClause = [ ExpressionList "=" | IdentifierList ":=" ] "range" ExpressionPreBlock .
-type RangeClauseNode = struct{}
+type RangeClauseNode = struct{ noder }
 
 func (p *parser) rangeClause() *RangeClauseNode {
 	ix := p.ix
@@ -5580,12 +5502,9 @@ func (p *parser) rangeClause() *RangeClauseNode {
 		// *ebnf.Option: [ ExpressionList "=" | IdentifierList ":=" ]
 		switch p.c().tok {
 		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-			// false: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-			// false: IDENT
-			// single: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-			// multi: IDENT
 			// ebnf.Alternative: ExpressionList "=" | IdentifierList ":="
-			{
+			switch p.c().tok {
+			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR: // 0
 				// ebnf.Sequence: ExpressionList "="
 				{
 					ix := p.ix
@@ -5593,22 +5512,44 @@ func (p *parser) rangeClause() *RangeClauseNode {
 					case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 						if p.expressionList() == nil {
 							p.back(ix)
-							goto _3
+							goto _1
 						}
 					default:
 						p.back(ix)
-						goto _3
+						goto _1
 					}
 					if p.c().tok == ASSIGN {
 						p.ix++
 						p.budget--
 					} else {
 						p.back(ix)
-						goto _3
+						goto _1
 					}
 				}
-				goto _2
-			_3:
+			case IDENT: // 0 1
+				// ebnf.Sequence: ExpressionList "="
+				{
+					ix := p.ix
+					switch p.c().tok {
+					case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+						if p.expressionList() == nil {
+							p.back(ix)
+							goto _2
+						}
+					default:
+						p.back(ix)
+						goto _2
+					}
+					if p.c().tok == ASSIGN {
+						p.ix++
+						p.budget--
+					} else {
+						p.back(ix)
+						goto _2
+					}
+				}
+				break
+			_2:
 				// ebnf.Sequence: IdentifierList ":="
 				{
 					ix := p.ix
@@ -5616,25 +5557,26 @@ func (p *parser) rangeClause() *RangeClauseNode {
 					case IDENT:
 						if p.identifierList() == nil {
 							p.back(ix)
-							goto _4
+							goto _3
 						}
 					default:
 						p.back(ix)
-						goto _4
+						goto _3
 					}
 					if p.c().tok == DEFINE {
 						p.ix++
 						p.budget--
 					} else {
 						p.back(ix)
-						goto _4
+						goto _3
 					}
 				}
-				goto _2
-			_4:
+				break
+			_3:
+				goto _1
+			default:
 				goto _1
 			}
-		_2:
 		}
 	_1:
 		if p.c().tok == RANGE {
@@ -5663,9 +5605,9 @@ _0:
 }
 
 // ReceiverNode represents
-
+//
 //	Receiver = Parameters .
-type ReceiverNode = struct{}
+type ReceiverNode = struct{ noder }
 
 func (p *parser) receiver() *ReceiverNode {
 	ix := p.ix
@@ -5685,9 +5627,9 @@ _0:
 }
 
 // ReceiverTypeNode represents
-
+//
 //	ReceiverType = Type .
-type ReceiverTypeNode = struct{}
+type ReceiverTypeNode = struct{ noder }
 
 func (p *parser) receiverType() *ReceiverTypeNode {
 	ix := p.ix
@@ -5707,9 +5649,9 @@ _0:
 }
 
 // RecvExprNode represents
-
+//
 //	RecvExpr = Expression .
-type RecvExprNode = struct{}
+type RecvExprNode = struct{ noder }
 
 func (p *parser) recvExpr() *RecvExprNode {
 	ix := p.ix
@@ -5729,9 +5671,9 @@ _0:
 }
 
 // RecvStmtNode represents
-
+//
 //	RecvStmt = [ ExpressionList "=" | IdentifierList ":=" ] RecvExpr .
-type RecvStmtNode = struct{}
+type RecvStmtNode = struct{ noder }
 
 func (p *parser) recvStmt() *RecvStmtNode {
 	ix := p.ix
@@ -5741,12 +5683,9 @@ func (p *parser) recvStmt() *RecvStmtNode {
 		// *ebnf.Option: [ ExpressionList "=" | IdentifierList ":=" ]
 		switch p.c().tok {
 		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-			// false: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-			// false: IDENT
-			// single: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-			// multi: IDENT
 			// ebnf.Alternative: ExpressionList "=" | IdentifierList ":="
-			{
+			switch p.c().tok {
+			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR: // 0
 				// ebnf.Sequence: ExpressionList "="
 				{
 					ix := p.ix
@@ -5754,22 +5693,44 @@ func (p *parser) recvStmt() *RecvStmtNode {
 					case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 						if p.expressionList() == nil {
 							p.back(ix)
-							goto _3
+							goto _1
 						}
 					default:
 						p.back(ix)
-						goto _3
+						goto _1
 					}
 					if p.c().tok == ASSIGN {
 						p.ix++
 						p.budget--
 					} else {
 						p.back(ix)
-						goto _3
+						goto _1
 					}
 				}
-				goto _2
-			_3:
+			case IDENT: // 0 1
+				// ebnf.Sequence: ExpressionList "="
+				{
+					ix := p.ix
+					switch p.c().tok {
+					case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+						if p.expressionList() == nil {
+							p.back(ix)
+							goto _2
+						}
+					default:
+						p.back(ix)
+						goto _2
+					}
+					if p.c().tok == ASSIGN {
+						p.ix++
+						p.budget--
+					} else {
+						p.back(ix)
+						goto _2
+					}
+				}
+				break
+			_2:
 				// ebnf.Sequence: IdentifierList ":="
 				{
 					ix := p.ix
@@ -5777,25 +5738,26 @@ func (p *parser) recvStmt() *RecvStmtNode {
 					case IDENT:
 						if p.identifierList() == nil {
 							p.back(ix)
-							goto _4
+							goto _3
 						}
 					default:
 						p.back(ix)
-						goto _4
+						goto _3
 					}
 					if p.c().tok == DEFINE {
 						p.ix++
 						p.budget--
 					} else {
 						p.back(ix)
-						goto _4
+						goto _3
 					}
 				}
-				goto _2
-			_4:
+				break
+			_3:
+				goto _1
+			default:
 				goto _1
 			}
-		_2:
 		}
 	_1:
 		switch p.c().tok {
@@ -5817,73 +5779,59 @@ _0:
 }
 
 // RelOpNode represents
-
+//
 //	RelOp = "==" | "!=" | "<" | "<=" | ">" | ">=" .
-type RelOpNode = struct{}
+type RelOpNode = struct{ noder }
 
 func (p *parser) relOp() *RelOpNode {
 	ix := p.ix
-	// true: EQL
-	// true: NEQ
-	// true: LSS
-	// true: LEQ
-	// true: GTR
-	// true: GEQ
-	// single: EQL, GEQ, GTR, LEQ, LSS, NEQ
-	// multi:
 	// ebnf.Alternative: "==" | "!=" | "<" | "<=" | ">" | ">="
-	{
+	switch p.c().tok {
+	case EQL: // 0
 		if p.c().tok == EQL {
 			p.ix++
 			p.budget--
 		} else {
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case NEQ: // 1
 		if p.c().tok == NEQ {
 			p.ix++
 			p.budget--
 		} else {
-			goto _3
+			goto _0
 		}
-		goto _1
-	_3:
+	case LSS: // 2
 		if p.c().tok == LSS {
 			p.ix++
 			p.budget--
 		} else {
-			goto _4
+			goto _0
 		}
-		goto _1
-	_4:
+	case LEQ: // 3
 		if p.c().tok == LEQ {
 			p.ix++
 			p.budget--
 		} else {
-			goto _5
+			goto _0
 		}
-		goto _1
-	_5:
+	case GTR: // 4
 		if p.c().tok == GTR {
 			p.ix++
 			p.budget--
 		} else {
-			goto _6
+			goto _0
 		}
-		goto _1
-	_6:
+	case GEQ: // 5
 		if p.c().tok == GEQ {
 			p.ix++
 			p.budget--
 		} else {
-			goto _7
+			goto _0
 		}
-		goto _1
-	_7:
+	default:
 		goto _0
 	}
-_1:
 	return &RelOpNode{}
 	goto _0
 _0:
@@ -5892,9 +5840,9 @@ _0:
 }
 
 // RelationalExpressionNode represents
-
+//
 //	RelationalExpression = AdditiveExpression { RelOp AdditiveExpression } .
-type RelationalExpressionNode = struct{}
+type RelationalExpressionNode = struct{ noder }
 
 func (p *parser) relationalExpression() *RelationalExpressionNode {
 	ix := p.ix
@@ -5949,9 +5897,9 @@ _0:
 }
 
 // RelationalExpressionPreBlockNode represents
-
+//
 //	RelationalExpressionPreBlock = AdditiveExpressionPreBlock { RelOp AdditiveExpressionPreBlock } .
-type RelationalExpressionPreBlockNode = struct{}
+type RelationalExpressionPreBlockNode = struct{ noder }
 
 func (p *parser) relationalExpressionPreBlock() *RelationalExpressionPreBlockNode {
 	ix := p.ix
@@ -6006,41 +5954,48 @@ _0:
 }
 
 // ResultNode represents
-
+//
 //	Result = Parameters | Type .
-type ResultNode = struct{}
+type ResultNode = struct{ noder }
 
 func (p *parser) result() *ResultNode {
 	ix := p.ix
-	// false: LPAREN
-	// false: ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
-	// single: ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, MAP, MUL, STRUCT
-	// multi: LPAREN
 	// ebnf.Alternative: Parameters | Type
-	{
+	switch p.c().tok {
+	case LPAREN: // 0 1
 		switch p.c().tok {
 		case LPAREN:
 			if p.parameters() == nil {
+				goto _1
+			}
+		default:
+			goto _1
+		}
+		break
+	_1:
+		switch p.c().tok {
+		case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+			if p.type1() == nil {
 				goto _2
 			}
 		default:
 			goto _2
 		}
-		goto _1
+		break
 	_2:
+		goto _0
+	case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, MAP, MUL, STRUCT: // 1
 		switch p.c().tok {
 		case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 			if p.type1() == nil {
-				goto _3
+				goto _0
 			}
 		default:
-			goto _3
+			goto _0
 		}
-		goto _1
-	_3:
+	default:
 		goto _0
 	}
-_1:
 	return &ResultNode{}
 	goto _0
 _0:
@@ -6049,9 +6004,9 @@ _0:
 }
 
 // ReturnStmtNode represents
-
+//
 //	ReturnStmt = "return" [ ExpressionList ] .
-type ReturnStmtNode = struct{}
+type ReturnStmtNode = struct{ noder }
 
 func (p *parser) returnStmt() *ReturnStmtNode {
 	ix := p.ix
@@ -6087,9 +6042,9 @@ _0:
 }
 
 // SelectStmtNode represents
-
+//
 //	SelectStmt = "select" "{" { CommClause } "}" .
-type SelectStmtNode = struct{}
+type SelectStmtNode = struct{ noder }
 
 func (p *parser) selectStmt() *SelectStmtNode {
 	ix := p.ix
@@ -6141,9 +6096,9 @@ _0:
 }
 
 // SelectorNode represents
-
+//
 //	Selector = "." identifier .
-type SelectorNode = struct{}
+type SelectorNode = struct{ noder }
 
 func (p *parser) selector() *SelectorNode {
 	ix := p.ix
@@ -6173,9 +6128,9 @@ _0:
 }
 
 // SendStmtNode represents
-
+//
 //	SendStmt = Channel "<-" Expression .
-type SendStmtNode = struct{}
+type SendStmtNode = struct{ noder }
 
 func (p *parser) sendStmt() *SendStmtNode {
 	ix := p.ix
@@ -6218,9 +6173,9 @@ _0:
 }
 
 // SendStmtPreBlockNode represents
-
+//
 //	SendStmtPreBlock = Channel "<-" ExpressionPreBlock .
-type SendStmtPreBlockNode = struct{}
+type SendStmtPreBlockNode = struct{ noder }
 
 func (p *parser) sendStmtPreBlock() *SendStmtPreBlockNode {
 	ix := p.ix
@@ -6263,9 +6218,9 @@ _0:
 }
 
 // ShortVarDeclNode represents
-
+//
 //	ShortVarDecl = IdentifierList ":=" ExpressionList .
-type ShortVarDeclNode = struct{}
+type ShortVarDeclNode = struct{ noder }
 
 func (p *parser) shortVarDecl() *ShortVarDeclNode {
 	ix := p.ix
@@ -6308,9 +6263,9 @@ _0:
 }
 
 // ShortVarDeclPreBlockNode represents
-
+//
 //	ShortVarDeclPreBlock = IdentifierList ":=" ExpressionListPreBlock .
-type ShortVarDeclPreBlockNode = struct{}
+type ShortVarDeclPreBlockNode = struct{ noder }
 
 func (p *parser) shortVarDeclPreBlock() *ShortVarDeclPreBlockNode {
 	ix := p.ix
@@ -6353,9 +6308,9 @@ _0:
 }
 
 // SignatureNode represents
-
+//
 //	Signature = Parameters [ Result ] .
-type SignatureNode = struct{}
+type SignatureNode = struct{ noder }
 
 func (p *parser) signature() *SignatureNode {
 	ix := p.ix
@@ -6394,80 +6349,113 @@ _0:
 }
 
 // SimpleStmtNode represents
-
+//
 //	SimpleStmt = Assignment | ShortVarDecl | IncDecStmt | SendStmt | ExpressionStmt | EmptyStmt .
-type SimpleStmtNode = struct{}
+type SimpleStmtNode = struct{ noder }
 
 func (p *parser) simpleStmt() *SimpleStmtNode {
 	ix := p.ix
-	// false: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-	// false: IDENT
-	// false: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-	// false: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-	// false: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-	// true:  /* ε */
-	// single:  /* ε */
-	// multi: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
 	// ebnf.Alternative: Assignment | ShortVarDecl | IncDecStmt | SendStmt | ExpressionStmt | EmptyStmt
-	{
+	switch p.c().tok {
+	case IDENT: // 0 1 2 3 4
 		switch p.c().tok {
 		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 			if p.assignment() == nil {
+				goto _1
+			}
+		default:
+			goto _1
+		}
+		break
+	_1:
+		switch p.c().tok {
+		case IDENT:
+			if p.shortVarDecl() == nil {
 				goto _2
 			}
 		default:
 			goto _2
 		}
-		goto _1
+		break
 	_2:
 		switch p.c().tok {
-		case IDENT:
-			if p.shortVarDecl() == nil {
+		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+			if p.incDecStmt() == nil {
 				goto _3
 			}
 		default:
 			goto _3
 		}
-		goto _1
+		break
 	_3:
 		switch p.c().tok {
 		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-			if p.incDecStmt() == nil {
+			if p.sendStmt() == nil {
 				goto _4
 			}
 		default:
 			goto _4
 		}
-		goto _1
+		break
 	_4:
 		switch p.c().tok {
 		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-			if p.sendStmt() == nil {
+			if p.expressionStmt() == nil {
 				goto _5
 			}
 		default:
 			goto _5
 		}
-		goto _1
+		break
 	_5:
+		goto _0
+	case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR: // 0 2 3 4
 		switch p.c().tok {
 		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-			if p.expressionStmt() == nil {
+			if p.assignment() == nil {
 				goto _6
 			}
 		default:
 			goto _6
 		}
-		goto _1
+		break
 	_6:
-		if p.emptyStmt() == nil {
+		switch p.c().tok {
+		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+			if p.incDecStmt() == nil {
+				goto _7
+			}
+		default:
 			goto _7
 		}
-		goto _1
+		break
 	_7:
+		switch p.c().tok {
+		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+			if p.sendStmt() == nil {
+				goto _8
+			}
+		default:
+			goto _8
+		}
+		break
+	_8:
+		switch p.c().tok {
+		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+			if p.expressionStmt() == nil {
+				goto _9
+			}
+		default:
+			goto _9
+		}
+		break
+	_9:
 		goto _0
+	default: //  /* ε */ 5
+		if p.emptyStmt() == nil {
+			goto _0
+		}
 	}
-_1:
 	return &SimpleStmtNode{}
 	goto _0
 _0:
@@ -6476,80 +6464,113 @@ _0:
 }
 
 // SimpleStmtPreBlockNode represents
-
+//
 //	SimpleStmtPreBlock = AssignmentPreBlock | ShortVarDeclPreBlock | IncDecStmt | SendStmtPreBlock | ExpressionStmtPreBlock | EmptyStmt .
-type SimpleStmtPreBlockNode = struct{}
+type SimpleStmtPreBlockNode = struct{ noder }
 
 func (p *parser) simpleStmtPreBlock() *SimpleStmtPreBlockNode {
 	ix := p.ix
-	// false: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-	// false: IDENT
-	// false: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-	// false: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-	// false: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-	// true:  /* ε */
-	// single:  /* ε */
-	// multi: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
 	// ebnf.Alternative: AssignmentPreBlock | ShortVarDeclPreBlock | IncDecStmt | SendStmtPreBlock | ExpressionStmtPreBlock | EmptyStmt
-	{
+	switch p.c().tok {
+	case IDENT: // 0 1 2 3 4
 		switch p.c().tok {
 		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 			if p.assignmentPreBlock() == nil {
+				goto _1
+			}
+		default:
+			goto _1
+		}
+		break
+	_1:
+		switch p.c().tok {
+		case IDENT:
+			if p.shortVarDeclPreBlock() == nil {
 				goto _2
 			}
 		default:
 			goto _2
 		}
-		goto _1
+		break
 	_2:
 		switch p.c().tok {
-		case IDENT:
-			if p.shortVarDeclPreBlock() == nil {
+		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+			if p.incDecStmt() == nil {
 				goto _3
 			}
 		default:
 			goto _3
 		}
-		goto _1
+		break
 	_3:
 		switch p.c().tok {
 		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-			if p.incDecStmt() == nil {
+			if p.sendStmtPreBlock() == nil {
 				goto _4
 			}
 		default:
 			goto _4
 		}
-		goto _1
+		break
 	_4:
 		switch p.c().tok {
 		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-			if p.sendStmtPreBlock() == nil {
+			if p.expressionStmtPreBlock() == nil {
 				goto _5
 			}
 		default:
 			goto _5
 		}
-		goto _1
+		break
 	_5:
+		goto _0
+	case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR: // 0 2 3 4
 		switch p.c().tok {
 		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-			if p.expressionStmtPreBlock() == nil {
+			if p.assignmentPreBlock() == nil {
 				goto _6
 			}
 		default:
 			goto _6
 		}
-		goto _1
+		break
 	_6:
-		if p.emptyStmt() == nil {
+		switch p.c().tok {
+		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+			if p.incDecStmt() == nil {
+				goto _7
+			}
+		default:
 			goto _7
 		}
-		goto _1
+		break
 	_7:
+		switch p.c().tok {
+		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+			if p.sendStmtPreBlock() == nil {
+				goto _8
+			}
+		default:
+			goto _8
+		}
+		break
+	_8:
+		switch p.c().tok {
+		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+			if p.expressionStmtPreBlock() == nil {
+				goto _9
+			}
+		default:
+			goto _9
+		}
+		break
+	_9:
 		goto _0
+	default: //  /* ε */ 5
+		if p.emptyStmt() == nil {
+			goto _0
+		}
 	}
-_1:
 	return &SimpleStmtPreBlockNode{}
 	goto _0
 _0:
@@ -6558,18 +6579,15 @@ _0:
 }
 
 // SliceNode represents
-
+//
 //	Slice = "[" [ Expression ] ":" [ Expression ] "]" | "[" [ Expression ] ":" Expression ":" Expression "]" .
-type SliceNode = struct{}
+type SliceNode = struct{ noder }
 
 func (p *parser) slice() *SliceNode {
 	ix := p.ix
-	// false: LBRACK
-	// false: LBRACK
-	// single:
-	// multi: LBRACK
 	// ebnf.Alternative: "[" [ Expression ] ":" [ Expression ] "]" | "[" [ Expression ] ":" Expression ":" Expression "]"
-	{
+	switch p.c().tok {
+	case LBRACK: // 0 1
 		// ebnf.Sequence: "[" [ Expression ] ":" [ Expression ] "]"
 		{
 			ix := p.ix
@@ -6578,7 +6596,27 @@ func (p *parser) slice() *SliceNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _2
+				goto _1
+			}
+			// *ebnf.Option: [ Expression ]
+			switch p.c().tok {
+			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+				switch p.c().tok {
+				case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+					if p.expression() == nil {
+						goto _2
+					}
+				default:
+					goto _2
+				}
+			}
+		_2:
+			if p.c().tok == COLON {
+				p.ix++
+				p.budget--
+			} else {
+				p.back(ix)
+				goto _1
 			}
 			// *ebnf.Option: [ Expression ]
 			switch p.c().tok {
@@ -6593,36 +6631,16 @@ func (p *parser) slice() *SliceNode {
 				}
 			}
 		_3:
-			if p.c().tok == COLON {
-				p.ix++
-				p.budget--
-			} else {
-				p.back(ix)
-				goto _2
-			}
-			// *ebnf.Option: [ Expression ]
-			switch p.c().tok {
-			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-				switch p.c().tok {
-				case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-					if p.expression() == nil {
-						goto _4
-					}
-				default:
-					goto _4
-				}
-			}
-		_4:
 			if p.c().tok == RBRACK {
 				p.ix++
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _2
+				goto _1
 			}
 		}
-		goto _1
-	_2:
+		break
+	_1:
 		// ebnf.Sequence: "[" [ Expression ] ":" Expression ":" Expression "]"
 		{
 			ix := p.ix
@@ -6631,7 +6649,7 @@ func (p *parser) slice() *SliceNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _5
+				goto _4
 			}
 			// *ebnf.Option: [ Expression ]
 			switch p.c().tok {
@@ -6639,60 +6657,61 @@ func (p *parser) slice() *SliceNode {
 				switch p.c().tok {
 				case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 					if p.expression() == nil {
-						goto _6
+						goto _5
 					}
 				default:
-					goto _6
+					goto _5
 				}
 			}
-		_6:
+		_5:
 			if p.c().tok == COLON {
 				p.ix++
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _5
+				goto _4
 			}
 			switch p.c().tok {
 			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 				if p.expression() == nil {
 					p.back(ix)
-					goto _5
+					goto _4
 				}
 			default:
 				p.back(ix)
-				goto _5
+				goto _4
 			}
 			if p.c().tok == COLON {
 				p.ix++
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _5
+				goto _4
 			}
 			switch p.c().tok {
 			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 				if p.expression() == nil {
 					p.back(ix)
-					goto _5
+					goto _4
 				}
 			default:
 				p.back(ix)
-				goto _5
+				goto _4
 			}
 			if p.c().tok == RBRACK {
 				p.ix++
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _5
+				goto _4
 			}
 		}
-		goto _1
-	_5:
+		break
+	_4:
+		goto _0
+	default:
 		goto _0
 	}
-_1:
 	return &SliceNode{}
 	goto _0
 _0:
@@ -6701,9 +6720,9 @@ _0:
 }
 
 // SliceTypeNode represents
-
+//
 //	SliceType = "[" "]" ElementType .
-type SliceTypeNode = struct{}
+type SliceTypeNode = struct{ noder }
 
 func (p *parser) sliceType() *SliceTypeNode {
 	ix := p.ix
@@ -6743,9 +6762,9 @@ _0:
 }
 
 // SourceFileNode represents
-
+//
 //	SourceFile = PackageClause ";" { ImportDecl ";" } { TopLevelDecl ";" } .
-type SourceFileNode = struct{}
+type SourceFileNode = struct{ noder }
 
 func (p *parser) sourceFile() *SourceFileNode {
 	ix := p.ix
@@ -6830,182 +6849,159 @@ _0:
 }
 
 // StatementNode represents
-
+//
 //	Statement = Declaration | LabeledStmt | GoStmt | ReturnStmt | BreakStmt | ContinueStmt | GotoStmt | FallthroughStmt | Block | IfStmt | SwitchStmt | SelectStmt | ForStmt | DeferStmt | SimpleStmt .
-type StatementNode = struct{}
+type StatementNode = struct{ noder }
 
 func (p *parser) statement() *StatementNode {
 	ix := p.ix
-	// true: CONST, TYPE, VAR
-	// false: IDENT
-	// true: GO
-	// true: RETURN
-	// true: BREAK
-	// true: CONTINUE
-	// true: GOTO
-	// true: FALLTHROUGH
-	// true: LBRACE
-	// true: IF
-	// true: SWITCH
-	// true: SELECT
-	// true: FOR
-	// true: DEFER
-	// false: ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR /* ε */
-	// single: ADD, AND, ARROW, BREAK, CHAN, CHAR, CONST, CONTINUE, DEFER, FALLTHROUGH, FLOAT, FOR, FUNC, GO, GOTO, IF, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, RETURN, SELECT, STRING, STRUCT, SUB, SWITCH, TYPE, VAR, XOR /* ε */
-	// multi: IDENT
 	// ebnf.Alternative: Declaration | LabeledStmt | GoStmt | ReturnStmt | BreakStmt | ContinueStmt | GotoStmt | FallthroughStmt | Block | IfStmt | SwitchStmt | SelectStmt | ForStmt | DeferStmt | SimpleStmt
-	{
+	switch p.c().tok {
+	case CONST, TYPE, VAR: // 0
 		switch p.c().tok {
 		case CONST, TYPE, VAR:
 			if p.declaration() == nil {
-				goto _2
+				goto _0
 			}
 		default:
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case IDENT: // 1 14
 		switch p.c().tok {
 		case IDENT:
 			if p.labeledStmt() == nil {
-				goto _3
+				goto _1
 			}
 		default:
-			goto _3
+			goto _1
 		}
-		goto _1
-	_3:
-		switch p.c().tok {
-		case GO:
-			if p.goStmt() == nil {
-				goto _4
-			}
-		default:
-			goto _4
-		}
-		goto _1
-	_4:
-		switch p.c().tok {
-		case RETURN:
-			if p.returnStmt() == nil {
-				goto _5
-			}
-		default:
-			goto _5
-		}
-		goto _1
-	_5:
-		switch p.c().tok {
-		case BREAK:
-			if p.breakStmt() == nil {
-				goto _6
-			}
-		default:
-			goto _6
-		}
-		goto _1
-	_6:
-		switch p.c().tok {
-		case CONTINUE:
-			if p.continueStmt() == nil {
-				goto _7
-			}
-		default:
-			goto _7
-		}
-		goto _1
-	_7:
-		switch p.c().tok {
-		case GOTO:
-			if p.gotoStmt() == nil {
-				goto _8
-			}
-		default:
-			goto _8
-		}
-		goto _1
-	_8:
-		switch p.c().tok {
-		case FALLTHROUGH:
-			if p.fallthroughStmt() == nil {
-				goto _9
-			}
-		default:
-			goto _9
-		}
-		goto _1
-	_9:
-		switch p.c().tok {
-		case LBRACE:
-			if p.block() == nil {
-				goto _10
-			}
-		default:
-			goto _10
-		}
-		goto _1
-	_10:
-		switch p.c().tok {
-		case IF:
-			if p.ifStmt() == nil {
-				goto _11
-			}
-		default:
-			goto _11
-		}
-		goto _1
-	_11:
-		switch p.c().tok {
-		case SWITCH:
-			if p.switchStmt() == nil {
-				goto _12
-			}
-		default:
-			goto _12
-		}
-		goto _1
-	_12:
-		switch p.c().tok {
-		case SELECT:
-			if p.selectStmt() == nil {
-				goto _13
-			}
-		default:
-			goto _13
-		}
-		goto _1
-	_13:
-		switch p.c().tok {
-		case FOR:
-			if p.forStmt() == nil {
-				goto _14
-			}
-		default:
-			goto _14
-		}
-		goto _1
-	_14:
-		switch p.c().tok {
-		case DEFER:
-			if p.deferStmt() == nil {
-				goto _15
-			}
-		default:
-			goto _15
-		}
-		goto _1
-	_15:
+		break
+	_1:
 		switch p.c().tok {
 		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR /* ε */ :
 			if p.simpleStmt() == nil {
-				goto _16
+				goto _2
 			}
 		}
-		goto _1
-	_16:
+		break
+	_2:
 		goto _0
+	case GO: // 2
+		switch p.c().tok {
+		case GO:
+			if p.goStmt() == nil {
+				goto _0
+			}
+		default:
+			goto _0
+		}
+	case RETURN: // 3
+		switch p.c().tok {
+		case RETURN:
+			if p.returnStmt() == nil {
+				goto _0
+			}
+		default:
+			goto _0
+		}
+	case BREAK: // 4
+		switch p.c().tok {
+		case BREAK:
+			if p.breakStmt() == nil {
+				goto _0
+			}
+		default:
+			goto _0
+		}
+	case CONTINUE: // 5
+		switch p.c().tok {
+		case CONTINUE:
+			if p.continueStmt() == nil {
+				goto _0
+			}
+		default:
+			goto _0
+		}
+	case GOTO: // 6
+		switch p.c().tok {
+		case GOTO:
+			if p.gotoStmt() == nil {
+				goto _0
+			}
+		default:
+			goto _0
+		}
+	case FALLTHROUGH: // 7
+		switch p.c().tok {
+		case FALLTHROUGH:
+			if p.fallthroughStmt() == nil {
+				goto _0
+			}
+		default:
+			goto _0
+		}
+	case LBRACE: // 8
+		switch p.c().tok {
+		case LBRACE:
+			if p.block() == nil {
+				goto _0
+			}
+		default:
+			goto _0
+		}
+	case IF: // 9
+		switch p.c().tok {
+		case IF:
+			if p.ifStmt() == nil {
+				goto _0
+			}
+		default:
+			goto _0
+		}
+	case SWITCH: // 10
+		switch p.c().tok {
+		case SWITCH:
+			if p.switchStmt() == nil {
+				goto _0
+			}
+		default:
+			goto _0
+		}
+	case SELECT: // 11
+		switch p.c().tok {
+		case SELECT:
+			if p.selectStmt() == nil {
+				goto _0
+			}
+		default:
+			goto _0
+		}
+	case FOR: // 12
+		switch p.c().tok {
+		case FOR:
+			if p.forStmt() == nil {
+				goto _0
+			}
+		default:
+			goto _0
+		}
+	case DEFER: // 13
+		switch p.c().tok {
+		case DEFER:
+			if p.deferStmt() == nil {
+				goto _0
+			}
+		default:
+			goto _0
+		}
+	case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR /* ε */ : // 14
+		switch p.c().tok {
+		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR /* ε */ :
+			if p.simpleStmt() == nil {
+				goto _0
+			}
+		}
 	}
-_1:
 	return &StatementNode{}
 	goto _0
 _0:
@@ -7014,9 +7010,9 @@ _0:
 }
 
 // StatementListNode represents
-
+//
 //	StatementList = [ Statement { ";" Statement } [ ";" ] ] .
-type StatementListNode = struct{}
+type StatementListNode = struct{ noder }
 
 func (p *parser) statementList() *StatementListNode {
 	ix := p.ix
@@ -7078,9 +7074,9 @@ _0:
 }
 
 // StructTypeNode represents
-
+//
 //	StructType = "struct" "{" [ FieldDecl { ";" FieldDecl } [ ";" ] ] "}" .
-type StructTypeNode = struct{}
+type StructTypeNode = struct{ noder }
 
 func (p *parser) structType() *StructTypeNode {
 	ix := p.ix
@@ -7173,41 +7169,39 @@ _0:
 }
 
 // SwitchStmtNode represents
-
+//
 //	SwitchStmt = ExprSwitchStmt | TypeSwitchStmt .
-type SwitchStmtNode = struct{}
+type SwitchStmtNode = struct{ noder }
 
 func (p *parser) switchStmt() *SwitchStmtNode {
 	ix := p.ix
-	// false: SWITCH
-	// false: SWITCH
-	// single:
-	// multi: SWITCH
 	// ebnf.Alternative: ExprSwitchStmt | TypeSwitchStmt
-	{
+	switch p.c().tok {
+	case SWITCH: // 0 1
 		switch p.c().tok {
 		case SWITCH:
 			if p.exprSwitchStmt() == nil {
+				goto _1
+			}
+		default:
+			goto _1
+		}
+		break
+	_1:
+		switch p.c().tok {
+		case SWITCH:
+			if p.typeSwitchStmt() == nil {
 				goto _2
 			}
 		default:
 			goto _2
 		}
-		goto _1
+		break
 	_2:
-		switch p.c().tok {
-		case SWITCH:
-			if p.typeSwitchStmt() == nil {
-				goto _3
-			}
-		default:
-			goto _3
-		}
-		goto _1
-	_3:
+		goto _0
+	default:
 		goto _0
 	}
-_1:
 	return &SwitchStmtNode{}
 	goto _0
 _0:
@@ -7216,9 +7210,9 @@ _0:
 }
 
 // TagNode represents
-
+//
 //	Tag = string_lit .
-type TagNode = struct{}
+type TagNode = struct{ noder }
 
 func (p *parser) tag() *TagNode {
 	ix := p.ix
@@ -7236,52 +7230,48 @@ _0:
 }
 
 // TopLevelDeclNode represents
-
+//
 //	TopLevelDecl = Declaration | FunctionDecl | MethodDecl .
-type TopLevelDeclNode = struct{}
+type TopLevelDeclNode = struct{ noder }
 
 func (p *parser) topLevelDecl() *TopLevelDeclNode {
 	ix := p.ix
-	// true: CONST, TYPE, VAR
-	// false: FUNC
-	// false: FUNC
-	// single: CONST, TYPE, VAR
-	// multi: FUNC
 	// ebnf.Alternative: Declaration | FunctionDecl | MethodDecl
-	{
+	switch p.c().tok {
+	case CONST, TYPE, VAR: // 0
 		switch p.c().tok {
 		case CONST, TYPE, VAR:
 			if p.declaration() == nil {
+				goto _0
+			}
+		default:
+			goto _0
+		}
+	case FUNC: // 1 2
+		switch p.c().tok {
+		case FUNC:
+			if p.functionDecl() == nil {
+				goto _1
+			}
+		default:
+			goto _1
+		}
+		break
+	_1:
+		switch p.c().tok {
+		case FUNC:
+			if p.methodDecl() == nil {
 				goto _2
 			}
 		default:
 			goto _2
 		}
-		goto _1
+		break
 	_2:
-		switch p.c().tok {
-		case FUNC:
-			if p.functionDecl() == nil {
-				goto _3
-			}
-		default:
-			goto _3
-		}
-		goto _1
-	_3:
-		switch p.c().tok {
-		case FUNC:
-			if p.methodDecl() == nil {
-				goto _4
-			}
-		default:
-			goto _4
-		}
-		goto _1
-	_4:
+		goto _0
+	default:
 		goto _0
 	}
-_1:
 	return &TopLevelDeclNode{}
 	goto _0
 _0:
@@ -7290,19 +7280,15 @@ _0:
 }
 
 // TypeNode represents
-
+//
 //	Type = TypeName [ TypeArgs ] | TypeLit | "(" Type ")" .
-type TypeNode = struct{}
+type TypeNode = struct{ noder }
 
 func (p *parser) type1() *TypeNode {
 	ix := p.ix
-	// true: IDENT
-	// true: ARROW, CHAN, FUNC, INTERFACE, LBRACK, MAP, MUL, STRUCT
-	// true: LPAREN
-	// single: ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
-	// multi:
 	// ebnf.Alternative: TypeName [ TypeArgs ] | TypeLit | "(" Type ")"
-	{
+	switch p.c().tok {
+	case IDENT: // 0
 		// ebnf.Sequence: TypeName [ TypeArgs ]
 		{
 			ix := p.ix
@@ -7310,11 +7296,11 @@ func (p *parser) type1() *TypeNode {
 			case IDENT:
 				if p.typeName() == nil {
 					p.back(ix)
-					goto _2
+					goto _0
 				}
 			default:
 				p.back(ix)
-				goto _2
+				goto _0
 			}
 			// *ebnf.Option: [ TypeArgs ]
 			switch p.c().tok {
@@ -7322,26 +7308,24 @@ func (p *parser) type1() *TypeNode {
 				switch p.c().tok {
 				case LBRACK:
 					if p.typeArgs() == nil {
-						goto _3
+						goto _1
 					}
 				default:
-					goto _3
+					goto _1
 				}
 			}
-		_3:
+		_1:
 		}
-		goto _1
-	_2:
+	case ARROW, CHAN, FUNC, INTERFACE, LBRACK, MAP, MUL, STRUCT: // 1
 		switch p.c().tok {
 		case ARROW, CHAN, FUNC, INTERFACE, LBRACK, MAP, MUL, STRUCT:
 			if p.typeLit() == nil {
-				goto _4
+				goto _0
 			}
 		default:
-			goto _4
+			goto _0
 		}
-		goto _1
-	_4:
+	case LPAREN: // 2
 		// ebnf.Sequence: "(" Type ")"
 		{
 			ix := p.ix
@@ -7350,31 +7334,29 @@ func (p *parser) type1() *TypeNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _5
+				goto _0
 			}
 			switch p.c().tok {
 			case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 				if p.type1() == nil {
 					p.back(ix)
-					goto _5
+					goto _0
 				}
 			default:
 				p.back(ix)
-				goto _5
+				goto _0
 			}
 			if p.c().tok == RPAREN {
 				p.ix++
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _5
+				goto _0
 			}
 		}
-		goto _1
-	_5:
+	default:
 		goto _0
 	}
-_1:
 	return &TypeNode{}
 	goto _0
 _0:
@@ -7383,9 +7365,9 @@ _0:
 }
 
 // TypeArgsNode represents
-
+//
 //	TypeArgs = "[" TypeList [ "," ] "]" .
-type TypeArgsNode = struct{}
+type TypeArgsNode = struct{ noder }
 
 func (p *parser) typeArgs() *TypeArgsNode {
 	ix := p.ix
@@ -7436,9 +7418,9 @@ _0:
 }
 
 // TypeAssertionNode represents
-
+//
 //	TypeAssertion = "." "(" Type ")" .
-type TypeAssertionNode = struct{}
+type TypeAssertionNode = struct{ noder }
 
 func (p *parser) typeAssertion() *TypeAssertionNode {
 	ix := p.ix
@@ -7485,9 +7467,9 @@ _0:
 }
 
 // TypeCaseClauseNode represents
-
+//
 //	TypeCaseClause = TypeSwitchCase ":" StatementList .
-type TypeCaseClauseNode = struct{}
+type TypeCaseClauseNode = struct{ noder }
 
 func (p *parser) typeCaseClause() *TypeCaseClauseNode {
 	ix := p.ix
@@ -7527,9 +7509,9 @@ _0:
 }
 
 // TypeConstraintNode represents
-
+//
 //	TypeConstraint = TypeElem .
-type TypeConstraintNode = struct{}
+type TypeConstraintNode = struct{ noder }
 
 func (p *parser) typeConstraint() *TypeConstraintNode {
 	ix := p.ix
@@ -7549,9 +7531,9 @@ _0:
 }
 
 // TypeDeclNode represents
-
+//
 //	TypeDecl = "type" ( TypeSpec | "(" [ TypeSpec { ";" TypeSpec } [ ";" ] ] ")" ) .
-type TypeDeclNode = struct{}
+type TypeDeclNode = struct{ noder }
 
 func (p *parser) typeDecl() *TypeDeclNode {
 	ix := p.ix
@@ -7568,22 +7550,20 @@ func (p *parser) typeDecl() *TypeDeclNode {
 		// *ebnf.Group: ( TypeSpec | "(" [ TypeSpec { ";" TypeSpec } [ ";" ] ] ")" )
 		switch p.c().tok {
 		case IDENT, LPAREN:
-			// true: IDENT
-			// true: LPAREN
-			// single: IDENT, LPAREN
-			// multi:
 			// ebnf.Alternative: TypeSpec | "(" [ TypeSpec { ";" TypeSpec } [ ";" ] ] ")"
-			{
+			switch p.c().tok {
+			case IDENT: // 0
 				switch p.c().tok {
 				case IDENT:
 					if p.typeSpec() == nil {
-						goto _2
+						p.back(ix)
+						goto _0
 					}
 				default:
-					goto _2
+					p.back(ix)
+					goto _0
 				}
-				goto _1
-			_2:
+			case LPAREN: // 1
 				// ebnf.Sequence: "(" [ TypeSpec { ";" TypeSpec } [ ";" ] ] ")"
 				{
 					ix := p.ix
@@ -7592,7 +7572,8 @@ func (p *parser) typeDecl() *TypeDeclNode {
 						p.budget--
 					} else {
 						p.back(ix)
-						goto _3
+						p.back(ix)
+						goto _0
 					}
 					// *ebnf.Option: [ TypeSpec { ";" TypeSpec } [ ";" ] ]
 					switch p.c().tok {
@@ -7604,13 +7585,13 @@ func (p *parser) typeDecl() *TypeDeclNode {
 							case IDENT:
 								if p.typeSpec() == nil {
 									p.back(ix)
-									goto _4
+									goto _1
 								}
 							default:
 								p.back(ix)
-								goto _4
+								goto _1
 							}
-						_5:
+						_2:
 							// *ebnf.Repetition: { ";" TypeSpec }
 							switch p.c().tok {
 							case SEMICOLON:
@@ -7621,21 +7602,21 @@ func (p *parser) typeDecl() *TypeDeclNode {
 									p.budget--
 								} else {
 									p.back(ix)
-									goto _6
+									goto _3
 								}
 								switch p.c().tok {
 								case IDENT:
 									if p.typeSpec() == nil {
 										p.back(ix)
-										goto _6
+										goto _3
 									}
 								default:
 									p.back(ix)
-									goto _6
+									goto _3
 								}
-								goto _5
+								goto _2
 							}
-						_6:
+						_3:
 							// *ebnf.Option: [ ";" ]
 							switch p.c().tok {
 							case SEMICOLON:
@@ -7643,28 +7624,26 @@ func (p *parser) typeDecl() *TypeDeclNode {
 									p.ix++
 									p.budget--
 								} else {
-									goto _7
+									goto _4
 								}
 							}
-						_7:
+						_4:
 						}
 					}
-				_4:
+				_1:
 					if p.c().tok == RPAREN {
 						p.ix++
 						p.budget--
 					} else {
 						p.back(ix)
-						goto _3
+						p.back(ix)
+						goto _0
 					}
 				}
-				goto _1
-			_3:
+			default:
 				p.back(ix)
 				goto _0
 			}
-		_1:
-			;
 		default:
 			p.back(ix)
 			goto _0
@@ -7678,9 +7657,9 @@ _0:
 }
 
 // TypeDefNode represents
-
+//
 //	TypeDef = identifier [ TypeParameters ] Type .
-type TypeDefNode = struct{}
+type TypeDefNode = struct{ noder }
 
 func (p *parser) typeDef() *TypeDefNode {
 	ix := p.ix
@@ -7726,9 +7705,9 @@ _0:
 }
 
 // TypeElemNode represents
-
+//
 //	TypeElem = TypeTerm { "|" TypeTerm } .
-type TypeElemNode = struct{}
+type TypeElemNode = struct{ noder }
 
 func (p *parser) typeElem() *TypeElemNode {
 	ix := p.ix
@@ -7780,9 +7759,9 @@ _0:
 }
 
 // TypeListNode represents
-
+//
 //	TypeList = Type { "," Type } .
-type TypeListNode = struct{}
+type TypeListNode = struct{ noder }
 
 func (p *parser) typeList() *TypeListNode {
 	ix := p.ix
@@ -7834,107 +7813,93 @@ _0:
 }
 
 // TypeLitNode represents
-
+//
 //	TypeLit = ArrayType | StructType | PointerType | FunctionType | InterfaceType | SliceType | MapType | ChannelType .
-type TypeLitNode = struct{}
+type TypeLitNode = struct{ noder }
 
 func (p *parser) typeLit() *TypeLitNode {
 	ix := p.ix
-	// false: LBRACK
-	// true: STRUCT
-	// true: MUL
-	// true: FUNC
-	// true: INTERFACE
-	// false: LBRACK
-	// true: MAP
-	// true: ARROW, CHAN
-	// single: ARROW, CHAN, FUNC, INTERFACE, MAP, MUL, STRUCT
-	// multi: LBRACK
 	// ebnf.Alternative: ArrayType | StructType | PointerType | FunctionType | InterfaceType | SliceType | MapType | ChannelType
-	{
+	switch p.c().tok {
+	case LBRACK: // 0 5
 		switch p.c().tok {
 		case LBRACK:
 			if p.arrayType() == nil {
+				goto _1
+			}
+		default:
+			goto _1
+		}
+		break
+	_1:
+		switch p.c().tok {
+		case LBRACK:
+			if p.sliceType() == nil {
 				goto _2
 			}
 		default:
 			goto _2
 		}
-		goto _1
+		break
 	_2:
+		goto _0
+	case STRUCT: // 1
 		switch p.c().tok {
 		case STRUCT:
 			if p.structType() == nil {
-				goto _3
+				goto _0
 			}
 		default:
-			goto _3
+			goto _0
 		}
-		goto _1
-	_3:
+	case MUL: // 2
 		switch p.c().tok {
 		case MUL:
 			if p.pointerType() == nil {
-				goto _4
+				goto _0
 			}
 		default:
-			goto _4
+			goto _0
 		}
-		goto _1
-	_4:
+	case FUNC: // 3
 		switch p.c().tok {
 		case FUNC:
 			if p.functionType() == nil {
-				goto _5
+				goto _0
 			}
 		default:
-			goto _5
+			goto _0
 		}
-		goto _1
-	_5:
+	case INTERFACE: // 4
 		switch p.c().tok {
 		case INTERFACE:
 			if p.interfaceType() == nil {
-				goto _6
+				goto _0
 			}
 		default:
-			goto _6
+			goto _0
 		}
-		goto _1
-	_6:
-		switch p.c().tok {
-		case LBRACK:
-			if p.sliceType() == nil {
-				goto _7
-			}
-		default:
-			goto _7
-		}
-		goto _1
-	_7:
+	case MAP: // 6
 		switch p.c().tok {
 		case MAP:
 			if p.mapType() == nil {
-				goto _8
+				goto _0
 			}
 		default:
-			goto _8
+			goto _0
 		}
-		goto _1
-	_8:
+	case ARROW, CHAN: // 7
 		switch p.c().tok {
 		case ARROW, CHAN:
 			if p.channelType() == nil {
-				goto _9
+				goto _0
 			}
 		default:
-			goto _9
+			goto _0
 		}
-		goto _1
-	_9:
+	default:
 		goto _0
 	}
-_1:
 	return &TypeLitNode{}
 	goto _0
 _0:
@@ -7943,39 +7908,37 @@ _0:
 }
 
 // TypeNameNode represents
-
+//
 //	TypeName = QualifiedIdent | identifier .
-type TypeNameNode = struct{}
+type TypeNameNode = struct{ noder }
 
 func (p *parser) typeName() *TypeNameNode {
 	ix := p.ix
-	// false: IDENT
-	// false: IDENT
-	// single:
-	// multi: IDENT
 	// ebnf.Alternative: QualifiedIdent | identifier
-	{
+	switch p.c().tok {
+	case IDENT: // 0 1
 		switch p.c().tok {
 		case IDENT:
 			if p.qualifiedIdent() == nil {
-				goto _2
+				goto _1
 			}
 		default:
-			goto _2
+			goto _1
 		}
-		goto _1
-	_2:
+		break
+	_1:
 		if p.c().tok == IDENT {
 			p.ix++
 			p.budget--
 		} else {
-			goto _3
+			goto _2
 		}
-		goto _1
-	_3:
+		break
+	_2:
+		goto _0
+	default:
 		goto _0
 	}
-_1:
 	return &TypeNameNode{}
 	goto _0
 _0:
@@ -7984,9 +7947,9 @@ _0:
 }
 
 // TypeParamDeclNode represents
-
+//
 //	TypeParamDecl = IdentifierList TypeConstraint .
-type TypeParamDeclNode = struct{}
+type TypeParamDeclNode = struct{ noder }
 
 func (p *parser) typeParamDecl() *TypeParamDeclNode {
 	ix := p.ix
@@ -8022,9 +7985,9 @@ _0:
 }
 
 // TypeParamListNode represents
-
+//
 //	TypeParamList = TypeParamDecl { "," TypeParamDecl } .
-type TypeParamListNode = struct{}
+type TypeParamListNode = struct{ noder }
 
 func (p *parser) typeParamList() *TypeParamListNode {
 	ix := p.ix
@@ -8076,9 +8039,9 @@ _0:
 }
 
 // TypeParametersNode represents
-
+//
 //	TypeParameters = "[" TypeParamList [ "," ] "]" .
-type TypeParametersNode = struct{}
+type TypeParametersNode = struct{ noder }
 
 func (p *parser) typeParameters() *TypeParametersNode {
 	ix := p.ix
@@ -8129,41 +8092,39 @@ _0:
 }
 
 // TypeSpecNode represents
-
+//
 //	TypeSpec = AliasDecl | TypeDef .
-type TypeSpecNode = struct{}
+type TypeSpecNode = struct{ noder }
 
 func (p *parser) typeSpec() *TypeSpecNode {
 	ix := p.ix
-	// false: IDENT
-	// false: IDENT
-	// single:
-	// multi: IDENT
 	// ebnf.Alternative: AliasDecl | TypeDef
-	{
+	switch p.c().tok {
+	case IDENT: // 0 1
 		switch p.c().tok {
 		case IDENT:
 			if p.aliasDecl() == nil {
+				goto _1
+			}
+		default:
+			goto _1
+		}
+		break
+	_1:
+		switch p.c().tok {
+		case IDENT:
+			if p.typeDef() == nil {
 				goto _2
 			}
 		default:
 			goto _2
 		}
-		goto _1
+		break
 	_2:
-		switch p.c().tok {
-		case IDENT:
-			if p.typeDef() == nil {
-				goto _3
-			}
-		default:
-			goto _3
-		}
-		goto _1
-	_3:
+		goto _0
+	default:
 		goto _0
 	}
-_1:
 	return &TypeSpecNode{}
 	goto _0
 _0:
@@ -8172,18 +8133,15 @@ _0:
 }
 
 // TypeSwitchCaseNode represents
-
+//
 //	TypeSwitchCase = "case" TypeList | "default" .
-type TypeSwitchCaseNode = struct{}
+type TypeSwitchCaseNode = struct{ noder }
 
 func (p *parser) typeSwitchCase() *TypeSwitchCaseNode {
 	ix := p.ix
-	// true: CASE
-	// true: DEFAULT
-	// single: CASE, DEFAULT
-	// multi:
 	// ebnf.Alternative: "case" TypeList | "default"
-	{
+	switch p.c().tok {
+	case CASE: // 0
 		// ebnf.Sequence: "case" TypeList
 		{
 			ix := p.ix
@@ -8192,32 +8150,29 @@ func (p *parser) typeSwitchCase() *TypeSwitchCaseNode {
 				p.budget--
 			} else {
 				p.back(ix)
-				goto _2
+				goto _0
 			}
 			switch p.c().tok {
 			case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 				if p.typeList() == nil {
 					p.back(ix)
-					goto _2
+					goto _0
 				}
 			default:
 				p.back(ix)
-				goto _2
+				goto _0
 			}
 		}
-		goto _1
-	_2:
+	case DEFAULT: // 1
 		if p.c().tok == DEFAULT {
 			p.ix++
 			p.budget--
 		} else {
-			goto _3
+			goto _0
 		}
-		goto _1
-	_3:
+	default:
 		goto _0
 	}
-_1:
 	return &TypeSwitchCaseNode{}
 	goto _0
 _0:
@@ -8226,9 +8181,9 @@ _0:
 }
 
 // TypeSwitchGuardNode represents
-
+//
 //	TypeSwitchGuard = [ identifier ":=" ] PrimaryExpr "." "(" "type" ")" .
-type TypeSwitchGuardNode = struct{}
+type TypeSwitchGuardNode = struct{ noder }
 
 func (p *parser) typeSwitchGuard() *TypeSwitchGuardNode {
 	ix := p.ix
@@ -8305,9 +8260,9 @@ _0:
 }
 
 // TypeSwitchStmtNode represents
-
+//
 //	TypeSwitchStmt = "switch" [ SimpleStmt ";" ] TypeSwitchGuard "{" { TypeCaseClause } "}" .
-type TypeSwitchStmtNode = struct{}
+type TypeSwitchStmtNode = struct{ noder }
 
 func (p *parser) typeSwitchStmt() *TypeSwitchStmtNode {
 	ix := p.ix
@@ -8392,41 +8347,35 @@ _0:
 }
 
 // TypeTermNode represents
-
+//
 //	TypeTerm = Type | UnderlyingType .
-type TypeTermNode = struct{}
+type TypeTermNode = struct{ noder }
 
 func (p *parser) typeTerm() *TypeTermNode {
 	ix := p.ix
-	// true: ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
-	// true: TILDE
-	// single: ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT, TILDE
-	// multi:
 	// ebnf.Alternative: Type | UnderlyingType
-	{
+	switch p.c().tok {
+	case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT: // 0
 		switch p.c().tok {
 		case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 			if p.type1() == nil {
-				goto _2
+				goto _0
 			}
 		default:
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case TILDE: // 1
 		switch p.c().tok {
 		case TILDE:
 			if p.underlyingType() == nil {
-				goto _3
+				goto _0
 			}
 		default:
-			goto _3
+			goto _0
 		}
-		goto _1
-	_3:
+	default:
 		goto _0
 	}
-_1:
 	return &TypeTermNode{}
 	goto _0
 _0:
@@ -8435,28 +8384,34 @@ _0:
 }
 
 // UnaryExprNode represents
-
+//
 //	UnaryExpr = PrimaryExpr | UnaryOp UnaryExpr .
-type UnaryExprNode = struct{}
+type UnaryExprNode = struct{ noder }
 
 func (p *parser) unaryExpr() *UnaryExprNode {
 	ix := p.ix
-	// false: ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRING, STRUCT
-	// false: ADD, AND, ARROW, MUL, NOT, SUB, XOR
-	// single: ADD, AND, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, NOT, STRING, STRUCT, SUB, XOR
-	// multi: ARROW, MUL
 	// ebnf.Alternative: PrimaryExpr | UnaryOp UnaryExpr
-	{
+	switch p.c().tok {
+	case CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, STRING, STRUCT: // 0
 		switch p.c().tok {
 		case ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRING, STRUCT:
 			if p.primaryExpr() == nil {
-				goto _2
+				goto _0
 			}
 		default:
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case ARROW, MUL: // 0 1
+		switch p.c().tok {
+		case ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRING, STRUCT:
+			if p.primaryExpr() == nil {
+				goto _1
+			}
+		default:
+			goto _1
+		}
+		break
+	_1:
 		// ebnf.Sequence: UnaryOp UnaryExpr
 		{
 			ix := p.ix
@@ -8464,28 +8419,54 @@ func (p *parser) unaryExpr() *UnaryExprNode {
 			case ADD, AND, ARROW, MUL, NOT, SUB, XOR:
 				if p.unaryOp() == nil {
 					p.back(ix)
-					goto _3
+					goto _2
 				}
 			default:
 				p.back(ix)
-				goto _3
+				goto _2
 			}
 			switch p.c().tok {
 			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 				if p.unaryExpr() == nil {
 					p.back(ix)
-					goto _3
+					goto _2
 				}
 			default:
 				p.back(ix)
-				goto _3
+				goto _2
 			}
 		}
-		goto _1
-	_3:
+		break
+	_2:
+		goto _0
+	case ADD, AND, NOT, SUB, XOR: // 1
+		// ebnf.Sequence: UnaryOp UnaryExpr
+		{
+			ix := p.ix
+			switch p.c().tok {
+			case ADD, AND, ARROW, MUL, NOT, SUB, XOR:
+				if p.unaryOp() == nil {
+					p.back(ix)
+					goto _0
+				}
+			default:
+				p.back(ix)
+				goto _0
+			}
+			switch p.c().tok {
+			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+				if p.unaryExpr() == nil {
+					p.back(ix)
+					goto _0
+				}
+			default:
+				p.back(ix)
+				goto _0
+			}
+		}
+	default:
 		goto _0
 	}
-_1:
 	return &UnaryExprNode{}
 	goto _0
 _0:
@@ -8494,28 +8475,34 @@ _0:
 }
 
 // UnaryExprPreBlockPreBlockNode represents
-
+//
 //	UnaryExprPreBlockPreBlock = PrimaryExprPreBlock | UnaryOp UnaryExprPreBlockPreBlock .
-type UnaryExprPreBlockPreBlockNode = struct{}
+type UnaryExprPreBlockPreBlockNode = struct{ noder }
 
 func (p *parser) unaryExprPreBlockPreBlock() *UnaryExprPreBlockPreBlockNode {
 	ix := p.ix
-	// false: ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRING, STRUCT
-	// false: ADD, AND, ARROW, MUL, NOT, SUB, XOR
-	// single: ADD, AND, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, NOT, STRING, STRUCT, SUB, XOR
-	// multi: ARROW, MUL
 	// ebnf.Alternative: PrimaryExprPreBlock | UnaryOp UnaryExprPreBlockPreBlock
-	{
+	switch p.c().tok {
+	case CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, STRING, STRUCT: // 0
 		switch p.c().tok {
 		case ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRING, STRUCT:
 			if p.primaryExprPreBlock() == nil {
-				goto _2
+				goto _0
 			}
 		default:
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case ARROW, MUL: // 0 1
+		switch p.c().tok {
+		case ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRING, STRUCT:
+			if p.primaryExprPreBlock() == nil {
+				goto _1
+			}
+		default:
+			goto _1
+		}
+		break
+	_1:
 		// ebnf.Sequence: UnaryOp UnaryExprPreBlockPreBlock
 		{
 			ix := p.ix
@@ -8523,28 +8510,54 @@ func (p *parser) unaryExprPreBlockPreBlock() *UnaryExprPreBlockPreBlockNode {
 			case ADD, AND, ARROW, MUL, NOT, SUB, XOR:
 				if p.unaryOp() == nil {
 					p.back(ix)
-					goto _3
+					goto _2
 				}
 			default:
 				p.back(ix)
-				goto _3
+				goto _2
 			}
 			switch p.c().tok {
 			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 				if p.unaryExprPreBlockPreBlock() == nil {
 					p.back(ix)
-					goto _3
+					goto _2
 				}
 			default:
 				p.back(ix)
-				goto _3
+				goto _2
 			}
 		}
-		goto _1
-	_3:
+		break
+	_2:
+		goto _0
+	case ADD, AND, NOT, SUB, XOR: // 1
+		// ebnf.Sequence: UnaryOp UnaryExprPreBlockPreBlock
+		{
+			ix := p.ix
+			switch p.c().tok {
+			case ADD, AND, ARROW, MUL, NOT, SUB, XOR:
+				if p.unaryOp() == nil {
+					p.back(ix)
+					goto _0
+				}
+			default:
+				p.back(ix)
+				goto _0
+			}
+			switch p.c().tok {
+			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+				if p.unaryExprPreBlockPreBlock() == nil {
+					p.back(ix)
+					goto _0
+				}
+			default:
+				p.back(ix)
+				goto _0
+			}
+		}
+	default:
 		goto _0
 	}
-_1:
 	return &UnaryExprPreBlockPreBlockNode{}
 	goto _0
 _0:
@@ -8553,82 +8566,66 @@ _0:
 }
 
 // UnaryOpNode represents
-
+//
 //	UnaryOp = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
-type UnaryOpNode = struct{}
+type UnaryOpNode = struct{ noder }
 
 func (p *parser) unaryOp() *UnaryOpNode {
 	ix := p.ix
-	// true: ADD
-	// true: SUB
-	// true: NOT
-	// true: XOR
-	// true: MUL
-	// true: AND
-	// true: ARROW
-	// single: ADD, AND, ARROW, MUL, NOT, SUB, XOR
-	// multi:
 	// ebnf.Alternative: "+" | "-" | "!" | "^" | "*" | "&" | "<-"
-	{
+	switch p.c().tok {
+	case ADD: // 0
 		if p.c().tok == ADD {
 			p.ix++
 			p.budget--
 		} else {
-			goto _2
+			goto _0
 		}
-		goto _1
-	_2:
+	case SUB: // 1
 		if p.c().tok == SUB {
 			p.ix++
 			p.budget--
 		} else {
-			goto _3
+			goto _0
 		}
-		goto _1
-	_3:
+	case NOT: // 2
 		if p.c().tok == NOT {
 			p.ix++
 			p.budget--
 		} else {
-			goto _4
+			goto _0
 		}
-		goto _1
-	_4:
+	case XOR: // 3
 		if p.c().tok == XOR {
 			p.ix++
 			p.budget--
 		} else {
-			goto _5
+			goto _0
 		}
-		goto _1
-	_5:
+	case MUL: // 4
 		if p.c().tok == MUL {
 			p.ix++
 			p.budget--
 		} else {
-			goto _6
+			goto _0
 		}
-		goto _1
-	_6:
+	case AND: // 5
 		if p.c().tok == AND {
 			p.ix++
 			p.budget--
 		} else {
-			goto _7
+			goto _0
 		}
-		goto _1
-	_7:
+	case ARROW: // 6
 		if p.c().tok == ARROW {
 			p.ix++
 			p.budget--
 		} else {
-			goto _8
+			goto _0
 		}
-		goto _1
-	_8:
+	default:
 		goto _0
 	}
-_1:
 	return &UnaryOpNode{}
 	goto _0
 _0:
@@ -8637,9 +8634,9 @@ _0:
 }
 
 // UnderlyingTypeNode represents
-
+//
 //	UnderlyingType = "~" Type .
-type UnderlyingTypeNode = struct{}
+type UnderlyingTypeNode = struct{ noder }
 
 func (p *parser) underlyingType() *UnderlyingTypeNode {
 	ix := p.ix
@@ -8672,9 +8669,9 @@ _0:
 }
 
 // VarDeclNode represents
-
+//
 //	VarDecl = "var" ( VarSpec | "(" [ VarSpec { ";" VarSpec } [ ";" ] ] ")" ) .
-type VarDeclNode = struct{}
+type VarDeclNode = struct{ noder }
 
 func (p *parser) varDecl() *VarDeclNode {
 	ix := p.ix
@@ -8691,22 +8688,20 @@ func (p *parser) varDecl() *VarDeclNode {
 		// *ebnf.Group: ( VarSpec | "(" [ VarSpec { ";" VarSpec } [ ";" ] ] ")" )
 		switch p.c().tok {
 		case IDENT, LPAREN:
-			// true: IDENT
-			// true: LPAREN
-			// single: IDENT, LPAREN
-			// multi:
 			// ebnf.Alternative: VarSpec | "(" [ VarSpec { ";" VarSpec } [ ";" ] ] ")"
-			{
+			switch p.c().tok {
+			case IDENT: // 0
 				switch p.c().tok {
 				case IDENT:
 					if p.varSpec() == nil {
-						goto _2
+						p.back(ix)
+						goto _0
 					}
 				default:
-					goto _2
+					p.back(ix)
+					goto _0
 				}
-				goto _1
-			_2:
+			case LPAREN: // 1
 				// ebnf.Sequence: "(" [ VarSpec { ";" VarSpec } [ ";" ] ] ")"
 				{
 					ix := p.ix
@@ -8715,7 +8710,8 @@ func (p *parser) varDecl() *VarDeclNode {
 						p.budget--
 					} else {
 						p.back(ix)
-						goto _3
+						p.back(ix)
+						goto _0
 					}
 					// *ebnf.Option: [ VarSpec { ";" VarSpec } [ ";" ] ]
 					switch p.c().tok {
@@ -8727,13 +8723,13 @@ func (p *parser) varDecl() *VarDeclNode {
 							case IDENT:
 								if p.varSpec() == nil {
 									p.back(ix)
-									goto _4
+									goto _1
 								}
 							default:
 								p.back(ix)
-								goto _4
+								goto _1
 							}
-						_5:
+						_2:
 							// *ebnf.Repetition: { ";" VarSpec }
 							switch p.c().tok {
 							case SEMICOLON:
@@ -8744,21 +8740,21 @@ func (p *parser) varDecl() *VarDeclNode {
 									p.budget--
 								} else {
 									p.back(ix)
-									goto _6
+									goto _3
 								}
 								switch p.c().tok {
 								case IDENT:
 									if p.varSpec() == nil {
 										p.back(ix)
-										goto _6
+										goto _3
 									}
 								default:
 									p.back(ix)
-									goto _6
+									goto _3
 								}
-								goto _5
+								goto _2
 							}
-						_6:
+						_3:
 							// *ebnf.Option: [ ";" ]
 							switch p.c().tok {
 							case SEMICOLON:
@@ -8766,28 +8762,26 @@ func (p *parser) varDecl() *VarDeclNode {
 									p.ix++
 									p.budget--
 								} else {
-									goto _7
+									goto _4
 								}
 							}
-						_7:
+						_4:
 						}
 					}
-				_4:
+				_1:
 					if p.c().tok == RPAREN {
 						p.ix++
 						p.budget--
 					} else {
 						p.back(ix)
-						goto _3
+						p.back(ix)
+						goto _0
 					}
 				}
-				goto _1
-			_3:
+			default:
 				p.back(ix)
 				goto _0
 			}
-		_1:
-			;
 		default:
 			p.back(ix)
 			goto _0
@@ -8801,9 +8795,9 @@ _0:
 }
 
 // VarSpecNode represents
-
+//
 //	VarSpec = IdentifierList ( Type [ "=" ExpressionList ] | "=" ExpressionList ) .
-type VarSpecNode = struct{}
+type VarSpecNode = struct{ noder }
 
 func (p *parser) varSpec() *VarSpecNode {
 	ix := p.ix
@@ -8823,12 +8817,9 @@ func (p *parser) varSpec() *VarSpecNode {
 		// *ebnf.Group: ( Type [ "=" ExpressionList ] | "=" ExpressionList )
 		switch p.c().tok {
 		case ARROW, ASSIGN, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
-			// true: ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
-			// true: ASSIGN
-			// single: ARROW, ASSIGN, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
-			// multi:
 			// ebnf.Alternative: Type [ "=" ExpressionList ] | "=" ExpressionList
-			{
+			switch p.c().tok {
+			case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT: // 0
 				// ebnf.Sequence: Type [ "=" ExpressionList ]
 				{
 					ix := p.ix
@@ -8836,11 +8827,13 @@ func (p *parser) varSpec() *VarSpecNode {
 					case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
 						if p.type1() == nil {
 							p.back(ix)
-							goto _2
+							p.back(ix)
+							goto _0
 						}
 					default:
 						p.back(ix)
-						goto _2
+						p.back(ix)
+						goto _0
 					}
 					// *ebnf.Option: [ "=" ExpressionList ]
 					switch p.c().tok {
@@ -8853,24 +8846,23 @@ func (p *parser) varSpec() *VarSpecNode {
 								p.budget--
 							} else {
 								p.back(ix)
-								goto _3
+								goto _1
 							}
 							switch p.c().tok {
 							case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 								if p.expressionList() == nil {
 									p.back(ix)
-									goto _3
+									goto _1
 								}
 							default:
 								p.back(ix)
-								goto _3
+								goto _1
 							}
 						}
 					}
-				_3:
+				_1:
 				}
-				goto _1
-			_2:
+			case ASSIGN: // 1
 				// ebnf.Sequence: "=" ExpressionList
 				{
 					ix := p.ix
@@ -8879,26 +8871,26 @@ func (p *parser) varSpec() *VarSpecNode {
 						p.budget--
 					} else {
 						p.back(ix)
-						goto _4
+						p.back(ix)
+						goto _0
 					}
 					switch p.c().tok {
 					case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
 						if p.expressionList() == nil {
 							p.back(ix)
-							goto _4
+							p.back(ix)
+							goto _0
 						}
 					default:
 						p.back(ix)
-						goto _4
+						p.back(ix)
+						goto _0
 					}
 				}
-				goto _1
-			_4:
+			default:
 				p.back(ix)
 				goto _0
 			}
-		_1:
-			;
 		default:
 			p.back(ix)
 			goto _0

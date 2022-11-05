@@ -77,33 +77,6 @@ func testGrammar(t *testing.T, fn string) {
 		t.Fatal(err)
 	}
 
-	var a []string
-	for nm, p := range peg.g {
-		var b []string
-		var c closure
-		e := p.Expr
-		switch {
-		case token.IsExported(nm):
-			if e == nil {
-				c.add(epsilon)
-				break
-			}
-
-			c = peg.exprClosure(e)
-		default:
-			c.add(peg.tok(nm))
-		}
-		for k := range c {
-			b = append(b, tokSource(k))
-		}
-		sort.Strings(b)
-		a = append(a, fmt.Sprintf("%s case %v:", nm, strings.Join(b, ", ")))
-	}
-	sort.Strings(a)
-	if err := os.WriteFile(fn+".fs", []byte(strings.Join(a, "\n")), 0660); err != nil {
-		t.Fatal(err)
-	}
-
 	for k := range peg.leftRecursive {
 		t.Errorf("left recursive: %v", k)
 	}

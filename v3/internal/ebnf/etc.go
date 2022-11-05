@@ -474,6 +474,18 @@ func (p *parallel) wait() error {
 
 type closure map[token.Token]struct{}
 
+func (c closure) clone() (r closure) {
+	if c == nil {
+		return nil
+	}
+
+	r = make(closure, len(c))
+	for k := range c {
+		r[k] = struct{}{}
+	}
+	return r
+}
+
 func (c closure) caseStr() string {
 	var a []string
 	var e string
@@ -1068,7 +1080,7 @@ type parser struct {
 
 func newParser(path string, src []byte) (r *parser, err error) {
 	r = &parser{
-		budget: 1e7,
+		budget: 2e6,
 		path:   path,
 	}
 	var s scanner.Scanner
@@ -1114,4 +1126,25 @@ func (p *parser) parse() (err error) {
 	}
 
 	return nil
+}
+
+type Node interface {
+	Position() token.Position
+}
+
+type noder struct{}
+
+func (*noder) Position() (r token.Position) { return r }
+
+func ints(s string) (r []int) {
+	a := strings.Split(s, " ")
+	for _, v := range a {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			panic(todo("", v))
+		}
+
+		r = append(r, n)
+	}
+	return r
 }

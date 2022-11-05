@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"golang.org/x/exp/ebnf"
+	"modernc.org/mathutil"
 )
 
 func generate(dst, src string) error {
@@ -84,8 +85,8 @@ func (g *gen) gen() (err error) {
 		}
 
 		g.w("\n\n// %sNode represents", nm)
-		g.w("\n\n//\t%s = %s .", nm, ebnfString(p.Expr))
-		g.w("\ntype %sNode = struct{}", nm)
+		g.w("\n//\n//\t%s = %s .", nm, ebnfString(p.Expr))
+		g.w("\ntype %sNode = struct{ noder }", nm)
 		g.w("\n\nfunc (p *parser) %s() *%sNode {", unexport(nm), nm)
 		if p.Expr == nil {
 			g.w("\nreturn &%sNode{}", nm)
@@ -123,19 +124,6 @@ func (g *gen) defaultPart(out string) {
 func (g *gen) expression(e ebnf.Expression, out string, braced bool) {
 	switch x := e.(type) {
 	case ebnf.Alternative:
-		// //TODO use closures
-		// ok := g.id()
-		// g.w("\n// %T: %s", x, ebnfString(x))
-		// g.w("\n{")
-		// for _, v := range x {
-		// 	next := g.id()
-		// 	g.expression(v, fmt.Sprintf("\ngoto _%d", next), false)
-		// 	g.w("\ngoto _%d", ok)
-		// 	g.w("\n_%d:", next)
-		// }
-		// g.w("%s", out)
-		// g.w("\n}")
-		// g.w("\n_%d:", ok)
 		g.alt(x, out)
 	case *ebnf.Group:
 		g.w("\n// %T: %s", x, ebnfString(x))
@@ -228,51 +216,91 @@ func (g *gen) expression(e ebnf.Expression, out string, braced bool) {
 
 func (g *gen) alt(x ebnf.Alternative, out string) {
 	var cs []closure
-	var oks []bool
-	m := map[token.Token]int{}
-	for _, v := range x {
-		c := g.peg.exprClosure(v)
+	m := map[token.Token][]int{}
+	for i, v := range x {
+		c := g.peg.exprClosure(v).clone()
 		cs = append(cs, c)
 		for k := range c {
-			m[k]++
+			m[k] = append(m[k], i)
 		}
 	}
-next:
-	for _, v := range cs {
-		for k := range v {
-			if m[k] > 1 {
-				oks = append(oks, false)
-				continue next
+	var mX []token.Token
+	for k := range m {
+		mX = append(mX, k)
+	}
+	sort.Slice(mX, func(i, j int) bool { return mX[i] < mX[j] })
+	disjoint := map[string]closure{}
+	for _, t := range mX {
+		is := m[t]
+		if len(is) == 0 {
+			continue
+		}
+
+		k := fmt.Sprint(is)
+		k = k[1 : len(k)-1]
+		c := disjoint[k]
+		c.add(t)
+		disjoint[k] = c
+	}
+	var disjointX []string
+	for k := range disjoint {
+		disjointX = append(disjointX, k)
+	}
+	sort.Slice(disjointX, func(i, j int) bool {
+		a := ints(disjointX[i])
+		b := ints(disjointX[j])
+		for k := range a[:mathutil.Min(len(a), len(b))] {
+			if a[k] < b[k] {
+				return true
+			}
+
+			if a[k] > b[k] {
+				return false
 			}
 		}
-		oks = append(oks, true)
-	}
-	for i, v := range cs {
-		g.w("\n// %v: %v", oks[i], v.caseStr())
-	}
-	single := closure{}
-	multi := closure{}
-	for k, v := range m {
-		switch v {
-		case 1:
-			single.add(k)
+		return len(a) < len(b)
+	})
+	// for _, v := range disjointX {
+	// 	g.w("\n// case %v: %v", disjoint[v].caseStr(), v)
+	// }
+	g.w("\n// %T: %s", x, ebnfString(x))
+	g.w("\nswitch p.c().tok {")
+	needDefault := true
+	for _, k := range disjointX {
+		c := disjoint[k]
+		if c.hasEpsilon() {
+			needDefault = false
+		}
+		var xs []ebnf.Expression
+		for _, v := range ints(k) {
+			xs = append(xs, x[v])
+		}
+		switch {
+		case len(c) == 1 && c.hasEpsilon():
+			g.w("\ndefault: // %v %v", c.caseStr(), k)
+			g.altCases(xs, out)
 		default:
-			multi.add(k)
+			g.w("\ncase %v: // %v", c.caseStr(), k)
+			g.altCases(xs, out)
 		}
 	}
-	g.w("\n// single: %v", single.caseStr())
-	g.w("\n// multi: %v", multi.caseStr())
-
-	ok := g.id()
-	g.w("\n// %T: %s", x, ebnfString(x))
-	g.w("\n{")
-	for _, v := range x {
-		next := g.id()
-		g.expression(v, fmt.Sprintf("\ngoto _%d", next), false)
-		g.w("\ngoto _%d", ok)
-		g.w("\n_%d:", next)
+	if needDefault {
+		g.w("\ndefault:%s", out)
 	}
-	g.w("%s", out)
 	g.w("\n}")
-	g.w("\n_%d:", ok)
+}
+
+func (g *gen) altCases(x []ebnf.Expression, out string) {
+	switch {
+	case len(x) == 1:
+		g.expression(x[0], out, false)
+	default:
+		for _, v := range x {
+			next := g.id()
+			g.expression(v, fmt.Sprintf("\ngoto _%d", next), false)
+			g.w("\nbreak")
+			g.w("\n_%d:", next)
+		}
+		g.w("%s", out)
+	}
 }
