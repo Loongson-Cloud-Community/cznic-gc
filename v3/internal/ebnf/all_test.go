@@ -58,15 +58,6 @@ func TestSpecEBNF(t *testing.T) {
 	}
 }
 
-func loadPEG(fn string) (*grammar, error) {
-	b, err := os.ReadFile(fn)
-	if err != nil {
-		return nil, err
-	}
-
-	return newGrammar(fn, startProduction, b)
-}
-
 func TestPEGEBNF(t *testing.T) {
 	testGrammar(t, pegEBNF)
 }

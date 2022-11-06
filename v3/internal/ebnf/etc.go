@@ -474,6 +474,47 @@ func (p *parallel) wait() error {
 
 type closure map[token.Token]struct{}
 
+func (c closure) has(t token.Token) (r bool) { _, r = c[t]; return r }
+
+func (c closure) eq(d closure) (r bool) {
+	if len(c) != len(d) {
+		return false
+	}
+
+	for k := range c {
+		if _, r := d[k]; !r {
+			return r
+		}
+	}
+	return true
+}
+
+func (c closure) intersect(d closure) (r closure) {
+	if len(c) == 0 || len(d) == 0 {
+		return nil
+	}
+	r = closure{}
+	for k := range c {
+		if _, ok := d[k]; ok {
+			r[k] = struct{}{}
+		}
+	}
+	return r
+}
+
+func (c closure) isSubsetOf(d closure) (r bool) {
+	if len(d) < len(c) {
+		return false
+	}
+
+	for k := range c {
+		if _, r := d[k]; !r {
+			return r
+		}
+	}
+	return true
+}
+
 func (c closure) clone() (r closure) {
 	if c == nil {
 		return nil
@@ -1147,4 +1188,13 @@ func ints(s string) (r []int) {
 		r = append(r, n)
 	}
 	return r
+}
+
+func loadPEG(fn string) (*grammar, error) {
+	b, err := os.ReadFile(fn)
+	if err != nil {
+		return nil, err
+	}
+
+	return newGrammar(fn, startProduction, b)
 }
