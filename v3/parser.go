@@ -84,7 +84,11 @@ func (p *parser) peek(n int) tok {
 	return p.toks[p.ix+n]
 }
 
-func (p *parser) linearBack(ix int) { p.ix = ix }
+func (p *parser) linearBack(ix int) {
+	// t := p.c()
+	// trc("%v: %s (%v: %v: %v:)", t.Position(), t.tok, origin(4), origin(3), origin(2))
+	p.ix = ix
+}
 
 func (p *parser) back(ix int) {
 	if p.closed || p.ix == ix {
@@ -1316,7 +1320,7 @@ func (p *parser) conversion() Node {
 			p.ix++
 			p.budget--
 		} else {
-			p.back(ix)
+			p.linearBack(ix)
 			goto _0
 		}
 		// *ebnf.Name Expression ctx []
@@ -1468,8 +1472,8 @@ func (p *parser) elementList() Node {
 		}
 		// *ebnf.Repetition { "," KeyedElement } ctx []
 	_1:
-		switch p.c().tok {
-		case COMMA:
+		switch {
+		case p.c().tok == COMMA && p.peek(1).tok != RBRACE:
 			// ebnf.Sequence "," KeyedElement ctx [COMMA]
 			ix := p.ix
 			// *ebnf.Token "," ctx [COMMA]
@@ -2178,19 +2182,19 @@ _0:
 type ForStmtNode struct{ noder }
 
 func (p *parser) forStmt() Node {
-	// ebnf.Alternative "for" ForClause Block | "for" RangeClause Block | "for" ExpressionPreBlock Block | "for" Block ctx []
+	// ebnf.Alternative "for" ExpressionPreBlock Block | "for" ForClause Block | "for" RangeClause Block | "for" Block ctx []
 	switch p.c().tok {
 	case FOR: // 0 1 2 3
-		// ebnf.Sequence "for" ForClause Block ctx [FOR]
+		// ebnf.Sequence "for" ExpressionPreBlock Block ctx [FOR]
 		{
 			ix := p.ix
 			// *ebnf.Token "for" ctx [FOR]
 			p.ix++
 			p.budget--
-			// *ebnf.Name ForClause ctx []
+			// *ebnf.Name ExpressionPreBlock ctx []
 			switch p.c().tok {
-			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, SEMICOLON, STRING, STRUCT, SUB, XOR:
-				if p.forClause() == nil {
+			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+				if p.expressionPreBlock() == nil {
 					p.back(ix)
 					goto _0
 				}
@@ -2212,16 +2216,16 @@ func (p *parser) forStmt() Node {
 		}
 		break
 	_0:
-		// ebnf.Sequence "for" RangeClause Block ctx [FOR]
+		// ebnf.Sequence "for" ForClause Block ctx [FOR]
 		{
 			ix := p.ix
 			// *ebnf.Token "for" ctx [FOR]
 			p.ix++
 			p.budget--
-			// *ebnf.Name RangeClause ctx []
+			// *ebnf.Name ForClause ctx []
 			switch p.c().tok {
-			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, RANGE, STRING, STRUCT, SUB, XOR:
-				if p.rangeClause() == nil {
+			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, SEMICOLON, STRING, STRUCT, SUB, XOR:
+				if p.forClause() == nil {
 					p.back(ix)
 					goto _1
 				}
@@ -2243,16 +2247,16 @@ func (p *parser) forStmt() Node {
 		}
 		break
 	_1:
-		// ebnf.Sequence "for" ExpressionPreBlock Block ctx [FOR]
+		// ebnf.Sequence "for" RangeClause Block ctx [FOR]
 		{
 			ix := p.ix
 			// *ebnf.Token "for" ctx [FOR]
 			p.ix++
 			p.budget--
-			// *ebnf.Name ExpressionPreBlock ctx []
+			// *ebnf.Name RangeClause ctx []
 			switch p.c().tok {
-			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-				if p.expressionPreBlock() == nil {
+			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, RANGE, STRING, STRUCT, SUB, XOR:
+				if p.rangeClause() == nil {
 					p.back(ix)
 					goto _2
 				}
@@ -2597,7 +2601,7 @@ func (p *parser) ifStmt() Node {
 					goto _0
 				}
 			default:
-				p.back(ix)
+				p.linearBack(ix)
 				goto _0
 			}
 			// *ebnf.Name Block ctx []
@@ -3168,7 +3172,7 @@ func (p *parser) keyedElement() Node {
 					p.ix++
 					p.budget--
 				} else {
-					p.back(ix)
+					p.linearBack(ix)
 					goto _1
 				}
 			}
@@ -4308,7 +4312,7 @@ func (p *parser) parameterDecl() Node {
 		}
 	_0:
 		// ebnf.Sequence identifier Type ctx [IDENT]
-		if p.c().tok == IDENT && p.peek(1).tok != COMMA {
+		if p.c().tok == IDENT && p.peek(1).tok != COMMA && p.peek(1).tok != PERIOD {
 			{
 				ix := p.ix
 				// *ebnf.Name identifier ctx [IDENT]

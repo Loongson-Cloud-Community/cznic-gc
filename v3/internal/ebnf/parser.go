@@ -2048,23 +2048,23 @@ _0:
 
 // ForStmtNode represents the production
 //
-//	ForStmt = "for" ForClause Block | "for" RangeClause Block | "for" ExpressionPreBlock Block | "for" Block .
+//	ForStmt = "for" ExpressionPreBlock Block | "for" ForClause Block | "for" RangeClause Block | "for" Block .
 type ForStmtNode struct{ noder }
 
 func (p *parser) forStmt() Node {
-	// ebnf.Alternative "for" ForClause Block | "for" RangeClause Block | "for" ExpressionPreBlock Block | "for" Block ctx []
+	// ebnf.Alternative "for" ExpressionPreBlock Block | "for" ForClause Block | "for" RangeClause Block | "for" Block ctx []
 	switch p.c().tok {
 	case FOR: // 0 1 2 3
-		// ebnf.Sequence "for" ForClause Block ctx [FOR]
+		// ebnf.Sequence "for" ExpressionPreBlock Block ctx [FOR]
 		{
 			ix := p.ix
 			// *ebnf.Token "for" ctx [FOR]
 			p.ix++
 			p.budget--
-			// *ebnf.Name ForClause ctx []
+			// *ebnf.Name ExpressionPreBlock ctx []
 			switch p.c().tok {
-			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, SEMICOLON, STRING, STRUCT, SUB, XOR:
-				if p.forClause() == nil {
+			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+				if p.expressionPreBlock() == nil {
 					p.back(ix)
 					goto _0
 				}
@@ -2086,16 +2086,16 @@ func (p *parser) forStmt() Node {
 		}
 		break
 	_0:
-		// ebnf.Sequence "for" RangeClause Block ctx [FOR]
+		// ebnf.Sequence "for" ForClause Block ctx [FOR]
 		{
 			ix := p.ix
 			// *ebnf.Token "for" ctx [FOR]
 			p.ix++
 			p.budget--
-			// *ebnf.Name RangeClause ctx []
+			// *ebnf.Name ForClause ctx []
 			switch p.c().tok {
-			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, RANGE, STRING, STRUCT, SUB, XOR:
-				if p.rangeClause() == nil {
+			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, SEMICOLON, STRING, STRUCT, SUB, XOR:
+				if p.forClause() == nil {
 					p.back(ix)
 					goto _1
 				}
@@ -2117,16 +2117,16 @@ func (p *parser) forStmt() Node {
 		}
 		break
 	_1:
-		// ebnf.Sequence "for" ExpressionPreBlock Block ctx [FOR]
+		// ebnf.Sequence "for" RangeClause Block ctx [FOR]
 		{
 			ix := p.ix
 			// *ebnf.Token "for" ctx [FOR]
 			p.ix++
 			p.budget--
-			// *ebnf.Name ExpressionPreBlock ctx []
+			// *ebnf.Name RangeClause ctx []
 			switch p.c().tok {
-			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-				if p.expressionPreBlock() == nil {
+			case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, RANGE, STRING, STRUCT, SUB, XOR:
+				if p.rangeClause() == nil {
 					p.back(ix)
 					goto _2
 				}

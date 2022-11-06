@@ -156,7 +156,7 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 		}
 
 		p.addFile()
-		if !noBack {
+		if !noBack && !panicBack {
 			switch s := filepath.ToSlash(path0); {
 			case
 				strings.HasSuffix(s, "test/fixedbugs/issue29264.go"), //TODO
