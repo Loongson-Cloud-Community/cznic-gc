@@ -11,6 +11,11 @@ import (
 	"modernc.org/mathutil"
 )
 
+var (
+	noBack    bool //TODO-
+	panicBack bool //TODO-
+)
+
 type Node interface {
 	Position() token.Position
 }
@@ -19,11 +24,14 @@ type noder struct{} //TODO-
 
 func (*noder) Position() (r token.Position) { return r }
 
-type tok struct {
+type tok struct { //TODO-
+	f   *token.File
 	pos token.Pos
 	tok token.Token
 	lit string
 }
+
+func (n *tok) Position() token.Position { return n.f.PositionFor(n.pos, true) }
 
 type parser struct {
 	f    *token.File
@@ -44,11 +52,12 @@ func newParser(path string, src []byte) (r *parser, err error) {
 	}
 	var s scanner.Scanner
 	fs := token.NewFileSet()
-	r.f = fs.AddFile(path, -1, len(src))
+	f := fs.AddFile(path, -1, len(src))
+	r.f = f
 	s.Init(r.f, src, func(pos token.Position, msg string) { err = errorf("%v: %s", pos, msg) }, 0)
 	for {
 		pos, t, lit := s.Scan()
-		r.toks = append(r.toks, tok{pos, t, lit})
+		r.toks = append(r.toks, tok{f, pos, t, lit})
 		if err != nil {
 			return nil, err
 		}
@@ -60,19 +69,36 @@ func newParser(path string, src []byte) (r *parser, err error) {
 }
 
 func (p *parser) errPosition() token.Position {
-	return p.f.PositionFor(p.toks[p.maxIx].pos, true)
+	return p.toks[p.maxIx].Position()
 }
 
-func (p *parser) c() tok {
+func (p *parser) c() tok     { return p.peek(0) }
+func (p *parser) n() (r tok) { r = p.peek(0); p.ix++; return r }
+
+func (p *parser) peek(n int) tok {
 	if p.budget <= 0 || p.closed {
 		return p.toks[len(p.toks)-1]
 	}
 
-	p.maxIx = mathutil.Max(p.maxIx, p.ix)
-	return p.toks[p.ix]
+	p.maxIx = mathutil.Max(p.maxIx, p.ix+n)
+	return p.toks[p.ix+n]
 }
 
-func (p *parser) back(ix int) { p.ix = ix }
+func (p *parser) linearBack(ix int) { p.ix = ix }
+
+func (p *parser) back(ix int) {
+	if p.closed || p.ix == ix {
+		return
+	}
+
+	p.ix = ix
+	if noBack {
+		p.closed = true
+	}
+	if panicBack {
+		panic(todo("%v: (%v:)", p.errPosition(), origin(2)))
+	}
+}
 
 func (p *parser) parse() (err error) {
 	ast := p.sourceFile()
@@ -230,44 +256,28 @@ _0:
 // AliasDeclNode represents the production
 //
 //	AliasDecl = identifier "=" Type .
-type AliasDeclNode struct{ noder }
+type AliasDeclNode struct {
+	IDENT  tok
+	ASSIGN tok
+	Type   Node
+}
+
+func (n *AliasDeclNode) Position() token.Position { return n.IDENT.Position() }
 
 func (p *parser) aliasDecl() Node {
+	if p.c().tok != IDENT || p.peek(1).tok != ASSIGN {
+		return nil
+	}
+
 	ix := p.ix
-	// ebnf.Sequence identifier "=" Type ctx []
-	{
-		ix := p.ix
-		// *ebnf.Name identifier ctx []
-		if p.c().tok == IDENT {
-			p.ix++
-			p.budget--
-		} else {
-			p.back(ix)
-			goto _0
-		}
-		// *ebnf.Token "=" ctx []
-		if p.c().tok == ASSIGN {
-			p.ix++
-			p.budget--
-		} else {
-			p.back(ix)
-			goto _0
-		}
-		// *ebnf.Name Type ctx []
-		switch p.c().tok {
-		case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
-			if p.type1() == nil {
-				p.back(ix)
-				goto _0
-			}
-		default:
-			p.back(ix)
-			goto _0
+	switch p.c().tok {
+	case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+		r := &AliasDeclNode{IDENT: p.n(), ASSIGN: p.n()}
+		if t := p.type1(); t != nil {
+			r.Type = t
+			return r
 		}
 	}
-	return &AliasDeclNode{}
-	goto _0
-_0:
 	p.back(ix)
 	return nil
 }
@@ -406,6 +416,10 @@ func (p *parser) arrayLength() Node {
 type ArrayTypeNode struct{ noder }
 
 func (p *parser) arrayType() Node {
+	if p.c().tok != LBRACK || p.peek(1).tok == RBRACK {
+		return nil
+	}
+
 	ix := p.ix
 	// ebnf.Sequence "[" ArrayLength "]" ElementType ctx []
 	{
@@ -547,7 +561,7 @@ func (p *parser) assignment() Node {
 				goto _0
 			}
 		default:
-			p.back(ix)
+			p.linearBack(ix)
 			goto _0
 		}
 		// *ebnf.Name ExpressionList ctx []
@@ -779,6 +793,10 @@ func (p *parser) channelType() Node {
 	// ebnf.Alternative "<-" "chan" ElementType | "chan" "<-" ElementType | "chan" ElementType ctx []
 	switch p.c().tok {
 	case ARROW: // 0
+		if p.peek(1).tok != CHAN {
+			return nil
+		}
+
 		// ebnf.Sequence "<-" "chan" ElementType ctx [ARROW]
 		{
 			ix := p.ix
@@ -806,33 +824,35 @@ func (p *parser) channelType() Node {
 			}
 		}
 	case CHAN: // 1 2
-		// ebnf.Sequence "chan" "<-" ElementType ctx [CHAN]
-		{
-			ix := p.ix
-			// *ebnf.Token "chan" ctx [CHAN]
-			p.ix++
-			p.budget--
-			// *ebnf.Token "<-" ctx []
-			if p.c().tok == ARROW {
+		if p.peek(1).tok == ARROW {
+			// ebnf.Sequence "chan" "<-" ElementType ctx [CHAN]
+			{
+				ix := p.ix
+				// *ebnf.Token "chan" ctx [CHAN]
 				p.ix++
 				p.budget--
-			} else {
-				p.back(ix)
-				goto _0
-			}
-			// *ebnf.Name ElementType ctx []
-			switch p.c().tok {
-			case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
-				if p.elementType() == nil {
+				// *ebnf.Token "<-" ctx []
+				if p.c().tok == ARROW {
+					p.ix++
+					p.budget--
+				} else {
 					p.back(ix)
 					goto _0
 				}
-			default:
-				p.back(ix)
-				goto _0
+				// *ebnf.Name ElementType ctx []
+				switch p.c().tok {
+				case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+					if p.elementType() == nil {
+						p.back(ix)
+						goto _0
+					}
+				default:
+					p.back(ix)
+					goto _0
+				}
 			}
+			break
 		}
-		break
 	_0:
 		// ebnf.Sequence "chan" ElementType ctx [CHAN]
 		{
@@ -960,6 +980,25 @@ _0:
 type CompositeLitNode struct{ noder }
 
 func (p *parser) compositeLit() Node {
+	if p.c().tok == IDENT {
+		switch p.peek(1).tok {
+		case PERIOD:
+			if p.peek(2).tok != IDENT {
+				return nil
+			}
+			switch p.peek(3).tok {
+			case LBRACE, LBRACK:
+				// ok
+			default:
+				return nil
+			}
+		case LBRACK, LBRACE:
+			// ok
+		default:
+			return nil
+		}
+	}
+
 	ix := p.ix
 	// ebnf.Sequence LiteralType LiteralValue ctx []
 	{
@@ -983,7 +1022,7 @@ func (p *parser) compositeLit() Node {
 				goto _0
 			}
 		default:
-			p.back(ix)
+			p.linearBack(ix)
 			goto _0
 		}
 	}
@@ -1090,8 +1129,8 @@ func (p *parser) constDecl() Node {
 						}
 						// *ebnf.Repetition { ";" ConstSpec } ctx []
 					_2:
-						switch p.c().tok {
-						case SEMICOLON:
+						switch {
+						case p.c().tok == SEMICOLON && p.peek(1).tok != RPAREN:
 							// ebnf.Sequence ";" ConstSpec ctx [SEMICOLON]
 							ix := p.ix
 							// *ebnf.Token ";" ctx [SEMICOLON]
@@ -2010,8 +2049,10 @@ func (p *parser) fieldDecl() Node {
 						p.back(ix)
 						goto _1
 					}
+				case SEMICOLON, RBRACE:
+					return &FieldDeclNode{}
 				default:
-					p.back(ix)
+					p.linearBack(ix)
 					goto _1
 				}
 			}
@@ -2275,6 +2316,10 @@ func (p *parser) functionBody() Node {
 type FunctionDeclNode struct{ noder }
 
 func (p *parser) functionDecl() Node {
+	if p.c().tok != FUNC || p.peek(1).tok == LPAREN {
+		return nil
+	}
+
 	ix := p.ix
 	// ebnf.Sequence "func" FunctionName [ TypeParameters ] Signature [ FunctionBody ] ctx []
 	{
@@ -2513,48 +2558,20 @@ _0:
 // IdentifierListNode represents the production
 //
 //	IdentifierList = identifier { "," identifier } .
-type IdentifierListNode struct{ noder }
+type IdentifierListNode []struct{ COMMA, IDENT tok }
+
+func (n *IdentifierListNode) Position() token.Position { return (*n)[0].IDENT.Position() }
 
 func (p *parser) identifierList() Node {
-	ix := p.ix
-	// ebnf.Sequence identifier { "," identifier } ctx []
-	{
-		ix := p.ix
-		// *ebnf.Name identifier ctx []
-		if p.c().tok == IDENT {
-			p.ix++
-			p.budget--
-		} else {
-			p.back(ix)
-			goto _0
-		}
-		// *ebnf.Repetition { "," identifier } ctx []
-	_1:
-		switch p.c().tok {
-		case COMMA:
-			// ebnf.Sequence "," identifier ctx [COMMA]
-			ix := p.ix
-			// *ebnf.Token "," ctx [COMMA]
-			p.ix++
-			p.budget--
-			// *ebnf.Name identifier ctx []
-			if p.c().tok == IDENT {
-				p.ix++
-				p.budget--
-			} else {
-				p.back(ix)
-				goto _2
-			}
-			goto _1
-		}
-		goto _2
-	_2:
+	if p.c().tok != IDENT {
+		return nil
 	}
-	return &IdentifierListNode{}
-	goto _0
-_0:
-	p.back(ix)
-	return nil
+
+	r := IdentifierListNode{{IDENT: p.n()}}
+	for p.c().tok == COMMA && p.peek(1).tok == IDENT {
+		r = append(r, struct{ COMMA, IDENT tok }{p.n(), p.n()})
+	}
+	return &r
 }
 
 // IfStmtNode represents the production
@@ -2890,7 +2907,7 @@ func (p *parser) incDecStmt() Node {
 			p.ix++
 			p.budget--
 		default:
-			p.back(ix)
+			p.linearBack(ix)
 			goto _0
 		}
 	}
@@ -3027,8 +3044,8 @@ func (p *parser) interfaceType() Node {
 				}
 				// *ebnf.Repetition { ";" InterfaceElem } ctx []
 			_2:
-				switch p.c().tok {
-				case SEMICOLON:
+				switch {
+				case p.c().tok == SEMICOLON && p.peek(1).tok != RBRACE:
 					// ebnf.Sequence ";" InterfaceElem ctx [SEMICOLON]
 					ix := p.ix
 					// *ebnf.Token ";" ctx [SEMICOLON]
@@ -3197,6 +3214,10 @@ func (p *parser) label() Node {
 type LabeledStmtNode struct{ noder }
 
 func (p *parser) labeledStmt() Node {
+	if p.c().tok != IDENT || p.peek(1).tok != COLON {
+		return nil
+	}
+
 	ix := p.ix
 	// ebnf.Sequence Label ":" Statement ctx []
 	{
@@ -3315,40 +3336,42 @@ func (p *parser) literalType() Node {
 		break
 	_0:
 		// ebnf.Sequence "[" "..." "]" ElementType ctx [LBRACK]
-		{
-			ix := p.ix
-			// *ebnf.Token "[" ctx [LBRACK]
-			p.ix++
-			p.budget--
-			// *ebnf.Token "..." ctx []
-			if p.c().tok == ELLIPSIS {
+		if p.peek(1).tok == ELLIPSIS {
+			{
+				ix := p.ix
+				// *ebnf.Token "[" ctx [LBRACK]
 				p.ix++
 				p.budget--
-			} else {
-				p.back(ix)
-				goto _1
-			}
-			// *ebnf.Token "]" ctx []
-			if p.c().tok == RBRACK {
-				p.ix++
-				p.budget--
-			} else {
-				p.back(ix)
-				goto _1
-			}
-			// *ebnf.Name ElementType ctx []
-			switch p.c().tok {
-			case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
-				if p.elementType() == nil {
+				// *ebnf.Token "..." ctx []
+				if p.c().tok == ELLIPSIS {
+					p.ix++
+					p.budget--
+				} else {
 					p.back(ix)
 					goto _1
 				}
-			default:
-				p.back(ix)
-				goto _1
+				// *ebnf.Token "]" ctx []
+				if p.c().tok == RBRACK {
+					p.ix++
+					p.budget--
+				} else {
+					p.back(ix)
+					goto _1
+				}
+				// *ebnf.Name ElementType ctx []
+				switch p.c().tok {
+				case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+					if p.elementType() == nil {
+						p.back(ix)
+						goto _1
+					}
+				default:
+					p.back(ix)
+					goto _1
+				}
 			}
+			break
 		}
-		break
 	_1:
 		// *ebnf.Name SliceType ctx [LBRACK]
 		if p.sliceType() == nil {
@@ -3765,6 +3788,10 @@ _0:
 type MethodElemNode struct{ noder }
 
 func (p *parser) methodElem() Node {
+	if p.c().tok != IDENT || p.peek(1).tok != LPAREN {
+		return nil
+	}
+
 	ix := p.ix
 	// ebnf.Sequence MethodName Signature ctx []
 	{
@@ -4245,63 +4272,67 @@ func (p *parser) parameterDecl() Node {
 	// ebnf.Alternative identifier "..." Type | identifier Type | "..." Type | Type ctx []
 	switch p.c().tok {
 	case IDENT: // 0 1 3
-		// ebnf.Sequence identifier "..." Type ctx [IDENT]
-		{
-			ix := p.ix
-			// *ebnf.Name identifier ctx [IDENT]
-			if p.c().tok == IDENT {
-				p.ix++
-				p.budget--
-			} else {
-				p.back(ix)
-				goto _0
-			}
-			// *ebnf.Token "..." ctx []
-			if p.c().tok == ELLIPSIS {
-				p.ix++
-				p.budget--
-			} else {
-				p.back(ix)
-				goto _0
-			}
-			// *ebnf.Name Type ctx []
-			switch p.c().tok {
-			case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
-				if p.type1() == nil {
+		if p.peek(1).tok == ELLIPSIS {
+			// ebnf.Sequence identifier "..." Type ctx [IDENT]
+			{
+				ix := p.ix
+				// *ebnf.Name identifier ctx [IDENT]
+				if p.c().tok == IDENT {
+					p.ix++
+					p.budget--
+				} else {
 					p.back(ix)
 					goto _0
 				}
-			default:
-				p.back(ix)
-				goto _0
+				// *ebnf.Token "..." ctx []
+				if p.c().tok == ELLIPSIS {
+					p.ix++
+					p.budget--
+				} else {
+					p.back(ix)
+					goto _0
+				}
+				// *ebnf.Name Type ctx []
+				switch p.c().tok {
+				case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+					if p.type1() == nil {
+						p.back(ix)
+						goto _0
+					}
+				default:
+					p.back(ix)
+					goto _0
+				}
 			}
+			break
 		}
-		break
 	_0:
 		// ebnf.Sequence identifier Type ctx [IDENT]
-		{
-			ix := p.ix
-			// *ebnf.Name identifier ctx [IDENT]
-			if p.c().tok == IDENT {
-				p.ix++
-				p.budget--
-			} else {
-				p.back(ix)
-				goto _1
-			}
-			// *ebnf.Name Type ctx []
-			switch p.c().tok {
-			case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
-				if p.type1() == nil {
+		if p.c().tok == IDENT && p.peek(1).tok != COMMA {
+			{
+				ix := p.ix
+				// *ebnf.Name identifier ctx [IDENT]
+				if p.c().tok == IDENT {
+					p.ix++
+					p.budget--
+				} else {
 					p.back(ix)
 					goto _1
 				}
-			default:
-				p.back(ix)
-				goto _1
+				// *ebnf.Name Type ctx []
+				switch p.c().tok {
+				case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
+					if p.type1() == nil {
+						p.back(ix)
+						goto _1
+					}
+				default:
+					p.back(ix)
+					goto _1
+				}
 			}
+			break
 		}
-		break
 	_1:
 		// *ebnf.Name Type ctx [IDENT]
 		if p.type1() == nil {
@@ -4726,46 +4757,20 @@ _0:
 // QualifiedIdentNode represents the production
 //
 //	QualifiedIdent = PackageName "." identifier .
-type QualifiedIdentNode struct{ noder }
+type QualifiedIdentNode struct {
+	PackageName tok
+	PERIOD      tok
+	IDENT       tok
+}
+
+func (n *QualifiedIdentNode) Position() token.Position { return n.PackageName.Position() }
 
 func (p *parser) qualifiedIdent() Node {
-	ix := p.ix
-	// ebnf.Sequence PackageName "." identifier ctx []
-	{
-		ix := p.ix
-		// *ebnf.Name PackageName ctx []
-		switch p.c().tok {
-		case IDENT:
-			if p.packageName() == nil {
-				p.back(ix)
-				goto _0
-			}
-		default:
-			p.back(ix)
-			goto _0
-		}
-		// *ebnf.Token "." ctx []
-		if p.c().tok == PERIOD {
-			p.ix++
-			p.budget--
-		} else {
-			p.back(ix)
-			goto _0
-		}
-		// *ebnf.Name identifier ctx []
-		if p.c().tok == IDENT {
-			p.ix++
-			p.budget--
-		} else {
-			p.back(ix)
-			goto _0
-		}
+	if p.c().tok != IDENT || p.peek(1).tok != PERIOD || p.peek(2).tok != IDENT {
+		return nil
 	}
-	return &QualifiedIdentNode{}
-	goto _0
-_0:
-	p.back(ix)
-	return nil
+
+	return &QualifiedIdentNode{p.n(), p.n(), p.n()}
 }
 
 // RangeClauseNode represents the production
@@ -5330,7 +5335,7 @@ func (p *parser) sendStmt() Node {
 			p.ix++
 			p.budget--
 		} else {
-			p.back(ix)
+			p.linearBack(ix)
 			goto _0
 		}
 		// *ebnf.Name Expression ctx []
@@ -5426,7 +5431,7 @@ func (p *parser) shortVarDecl() Node {
 			p.ix++
 			p.budget--
 		} else {
-			p.back(ix)
+			p.linearBack(ix)
 			goto _0
 		}
 		// *ebnf.Name ExpressionList ctx []
@@ -6131,8 +6136,8 @@ func (p *parser) structType() Node {
 				}
 				// *ebnf.Repetition { ";" FieldDecl } ctx []
 			_2:
-				switch p.c().tok {
-				case SEMICOLON:
+				switch {
+				case p.c().tok == SEMICOLON && p.peek(1).tok != RBRACE:
 					// ebnf.Sequence ";" FieldDecl ctx [SEMICOLON]
 					ix := p.ix
 					// *ebnf.Token ";" ctx [SEMICOLON]
@@ -6929,6 +6934,10 @@ _0:
 type TypeParametersNode struct{ noder }
 
 func (p *parser) typeParameters() Node {
+	if p.c().tok != LBRACK || p.peek(1).tok != IDENT {
+		return nil
+	}
+
 	ix := p.ix
 	// ebnf.Sequence "[" TypeParamList [ "," ] "]" ctx []
 	{
@@ -7513,8 +7522,8 @@ func (p *parser) varDecl() Node {
 						}
 						// *ebnf.Repetition { ";" VarSpec } ctx []
 					_2:
-						switch p.c().tok {
-						case SEMICOLON:
+						switch {
+						case p.c().tok == SEMICOLON && p.peek(1).tok != RPAREN:
 							// ebnf.Sequence ";" VarSpec ctx [SEMICOLON]
 							ix := p.ix
 							// *ebnf.Token ";" ctx [SEMICOLON]

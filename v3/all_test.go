@@ -27,6 +27,8 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	flag.BoolVar(&noBack, "noback", false, "panic on parser back")
+	flag.BoolVar(&panicBack, "panicback", false, "panic on parser back")
 	flag.BoolVar(&trcTODOs, "trctodo", false, "")
 	flag.Parse()
 	if s := *oRE; s != "" {
@@ -154,13 +156,15 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 		}
 
 		p.addFile()
-		switch s := filepath.ToSlash(path0); {
-		case
-			strings.HasSuffix(s, "test/fixedbugs/issue29264.go"), //TODO
-			strings.HasSuffix(s, "test/fixedbugs/issue29312.go"): //TODO
+		if !noBack {
+			switch s := filepath.ToSlash(path0); {
+			case
+				strings.HasSuffix(s, "test/fixedbugs/issue29264.go"), //TODO
+				strings.HasSuffix(s, "test/fixedbugs/issue29312.go"): //TODO
 
-			p.addSkipped()
-			return nil
+				p.addSkipped()
+				return nil
+			}
 		}
 
 		path := path0
