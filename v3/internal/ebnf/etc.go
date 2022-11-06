@@ -21,7 +21,12 @@ import (
 	"modernc.org/mathutil"
 )
 
-const epsilon = -1
+const (
+	ebnfBudget   = 2e7
+	parserBudget = 2e6
+
+	epsilon = -1
+)
 
 // The list of tokens.
 const (
@@ -397,17 +402,21 @@ func h(v interface{}) string {
 }
 
 type parallel struct {
-	errors []error
-	limit  chan struct{}
+	errors        []error
+	limit         chan struct{}
+	maxBackPath   string
+	maxBudgetPath string
+	minToksPath   string
 	sync.Mutex
-	wg      sync.WaitGroup
-	minPath string
+	wg sync.WaitGroup
 
-	minToks int
-	fails   int32
-	files   int32
-	ok      int32
-	skipped int32
+	fails     int32
+	files     int32
+	maxBacks  int
+	maxBudget int
+	minToks   int
+	ok        int32
+	skipped   int32
 }
 
 func newParallel() *parallel {
@@ -421,13 +430,33 @@ func (p *parallel) addFail()    { atomic.AddInt32(&p.fails, 1) }
 func (p *parallel) addFile()    { atomic.AddInt32(&p.files, 1) }
 func (p *parallel) addOk()      { atomic.AddInt32(&p.ok, 1) }
 
-func (p *parallel) min(path string, toks int) {
+func (p *parallel) recordMaxBack(path string, back int) {
+	p.Lock()
+	defer p.Unlock()
+
+	if back > p.maxBacks {
+		p.maxBacks = back
+		p.maxBackPath = path
+	}
+}
+
+func (p *parallel) recordMaxBudget(path string, budget int) {
+	p.Lock()
+	defer p.Unlock()
+
+	if budget > p.maxBudget {
+		p.maxBudget = budget
+		p.maxBudgetPath = path
+	}
+}
+
+func (p *parallel) recordMinToks(path string, toks int) {
 	p.Lock()
 	defer p.Unlock()
 
 	if p.minToks == 0 || toks < p.minToks {
 		p.minToks = toks
-		p.minPath = path
+		p.minToksPath = path
 	}
 }
 
@@ -895,6 +924,7 @@ type ebnfParser struct {
 	path string
 	toks []tok
 
+	backs    int
 	budget   int
 	indentN  int
 	index    int
@@ -905,7 +935,7 @@ type ebnfParser struct {
 
 func newEBNFParser(g *grammar, path string, src []byte, trcPEG bool) (r *ebnfParser, err error) {
 	r = &ebnfParser{
-		budget: 3e7,
+		budget: ebnfBudget,
 		g:      g,
 		path:   path,
 		trcPEG: trcPEG,
@@ -1037,6 +1067,7 @@ out:
 	default:
 		panic(todo("%T", x))
 	}
+	p.backs += p.index - index0
 	p.index = index0
 	return false
 }
@@ -1046,6 +1077,7 @@ type parser struct {
 	path string
 	toks []tok
 
+	backs  int
 	budget int
 	ix     int
 	maxIx  int
@@ -1055,7 +1087,7 @@ type parser struct {
 
 func newParser(path string, src []byte) (r *parser, err error) {
 	r = &parser{
-		budget: 2e6,
+		budget: parserBudget,
 		path:   path,
 	}
 	var s scanner.Scanner
@@ -1088,7 +1120,10 @@ func (p *parser) c() tok {
 	return p.toks[p.ix]
 }
 
-func (p *parser) back(ix int) { p.ix = ix }
+func (p *parser) back(ix int) {
+	p.backs += ix - p.ix
+	p.ix = ix
+}
 
 func (p *parser) parse() (err error) {
 	ast := p.sourceFile()

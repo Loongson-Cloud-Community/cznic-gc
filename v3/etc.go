@@ -254,17 +254,21 @@ func h(v interface{}) string {
 }
 
 type parallel struct {
-	errors []error
-	limit  chan struct{}
+	errors        []error
+	limit         chan struct{}
+	maxBackPath   string
+	maxBudgetPath string
+	minToksPath   string
 	sync.Mutex
-	wg      sync.WaitGroup
-	minPath string
+	wg sync.WaitGroup
 
-	minToks int
-	fails   int32
-	files   int32
-	ok      int32
-	skipped int32
+	fails     int32
+	files     int32
+	maxBacks  int
+	maxBudget int
+	minToks   int
+	ok        int32
+	skipped   int32
 }
 
 func newParallel() *parallel {
@@ -278,13 +282,33 @@ func (p *parallel) addFail()    { atomic.AddInt32(&p.fails, 1) }
 func (p *parallel) addFile()    { atomic.AddInt32(&p.files, 1) }
 func (p *parallel) addOk()      { atomic.AddInt32(&p.ok, 1) }
 
-func (p *parallel) min(path string, toks int) {
+func (p *parallel) recordMaxBack(path string, back int) {
+	p.Lock()
+	defer p.Unlock()
+
+	if back > p.maxBacks {
+		p.maxBacks = back
+		p.maxBackPath = path
+	}
+}
+
+func (p *parallel) recordMaxBudget(path string, budget int) {
+	p.Lock()
+	defer p.Unlock()
+
+	if budget > p.maxBudget {
+		p.maxBudget = budget
+		p.maxBudgetPath = path
+	}
+}
+
+func (p *parallel) recordMinToks(path string, toks int) {
 	p.Lock()
 	defer p.Unlock()
 
 	if p.minToks == 0 || toks < p.minToks {
 		p.minToks = toks
-		p.minPath = path
+		p.minToksPath = path
 	}
 }
 

@@ -132,8 +132,10 @@ func TestParser(t *testing.T) {
 		t.Error(err)
 	}
 	t.Logf("TOTAL files %v, skip %v, ok %v, fail %v", h(p.files), h(p.skipped), h(p.ok), h(p.fails))
+	t.Logf("Max backtrack: %s, %v tokens", p.maxBackPath, h(p.maxBacks))
+	t.Logf("Max budget used: %s, %v", p.maxBudgetPath, h(p.maxBudget))
 	if p.fails != 0 {
-		t.Logf("Shortest failing file: %s, %v tokens", p.minPath, p.minToks)
+		t.Logf("Shortest failing file: %s, %v tokens", p.minToksPath, p.minToks)
 	}
 }
 
@@ -156,17 +158,6 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 		}
 
 		p.addFile()
-		if !noBack && !panicBack {
-			switch s := filepath.ToSlash(path0); {
-			case
-				strings.HasSuffix(s, "test/fixedbugs/issue29264.go"), //TODO
-				strings.HasSuffix(s, "test/fixedbugs/issue29312.go"): //TODO
-
-				p.addSkipped()
-				return nil
-			}
-		}
-
 		path := path0
 		p.exec(func() (err error) {
 			if *oTrc {
@@ -179,8 +170,12 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 				if err != nil {
 					p.addFail()
 					if pp != nil {
-						p.min(path, len(pp.toks))
+						p.recordMinToks(path, len(pp.toks))
 					}
+				}
+				if pp != nil {
+					p.recordMaxBack(path, pp.backs)
+					p.recordMaxBudget(path, parserBudget-pp.budget)
 				}
 			}()
 
@@ -227,9 +222,6 @@ func TestGoParser(t *testing.T) {
 		t.Error(err)
 	}
 	t.Logf("TOTAL files %v, skip %v, ok %v, fail %v", h(p.files), h(p.skipped), h(p.ok), h(p.fails))
-	if p.fails != 0 {
-		t.Logf("Shortest failing file: %s, %v tokens", p.minPath, p.minToks)
-	}
 }
 
 func testGoParser(p *parallel, t *testing.T, root string, gld *golden) {
@@ -237,7 +229,6 @@ func testGoParser(p *parallel, t *testing.T, root string, gld *golden) {
 		if err != nil {
 			return err
 		}
-
 		if info.IsDir() {
 			return nil
 		}

@@ -7203,7 +7203,9 @@
 /usr/local/go/test/fixedbugs/issue29215.go
 /usr/local/go/test/fixedbugs/issue29218.go
 /usr/local/go/test/fixedbugs/issue29220.go
+/usr/local/go/test/fixedbugs/issue29264.go
 /usr/local/go/test/fixedbugs/issue29304.go
+/usr/local/go/test/fixedbugs/issue29312.go
 /usr/local/go/test/fixedbugs/issue29329.go
 /usr/local/go/test/fixedbugs/issue29350.go
 /usr/local/go/test/fixedbugs/issue29362.go

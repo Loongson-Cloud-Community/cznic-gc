@@ -1968,20 +1968,6 @@ _0:
 	return nil
 }
 
-// FieldNameNode represents the production
-//
-//	FieldName = identifier .
-type FieldNameNode struct{ noder }
-
-func (p *parser) fieldName() Node {
-	if p.c().tok == IDENT {
-		p.ix++
-		p.budget--
-		return &FieldNameNode{}
-	}
-	return nil
-}
-
 // ForClauseNode represents the production
 //
 //	ForClause = [ InitStmt ] ";" [ Condition ] ";" [ PostStmt ] .
@@ -2993,44 +2979,6 @@ _0:
 	return nil
 }
 
-// KeyNode represents the production
-//
-//	Key = Expression | FieldName | LiteralValue .
-type KeyNode struct{ noder }
-
-func (p *parser) key() Node {
-	// ebnf.Alternative Expression | FieldName | LiteralValue ctx []
-	switch p.c().tok {
-	case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR: // 0
-		// *ebnf.Name Expression ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-		if p.expression() == nil {
-			return nil
-		}
-	case IDENT: // 0 1
-		// *ebnf.Name Expression ctx [IDENT]
-		if p.expression() == nil {
-			goto _0
-		}
-		break
-	_0:
-		// *ebnf.Name FieldName ctx [IDENT]
-		if p.fieldName() == nil {
-			goto _1
-		}
-		break
-	_1:
-		return nil
-	case LBRACE: // 2
-		// *ebnf.Name LiteralValue ctx [LBRACE]
-		if p.literalValue() == nil {
-			return nil
-		}
-	default:
-		return nil
-	}
-	return &KeyNode{}
-}
-
 // KeyTypeNode represents the production
 //
 //	KeyType = Type .
@@ -3042,37 +2990,14 @@ func (p *parser) keyType() Node {
 
 // KeyedElementNode represents the production
 //
-//	KeyedElement = [ Key ":" ] Element .
+//	KeyedElement = Element [ ":" Element ] .
 type KeyedElementNode struct{ noder }
 
 func (p *parser) keyedElement() Node {
 	ix := p.ix
-	// ebnf.Sequence [ Key ":" ] Element ctx []
+	// ebnf.Sequence Element [ ":" Element ] ctx []
 	{
 		ix := p.ix
-		// *ebnf.Option [ Key ":" ] ctx []
-		switch p.c().tok {
-		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-			// ebnf.Sequence Key ":" ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-			{
-				ix := p.ix
-				// *ebnf.Name Key ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-				if p.key() == nil {
-					p.back(ix)
-					goto _1
-				}
-				// *ebnf.Token ":" ctx []
-				if p.c().tok == COLON {
-					p.ix++
-					p.budget--
-				} else {
-					p.back(ix)
-					goto _1
-				}
-			}
-		}
-		goto _1
-	_1:
 		// *ebnf.Name Element ctx []
 		switch p.c().tok {
 		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
@@ -3084,6 +3009,30 @@ func (p *parser) keyedElement() Node {
 			p.back(ix)
 			goto _0
 		}
+		// *ebnf.Option [ ":" Element ] ctx []
+		switch p.c().tok {
+		case COLON:
+			// ebnf.Sequence ":" Element ctx [COLON]
+			{
+				ix := p.ix
+				// *ebnf.Token ":" ctx [COLON]
+				p.ix++
+				p.budget--
+				// *ebnf.Name Element ctx []
+				switch p.c().tok {
+				case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+					if p.element() == nil {
+						p.back(ix)
+						goto _1
+					}
+				default:
+					p.back(ix)
+					goto _1
+				}
+			}
+		}
+		goto _1
+	_1:
 	}
 	return &KeyedElementNode{}
 	goto _0
