@@ -1,3 +1,12 @@
+../../all_test.go
+../../etc.go
+../../internal/abi.go
+../../internal/ebnf/all_test.go
+../../internal/ebnf/ebnflint.go
+../../internal/ebnf/etc.go
+../../internal/ebnf/gen.go
+../../internal/ebnf/parser.go
+../../parser.go
 /usr/local/go/misc/android/go_android_exec.go
 /usr/local/go/misc/cgo/errors/argposition_test.go
 /usr/local/go/misc/cgo/errors/badsym_test.go
@@ -987,6 +996,7 @@
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue42758.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue42881.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue43056.go
+/usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue43087.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue43109.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue43110.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue43124.go
@@ -3147,6 +3157,7 @@
 /usr/local/go/src/go/types/testdata/fixedbugs/issue42758.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue42881.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue43056.go
+/usr/local/go/src/go/types/testdata/fixedbugs/issue43087.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue43109.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue43110.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue43124.go
@@ -6414,6 +6425,7 @@
 /usr/local/go/test/fixedbugs/bug347.go
 /usr/local/go/test/fixedbugs/bug348.go
 /usr/local/go/test/fixedbugs/bug350.go
+/usr/local/go/test/fixedbugs/bug351.go
 /usr/local/go/test/fixedbugs/bug352.go
 /usr/local/go/test/fixedbugs/bug353.go
 /usr/local/go/test/fixedbugs/bug354.go
@@ -6456,6 +6468,7 @@
 /usr/local/go/test/fixedbugs/bug385_64.go
 /usr/local/go/test/fixedbugs/bug386.go
 /usr/local/go/test/fixedbugs/bug387.go
+/usr/local/go/test/fixedbugs/bug388a.go
 /usr/local/go/test/fixedbugs/bug389.go
 /usr/local/go/test/fixedbugs/bug390.go
 /usr/local/go/test/fixedbugs/bug391.go
@@ -8753,8 +8766,3 @@
 /usr/local/go/test/winbatch.go
 /usr/local/go/test/writebarrier.go
 /usr/local/go/test/zerodivide.go
-all_test.go
-ebnflint.go
-etc.go
-gen.go
-parser.go

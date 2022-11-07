@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -253,26 +254,114 @@ func h(v interface{}) string {
 	return fmt.Sprint(v)
 }
 
+type data struct {
+	line  int
+	cases int
+	cnt   int
+}
+
+type analyzer struct {
+	sync.Mutex
+	m map[int]*data // line: data
+}
+
+func newAnalyzer() *analyzer {
+	return &analyzer{m: map[int]*data{}}
+}
+
+func (a *analyzer) record(line, cnt int) {
+	d := a.m[line]
+	if d == nil {
+		d = &data{line: line}
+		a.m[line] = d
+	}
+	d.cases++
+	d.cnt += cnt
+}
+
+func (a *analyzer) merge(b *analyzer) {
+	a.Lock()
+	defer a.Unlock()
+
+	for k, v := range b.m {
+		d := a.m[k]
+		if d == nil {
+			d = &data{line: k}
+			a.m[k] = d
+		}
+		d.cases += v.cases
+		d.cnt += v.cnt
+	}
+}
+
+func (a *analyzer) report() string {
+	var rows []*data
+	for _, v := range a.m {
+		rows = append(rows, v)
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		a := rows[i]
+		b := rows[j]
+		if a.cases < b.cases {
+			return true
+		}
+
+		if a.cases > b.cases {
+			return false
+		}
+
+		// a.cases == b.cases
+		if a.cnt < b.cnt {
+			return true
+		}
+
+		if a.cnt > b.cnt {
+			return false
+		}
+
+		// a.cnt == b.cnt
+		return a.line < b.line
+	})
+	var b strings.Builder
+	var cases, cnt int
+	for _, row := range rows {
+		cases += row.cases
+		cnt += row.cnt
+		avg := float64(row.cnt) / float64(row.cases)
+		fmt.Fprintf(&b, "parser.go:%d:\t%16s %16s %8.1f\n", row.line, h(row.cases), h(row.cnt), avg)
+	}
+	avg := float64(cnt) / float64(cases)
+	fmt.Fprintf(&b, "<total>\t\t%16s %16s %8.1f\n", h(cases), h(cnt), avg)
+	return b.String()
+}
+
 type parallel struct {
-	errors        []error
-	limit         chan struct{}
-	maxBackPath   string
-	maxBudgetPath string
-	minToksPath   string
+	a                  *analyzer
+	errors             []error
+	limit              chan struct{}
+	maxBacktrackOrigin string
+	maxBacktrackPath   string
+	maxBacktrackPos    string
+	maxBacktracksPath  string
+	maxBudgetPath      string
+	minToksPath        string
 	sync.Mutex
 	wg sync.WaitGroup
 
-	fails     int32
-	files     int32
-	maxBacks  int
-	maxBudget int
-	minToks   int
-	ok        int32
-	skipped   int32
+	fails         int32
+	files         int32
+	maxBacktrack  int
+	maxBacktracks int
+	maxBudget     int
+	maxBudgetToks int
+	minToks       int
+	ok            int32
+	skipped       int32
 }
 
 func newParallel() *parallel {
 	return &parallel{
+		a:     newAnalyzer(),
 		limit: make(chan struct{}, runtime.GOMAXPROCS(0)),
 	}
 }
@@ -282,22 +371,35 @@ func (p *parallel) addFail()    { atomic.AddInt32(&p.fails, 1) }
 func (p *parallel) addFile()    { atomic.AddInt32(&p.files, 1) }
 func (p *parallel) addOk()      { atomic.AddInt32(&p.ok, 1) }
 
-func (p *parallel) recordMaxBack(path string, back int) {
+func (p *parallel) recordMaxBacktrack(path string, back int, pos, origin string) {
 	p.Lock()
 	defer p.Unlock()
 
-	if back > p.maxBacks {
-		p.maxBacks = back
-		p.maxBackPath = path
+	if back > p.maxBacktrack {
+		p.maxBacktrack = back
+		p.maxBacktrackOrigin = origin
+		p.maxBacktrackPos = pos
+		p.maxBacktrackPath = path
 	}
 }
 
-func (p *parallel) recordMaxBudget(path string, budget int) {
+func (p *parallel) recordMaxBacktracks(path string, back int) {
+	p.Lock()
+	defer p.Unlock()
+
+	if back > p.maxBacktracks {
+		p.maxBacktracks = back
+		p.maxBacktracksPath = path
+	}
+}
+
+func (p *parallel) recordMaxBudget(path string, budget, toks int) {
 	p.Lock()
 	defer p.Unlock()
 
 	if budget > p.maxBudget {
 		p.maxBudget = budget
+		p.maxBudgetToks = toks
 		p.maxBudgetPath = path
 	}
 }

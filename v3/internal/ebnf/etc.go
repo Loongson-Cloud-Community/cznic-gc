@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	ebnfBudget   = 2e7
-	parserBudget = 2e6
+	ebnfBudget   = 4e6
+	parserBudget = 4e5
 
 	epsilon = -1
 )
@@ -223,6 +223,87 @@ var (
 	}
 )
 
+type data struct {
+	line  int
+	cases int
+	cnt   int
+}
+
+type analyzer struct {
+	sync.Mutex
+	m map[int]*data // line: data
+}
+
+func newAnalyzer() *analyzer {
+	return &analyzer{m: map[int]*data{}}
+}
+
+func (a *analyzer) record(line, cnt int) {
+	d := a.m[line]
+	if d == nil {
+		d = &data{line: line}
+		a.m[line] = d
+	}
+	d.cases++
+	d.cnt += cnt
+}
+
+func (a *analyzer) merge(b *analyzer) {
+	a.Lock()
+	defer a.Unlock()
+
+	for k, v := range b.m {
+		d := a.m[k]
+		if d == nil {
+			d = &data{line: k}
+			a.m[k] = d
+		}
+		d.cases += v.cases
+		d.cnt += v.cnt
+	}
+}
+
+func (a *analyzer) report() string {
+	var rows []*data
+	for _, v := range a.m {
+		rows = append(rows, v)
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		a := rows[i]
+		b := rows[j]
+		if a.cases < b.cases {
+			return true
+		}
+
+		if a.cases > b.cases {
+			return false
+		}
+
+		// a.cases == b.cases
+		if a.cnt < b.cnt {
+			return true
+		}
+
+		if a.cnt > b.cnt {
+			return false
+		}
+
+		// a.cnt == b.cnt
+		return a.line < b.line
+	})
+	var b strings.Builder
+	var cases, cnt int
+	for _, row := range rows {
+		cases += row.cases
+		cnt += row.cnt
+		avg := float64(row.cnt) / float64(row.cases)
+		fmt.Fprintf(&b, "parser.go:%d:\t%16s %16s %8.1f\n", row.line, h(row.cases), h(row.cnt), avg)
+	}
+	avg := float64(cnt) / float64(cases)
+	fmt.Fprintf(&b, "<total>\t\t%16s %16s %8.1f\n", h(cases), h(cnt), avg)
+	return b.String()
+}
+
 // origin returns caller's short position, skipping skip frames.
 func origin(skip int) string {
 	pc, fn, fl, _ := runtime.Caller(skip)
@@ -402,25 +483,32 @@ func h(v interface{}) string {
 }
 
 type parallel struct {
-	errors        []error
-	limit         chan struct{}
-	maxBackPath   string
-	maxBudgetPath string
-	minToksPath   string
+	a                  *analyzer
+	errors             []error
+	limit              chan struct{}
+	maxBacktrackOrigin string
+	maxBacktrackPath   string
+	maxBacktrackPos    string
+	maxBacktracksPath  string
+	maxBudgetPath      string
+	minToksPath        string
 	sync.Mutex
 	wg sync.WaitGroup
 
-	fails     int32
-	files     int32
-	maxBacks  int
-	maxBudget int
-	minToks   int
-	ok        int32
-	skipped   int32
+	fails         int32
+	files         int32
+	maxBacktrack  int
+	maxBacktracks int
+	maxBudget     int
+	maxBudgetToks int
+	minToks       int
+	ok            int32
+	skipped       int32
 }
 
 func newParallel() *parallel {
 	return &parallel{
+		a:     newAnalyzer(),
 		limit: make(chan struct{}, runtime.GOMAXPROCS(0)),
 	}
 }
@@ -430,22 +518,35 @@ func (p *parallel) addFail()    { atomic.AddInt32(&p.fails, 1) }
 func (p *parallel) addFile()    { atomic.AddInt32(&p.files, 1) }
 func (p *parallel) addOk()      { atomic.AddInt32(&p.ok, 1) }
 
+func (p *parallel) recordMaxBacktrack(path string, back int, pos, origin string) {
+	p.Lock()
+	defer p.Unlock()
+
+	if back > p.maxBacktrack {
+		p.maxBacktrack = back
+		p.maxBacktrackOrigin = origin
+		p.maxBacktrackPos = pos
+		p.maxBacktrackPath = path
+	}
+}
+
 func (p *parallel) recordMaxBack(path string, back int) {
 	p.Lock()
 	defer p.Unlock()
 
-	if back > p.maxBacks {
-		p.maxBacks = back
-		p.maxBackPath = path
+	if back > p.maxBacktracks {
+		p.maxBacktracks = back
+		p.maxBacktracksPath = path
 	}
 }
 
-func (p *parallel) recordMaxBudget(path string, budget int) {
+func (p *parallel) recordMaxBudget(path string, budget, toks int) {
 	p.Lock()
 	defer p.Unlock()
 
 	if budget > p.maxBudget {
 		p.maxBudget = budget
+		p.maxBudgetToks = toks
 		p.maxBudgetPath = path
 	}
 }
@@ -725,10 +826,13 @@ func (g *grammar) closure0(prod string, e ebnf.Expression, m map[string]struct{}
 }
 
 type tok struct {
+	f   *token.File
 	pos token.Pos
 	tok token.Token
 	lit string
 }
+
+func (n tok) Position() token.Position { return n.f.PositionFor(n.pos, true) }
 
 func (t tok) String() string {
 	lit := t.lit
@@ -919,15 +1023,18 @@ func tokSource(t token.Token) string {
 }
 
 type ebnfParser struct {
-	f    *token.File
-	g    *grammar
-	path string
-	toks []tok
+	f             *token.File
+	g             *grammar
+	maxBackOrigin string
+	maxBackRange  [2]int
+	path          string
+	toks          []tok
 
 	backs    int
 	budget   int
 	indentN  int
 	index    int
+	maxBack  int
 	maxIndex int
 
 	trcPEG bool
@@ -942,11 +1049,12 @@ func newEBNFParser(g *grammar, path string, src []byte, trcPEG bool) (r *ebnfPar
 	}
 	var s scanner.Scanner
 	fs := token.NewFileSet()
-	r.f = fs.AddFile(path, -1, len(src))
+	f := fs.AddFile(path, -1, len(src))
+	r.f = f
 	s.Init(r.f, src, func(pos token.Position, msg string) { err = errorf("%v: %s", pos, msg) }, 0)
 	for {
 		pos, t, lit := s.Scan()
-		r.toks = append(r.toks, tok{pos, t, lit})
+		r.toks = append(r.toks, tok{f, pos, t, lit})
 		if err != nil {
 			return nil, err
 		}
@@ -980,7 +1088,6 @@ func (p *ebnfParser) c() tok {
 		return p.toks[len(p.toks)-1]
 	}
 
-	p.budget--
 	p.maxIndex = mathutil.Max(p.maxIndex, p.index)
 	return p.toks[p.index]
 }
@@ -988,6 +1095,7 @@ func (p *ebnfParser) c() tok {
 func (p *ebnfParser) accept(b bool) bool {
 	if b {
 		p.index++
+		p.budget--
 	}
 	return b
 }
@@ -1003,6 +1111,17 @@ func (p *ebnfParser) parse(start string) error {
 	}
 
 	return nil
+}
+
+func (p *ebnfParser) recordBacktrack(index int) {
+	delta := p.index - index
+	p.backs += delta
+	if delta > p.maxBack {
+		p.maxBack = delta
+		p.maxBackRange = [2]int{index, p.index}
+		p.maxBackOrigin = origin(3)
+	}
+	p.index = index
 }
 
 func (p *ebnfParser) errPosition() token.Position {
@@ -1067,36 +1186,44 @@ out:
 	default:
 		panic(todo("%T", x))
 	}
-	p.backs += p.index - index0
-	p.index = index0
+	p.recordBacktrack(index0)
 	return false
 }
 
 type parser struct {
-	f    *token.File
-	path string
-	toks []tok
+	a             *analyzer
+	f             *token.File
+	maxBackOrigin string
+	maxBackRange  [2]int
+	path          string
+	toks          []tok
 
-	backs  int
-	budget int
-	ix     int
-	maxIx  int
+	backs         int
+	budget        int
+	ix            int
+	maxBack       int
+	maxBudgetToks int
+	maxIx         int
 
 	closed bool
+	record bool
 }
 
-func newParser(path string, src []byte) (r *parser, err error) {
+func newParser(path string, src []byte, record bool) (r *parser, err error) {
 	r = &parser{
+		a:      newAnalyzer(),
 		budget: parserBudget,
 		path:   path,
+		record: record,
 	}
 	var s scanner.Scanner
 	fs := token.NewFileSet()
-	r.f = fs.AddFile(path, -1, len(src))
+	f := fs.AddFile(path, -1, len(src))
+	r.f = f
 	s.Init(r.f, src, func(pos token.Position, msg string) { err = errorf("%v: %s", pos, msg) }, 0)
 	for {
 		pos, t, lit := s.Scan()
-		r.toks = append(r.toks, tok{pos, t, lit})
+		r.toks = append(r.toks, tok{f, pos, t, lit})
 		if err != nil {
 			return nil, err
 		}
@@ -1111,18 +1238,39 @@ func (p *parser) errPosition() token.Position {
 	return p.f.PositionFor(p.toks[p.maxIx].pos, true)
 }
 
-func (p *parser) c() tok {
+func (p *parser) c() token.Token { return p.peek(0) }
+
+func (p *parser) peek(n int) token.Token {
 	if p.budget <= 0 {
-		return p.toks[len(p.toks)-1]
+		return p.toks[len(p.toks)-1].tok
 	}
 
-	p.maxIx = mathutil.Max(p.maxIx, p.ix)
-	return p.toks[p.ix]
+	p.maxIx = mathutil.Max(p.maxIx, p.ix+n)
+	return p.toks[p.ix+n].tok
+}
+
+func (p *parser) recordBacktrack(ix int) {
+	delta := p.ix - ix
+	p.backs += delta
+	if delta > p.maxBack {
+		p.maxBack = delta
+		p.maxBackRange = [2]int{ix, p.ix}
+		p.maxBackOrigin = origin(3)
+	}
+	p.ix = ix
+	if p.record {
+		if _, _, line, ok := runtime.Caller(2); ok {
+			p.a.record(line, delta)
+		}
+	}
 }
 
 func (p *parser) back(ix int) {
-	p.backs += ix - p.ix
-	p.ix = ix
+	if p.closed {
+		return
+	}
+
+	p.recordBacktrack(ix)
 }
 
 func (p *parser) parse() (err error) {

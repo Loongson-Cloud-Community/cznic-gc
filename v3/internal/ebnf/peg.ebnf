@@ -6,7 +6,8 @@ Arguments = "(" [ ( ExpressionList | Type [ "," ExpressionList ] ) [ "..." ] [ "
 ArrayLength = Expression .
 ArrayType = "[" ArrayLength "]" ElementType .
 AssignOp = "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" .
-Assignment = ExpressionList AssignOp ExpressionList .
+// Assignment = ExpressionList AssignOp ExpressionList .
+Assignment = /* ExpressionList */ AssignOp ExpressionList .
 AssignmentPreBlock = ExpressionList AssignOp ExpressionListPreBlock .
 BaseType = Type .
 BasicLit = int_lit | float_lit | imaginary_lit | rune_lit | string_lit .
@@ -37,7 +38,7 @@ Expression = LogicalAndExpression { "||" LogicalAndExpression } .
 ExpressionList = Expression { "," Expression } .
 ExpressionListPreBlock = ExpressionPreBlock { "," ExpressionPreBlock } .
 ExpressionPreBlock = LogicalAndExpressionPreBlock { "||" LogicalAndExpressionPreBlock } | Expression .
-ExpressionStmt = Expression .
+// ExpressionStmt = Expression .
 ExpressionStmtPreBlock = ExpressionPreBlock .
 FallthroughStmt = "fallthrough" .
 FieldDecl = ( IdentifierList Type | EmbeddedField ) [ Tag ] .
@@ -109,10 +110,13 @@ SelectStmt = "select" "{" { CommClause } "}" .
 Selector = "." identifier .
 SendStmt = Channel "<-" Expression .
 SendStmtPreBlock = Channel "<-" ExpressionPreBlock .
-ShortVarDecl = IdentifierList ":=" ExpressionList .
+ShortVarDecl = /* IdentifierList */ ":=" ExpressionList .
 ShortVarDeclPreBlock = IdentifierList ":=" ExpressionListPreBlock .
 Signature = Parameters [ Result ] .
-SimpleStmt = Assignment | ShortVarDecl | IncDecStmt | SendStmt | ExpressionStmt | EmptyStmt . 
+
+// SimpleStmt = ExpressionList Assignment | ExpressionList ShortVarDecl | ExpressionList ( "++" | "--" ) | ExpressionList "<-" Expression | ExpressionList | EmptyStmt . 
+SimpleStmt = ExpressionList [ Assignment | ShortVarDecl | ( "++" | "--" ) | "<-" Expression ] | EmptyStmt . 
+
 SimpleStmtPreBlock = AssignmentPreBlock | ShortVarDeclPreBlock | IncDecStmt | SendStmtPreBlock | ExpressionStmtPreBlock | EmptyStmt .
 Slice = "[" [ Expression ] ":" [ Expression ] "]" | "[" [ Expression ] ":" Expression ":" Expression "]" .
 SliceType = "[" "]" ElementType .

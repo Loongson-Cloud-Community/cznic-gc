@@ -1,4 +1,4 @@
-.PHONY:	clean edit editor test back
+.PHONY:	clean edit editor test back report
 
 clean:
 	rm -f log-* cpu.test mem.test *.out
@@ -21,6 +21,13 @@ test:
 
 back:
 	go test -v -failfast -noback 2>&1 | tee log-test
+	@git diff testdata/
+	@git status
+	@grep TOTAL log-test || true
+	grep 'FAIL' log-test || true
+
+report:
+	go test -v -failfast -run TestParser -report 2>&1 | tee log-test
 	@git diff testdata/
 	@git status
 	@grep TOTAL log-test || true

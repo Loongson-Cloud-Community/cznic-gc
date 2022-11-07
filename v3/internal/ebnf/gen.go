@@ -92,7 +92,7 @@ func (g *gen) gen() (err error) {
 		case nil:
 			g.w("\nreturn &%sNode{}", nm)
 		case ebnf.Alternative:
-			g.expression( /*TODO*/ nil, x, "\nreturn nil", false)
+			g.expression(nil, x, "\nreturn nil", false)
 			g.w("\nreturn &%sNode{}", nm)
 		// case *ebnf.Group:
 		case *ebnf.Name:
@@ -103,20 +103,22 @@ func (g *gen) gen() (err error) {
 			}
 
 			t := g.tok(nm2)
-			g.w("\nif p.c().tok == %s {", tokSource(t))
+			g.w("\nif p.c() == %s {", tokSource(t))
 			g.w("\np.ix++")
 			g.w("\np.budget--")
 			g.w("\nreturn &%sNode{}", nm)
 			g.w("\n}")
 			g.w("\nreturn nil")
 		case *ebnf.Option:
-			g.expression( /*TODO*/ nil, x, "\npanic(`internal error`)", false)
+			g.expression(nil, x, "\npanic(`internal error`)", false)
 			g.w("\nreturn &%sNode{}", nm)
 		// case *ebnf.Repetition:
-		// case ebnf.Sequence:
+		case ebnf.Sequence:
+			g.expression(nil, x, "\nreturn nil", false)
+			g.w("\nreturn &%sNode{}", nm)
 		case *ebnf.Token:
 			t := g.tok(x.String)
-			g.w("\nif p.c().tok == %s {", tokSource(t))
+			g.w("\nif p.c() == %s {", tokSource(t))
 			g.w("\np.ix++")
 			g.w("\np.budget--")
 			g.w("\nreturn &%sNode{}", nm)
@@ -125,7 +127,7 @@ func (g *gen) gen() (err error) {
 		default:
 			id := g.id()
 			g.w("\nix := p.ix")
-			g.expression( /*TODO*/ nil, x, fmt.Sprintf("\ngoto _%d", id), false)
+			g.expression(nil, x, fmt.Sprintf("\ngoto _%d", id), false)
 			g.w("\nreturn &%sNode{}", nm)
 			g.w("\ngoto _%d", id)
 			g.w("\n_%d:", id)
@@ -186,7 +188,7 @@ func (g *gen) expression(ctx closure, e ebnf.Expression, out string, braced bool
 					g.w("%s", out)
 					g.w("\n}")
 				default:
-					g.w("\nswitch p.c().tok {")
+					g.w("\nswitch p.c() {")
 					g.w("\ncase %v:", c.caseStr())
 					g.w("\nif p.%s() == nil {", unexport(nm))
 					g.w("%s", out)
@@ -200,7 +202,7 @@ func (g *gen) expression(ctx closure, e ebnf.Expression, out string, braced bool
 			break
 		}
 
-		g.w("\nif p.c().tok == %s {", tokSource(g.tok(x.String)))
+		g.w("\nif p.c() == %s {", tokSource(g.tok(x.String)))
 		g.w("\np.ix++")
 		g.w("\np.budget--")
 		g.w("\n}")
@@ -214,7 +216,7 @@ func (g *gen) expression(ctx closure, e ebnf.Expression, out string, braced bool
 		case len(ctx) != 0 && ctx.isSubsetOf(c):
 			g.expression(c, x.Body, "", false)
 		default:
-			g.w("\nswitch p.c().tok {")
+			g.w("\nswitch p.c() {")
 			g.w("\ncase %v:", c.caseStr())
 			ok := g.id()
 			g.expression(c, x.Body, fmt.Sprintf("\ngoto _%d", ok), false)
@@ -239,7 +241,7 @@ func (g *gen) expression(ctx closure, e ebnf.Expression, out string, braced bool
 			id := g.id()
 			g.w("\n_%d:", id)
 			ok := g.id()
-			g.w("\nswitch p.c().tok {")
+			g.w("\nswitch p.c() {")
 			g.w("\ncase %v:", c.caseStr())
 			g.expression(c, x.Body, fmt.Sprintf("\ngoto _%d", ok), true)
 			g.w("\ngoto _%d", id)
@@ -271,7 +273,7 @@ func (g *gen) expression(ctx closure, e ebnf.Expression, out string, braced bool
 			g.w("\np.ix++")
 			g.w("\np.budget--")
 		default:
-			g.w("\nif p.c().tok == %s {", tokSource(t))
+			g.w("\nif p.c() == %s {", tokSource(t))
 			g.w("\np.ix++")
 			g.w("\np.budget--")
 			g.w("\n}")
@@ -333,7 +335,7 @@ func (g *gen) alt(ctx closure, x ebnf.Alternative, out string) {
 	// for _, v := range disjointX {
 	// 	g.w("\n// case %v: %v", disjoint[v].caseStr(), v)
 	// }
-	g.w("\nswitch p.c().tok {")
+	g.w("\nswitch p.c() {")
 	needDefault := true
 	for _, k := range disjointX {
 		c := disjoint[k]

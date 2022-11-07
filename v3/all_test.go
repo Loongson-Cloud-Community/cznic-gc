@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -20,8 +21,9 @@ import (
 )
 
 var (
-	oRE  = flag.String("re", "", "")
-	oTrc = flag.Bool("trc", false, "")
+	oRE     = flag.String("re", "", "")
+	oReport = flag.Bool("report", false, "")
+	oTrc    = flag.Bool("trc", false, "")
 
 	re *regexp.Regexp
 )
@@ -37,6 +39,8 @@ func TestMain(m *testing.M) {
 
 	os.Exit(m.Run())
 }
+
+func stack() string { return string(debug.Stack()) }
 
 type golden struct {
 	a  []string
@@ -132,10 +136,16 @@ func TestParser(t *testing.T) {
 		t.Error(err)
 	}
 	t.Logf("TOTAL files %v, skip %v, ok %v, fail %v", h(p.files), h(p.skipped), h(p.ok), h(p.fails))
-	t.Logf("Max backtrack: %s, %v tokens", p.maxBackPath, h(p.maxBacks))
-	t.Logf("Max budget used: %s, %v", p.maxBudgetPath, h(p.maxBudget))
 	if p.fails != 0 {
 		t.Logf("Shortest failing file: %s, %v tokens", p.minToksPath, p.minToks)
+		return
+	}
+
+	t.Logf("Max backtrack: %s, %v tokens\n\t%v (%v:)", p.maxBacktrackPath, h(p.maxBacktrack), p.maxBacktrackPos, p.maxBacktrackOrigin)
+	t.Logf("Max backtracks: %s, %v tokens", p.maxBacktracksPath, h(p.maxBacktracks))
+	t.Logf("Max budget used: %s, %v for %v tokens", p.maxBudgetPath, h(p.maxBudget), h(p.maxBudgetToks))
+	if *oReport {
+		t.Logf("\n%s", p.a.report())
 	}
 }
 
@@ -174,8 +184,14 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 					}
 				}
 				if pp != nil {
-					p.recordMaxBack(path, pp.backs)
-					p.recordMaxBudget(path, parserBudget-pp.budget)
+					from := pp.toks[pp.maxBackRange[0]].Position()
+					to := pp.toks[pp.maxBackRange[1]].Position()
+					p.recordMaxBacktrack(path, pp.maxBack, fmt.Sprintf("%v: - %v:", from, to), pp.maxBackOrigin)
+					p.recordMaxBacktracks(path, pp.backs)
+					p.recordMaxBudget(path, parserBudget-pp.budget, len(pp.toks))
+					if *oReport {
+						p.a.merge(pp.a)
+					}
 				}
 			}()
 
@@ -184,7 +200,7 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 				return errorf("%s: %v", path, err)
 			}
 
-			if pp, err = newParser(path, b); err != nil {
+			if pp, err = newParser(path, b, *oReport); err != nil {
 				pp = nil
 				p.addSkipped()
 				return nil

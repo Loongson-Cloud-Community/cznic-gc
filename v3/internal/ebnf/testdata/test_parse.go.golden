@@ -1,3 +1,12 @@
+../../all_test.go
+../../etc.go
+../../internal/abi.go
+../../internal/ebnf/all_test.go
+../../internal/ebnf/ebnflint.go
+../../internal/ebnf/etc.go
+../../internal/ebnf/gen.go
+../../internal/ebnf/parser.go
+../../parser.go
 /usr/local/go/misc/android/go_android_exec.go
 /usr/local/go/misc/cgo/errors/argposition_test.go
 /usr/local/go/misc/cgo/errors/badsym_test.go
@@ -8752,8 +8761,3 @@
 /usr/local/go/test/winbatch.go
 /usr/local/go/test/writebarrier.go
 /usr/local/go/test/zerodivide.go
-all_test.go
-ebnflint.go
-etc.go
-gen.go
-parser.go
