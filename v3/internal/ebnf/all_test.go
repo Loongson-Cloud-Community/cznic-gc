@@ -154,14 +154,14 @@ func TestEBNFParser(t *testing.T) {
 	if err := p.wait(); err != nil {
 		t.Error(err)
 	}
-	t.Logf("TOTAL files %v, skip %v, ok %v, fail %v", h(p.files), h(p.skipped), h(p.ok), h(p.fails))
+	t.Logf("TOTAL files %v, toks %v, skip %v, ok %v, fail %v", h(p.files), h(p.allToks), h(p.skipped), h(p.ok), h(p.fails))
 	if p.fails != 0 {
 		t.Logf("Shortest failing file: %s, %v tokens", p.minToksPath, p.minToks)
 		return
 	}
 
-	t.Logf("Max backtrack: %s, %v tokens\n\t%v (%v:)", p.maxBacktrackPath, h(p.maxBacktrack), p.maxBacktrackPos, p.maxBacktrackOrigin)
-	t.Logf("Max backtracks: %s, %v tokens", p.maxBacktracksPath, h(p.maxBacktracks))
+	t.Logf("Max backtrack: %s, %v for %v tokens\n\t%v (%v:)", p.maxBacktrackPath, h(p.maxBacktrack), h(p.maxBacktrackToks), p.maxBacktrackPos, p.maxBacktrackOrigin)
+	t.Logf("Max backtracks: %s, %v for %v tokens", p.maxBacktracksPath, h(p.maxBacktracks), h(p.maxBacktracksToks))
 	t.Logf("Max budget used: %s, %v for %v tokens", p.maxBudgetPath, h(p.maxBudget), h(p.maxBudgetToks))
 }
 
@@ -202,8 +202,8 @@ func testEBNFParser(p *parallel, t *testing.T, g *grammar, root string, gld *gol
 				if pp != nil {
 					from := pp.toks[pp.maxBackRange[0]].Position()
 					to := pp.toks[pp.maxBackRange[1]].Position()
-					p.recordMaxBacktrack(path, pp.maxBack, fmt.Sprintf("%v: - %v:", from, to), pp.maxBackOrigin)
-					p.recordMaxBack(path, pp.backs)
+					p.recordMaxBacktrack(path, pp.maxBack, len(pp.toks), fmt.Sprintf("%v: - %v:", from, to), pp.maxBackOrigin)
+					p.recordMaxBack(path, pp.backs, len(pp.toks))
 					p.recordMaxBudget(path, ebnfBudget-pp.budget, len(pp.toks))
 				}
 			}()
@@ -219,6 +219,7 @@ func testEBNFParser(p *parallel, t *testing.T, g *grammar, root string, gld *gol
 				return nil
 			}
 
+			p.addToks(len(pp.toks))
 			if err := pp.parse(startProduction); err != nil {
 				if isKnownBad(path, pp.errPosition()) {
 					p.addSkipped()
@@ -267,14 +268,14 @@ func TestParser(t *testing.T) {
 	if err := p.wait(); err != nil {
 		t.Error(err)
 	}
-	t.Logf("TOTAL files %v, skip %v, ok %v, fail %v", h(p.files), h(p.skipped), h(p.ok), h(p.fails))
+	t.Logf("TOTAL files %v, toks %v, skip %v, ok %v, fail %v", h(p.files), h(p.allToks), h(p.skipped), h(p.ok), h(p.fails))
 	if p.fails != 0 {
 		t.Logf("Shortest failing file: %s, %v tokens", p.minToksPath, p.minToks)
 		return
 	}
 
-	t.Logf("Max backtrack: %s, %v tokens\n\t%v (%v:)", p.maxBacktrackPath, h(p.maxBacktrack), p.maxBacktrackPos, p.maxBacktrackOrigin)
-	t.Logf("Max backtracks: %s, %v tokens", p.maxBacktracksPath, h(p.maxBacktracks))
+	t.Logf("Max backtrack: %s, %v for %v tokens\n\t%v (%v:)", p.maxBacktrackPath, h(p.maxBacktrack), h(p.maxBacktrackToks), p.maxBacktrackPos, p.maxBacktrackOrigin)
+	t.Logf("Max backtracks: %s, %v for %v tokens", p.maxBacktracksPath, h(p.maxBacktracks), h(p.maxBacktracksToks))
 	t.Logf("Max budget used: %s, %v for %v tokens", p.maxBudgetPath, h(p.maxBudget), h(p.maxBudgetToks))
 	if *oReport {
 		t.Logf("\n%s", p.a.report())
@@ -318,8 +319,8 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 				if pp != nil {
 					from := pp.toks[pp.maxBackRange[0]].Position()
 					to := pp.toks[pp.maxBackRange[1]].Position()
-					p.recordMaxBacktrack(path, pp.maxBack, fmt.Sprintf("%v: - %v:", from, to), pp.maxBackOrigin)
-					p.recordMaxBack(path, pp.backs)
+					p.recordMaxBacktrack(path, pp.maxBack, len(pp.toks), fmt.Sprintf("%v: - %v:", from, to), pp.maxBackOrigin)
+					p.recordMaxBack(path, pp.backs, len(pp.toks))
 					p.recordMaxBudget(path, parserBudget-pp.budget, len(pp.toks))
 					if *oReport {
 						p.a.merge(pp.a)
@@ -338,6 +339,7 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 				return nil
 			}
 
+			p.addToks(len(pp.toks))
 			if err := pp.parse(); err != nil {
 				if isKnownBad(path, pp.errPosition()) {
 					pp = nil

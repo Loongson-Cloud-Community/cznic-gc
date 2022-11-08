@@ -49,6 +49,24 @@ func (g *gen) tok(s string) token.Token {
 	panic(todo("%q", s))
 }
 
+func (g *gen) isToken(e ebnf.Expression, r *token.Token) bool {
+	switch x := e.(type) {
+	case *ebnf.Name:
+		nm := x.String
+		if token.IsExported(nm) {
+			return g.isToken(g.peg.g[nm].Expr, r)
+		}
+
+		*r = g.tok(nm)
+		return true
+	case *ebnf.Token:
+		*r = g.tok(x.String)
+		return true
+	default:
+		return false
+	}
+}
+
 func (g *gen) gen() (err error) {
 	defer func() {
 		if e := recover(); e != nil {
@@ -154,17 +172,17 @@ func (g *gen) defaultPart(out string) {
 }
 
 // nil c -> unconstrained by caller
-func (g *gen) expression(ctx closure, e ebnf.Expression, out string, braced bool) {
+func (g *gen) expression(ctx followSet, e ebnf.Expression, out string, braced bool) {
 	g.w("\n// %T %s ctx [%v]", e, ebnfString(e), ctx.caseStr())
 	switch x := e.(type) {
 	case ebnf.Alternative:
-		c := g.peg.exprClosure(x)
+		c := g.peg.followSet(x)
 		if len(ctx) != 0 {
 			c = c.intersect(ctx)
 		}
 		g.alt(c, x, out)
 	case *ebnf.Group:
-		c := g.peg.exprClosure(x.Body)
+		c := g.peg.followSet(x.Body)
 		if len(ctx) != 0 {
 			c = c.intersect(ctx)
 		}
@@ -178,7 +196,7 @@ func (g *gen) expression(ctx closure, e ebnf.Expression, out string, braced bool
 				g.w("%s", out)
 				g.w("\n}")
 			default:
-				c := g.peg.productClosures[p]
+				c := g.peg.productionFollowSets[p]
 				if len(ctx) != 0 {
 					c = c.intersect(ctx)
 				}
@@ -202,13 +220,11 @@ func (g *gen) expression(ctx closure, e ebnf.Expression, out string, braced bool
 			break
 		}
 
-		g.w("\nif p.c() == %s {", tokSource(g.tok(x.String)))
-		g.w("\np.ix++")
-		g.w("\np.budget--")
+		g.w("\nif !p.accept(%s) {", tokSource(g.tok(x.String)))
+		g.w("%s", out)
 		g.w("\n}")
-		g.elsePart(out)
 	case *ebnf.Option:
-		c := g.peg.exprClosure(x.Body)
+		c := g.peg.followSet(x.Body)
 		if len(ctx) != 0 {
 			c = c.intersect(ctx)
 		}
@@ -225,7 +241,7 @@ func (g *gen) expression(ctx closure, e ebnf.Expression, out string, braced bool
 		}
 	case *ebnf.Repetition:
 		//TODO? specialize for single item .Body
-		c := g.peg.exprClosure(x.Body)
+		c := g.peg.followSet(x.Body)
 		if len(ctx) != 0 {
 			c = c.intersect(ctx)
 		}
@@ -251,6 +267,13 @@ func (g *gen) expression(ctx closure, e ebnf.Expression, out string, braced bool
 	case ebnf.Sequence:
 		switch {
 		case braced:
+			var t1, t2 token.Token
+			if len(x) > 1 && g.isToken(x[0], &t1) && g.isToken(x[1], &t2) {
+				g.w("\nif p.peek(1) != %s {", tokSource(t2))
+				g.w("%s", out)
+				g.w("\n}")
+			}
+
 			g.w("\nix := p.ix")
 			for _, v := range x {
 				g.expression(ctx, v, fmt.Sprintf("\np.back(ix);%s", out), false)
@@ -258,6 +281,13 @@ func (g *gen) expression(ctx closure, e ebnf.Expression, out string, braced bool
 			}
 		default:
 			g.w("\n{")
+			var t1, t2 token.Token
+			if len(x) > 1 && g.isToken(x[0], &t1) && g.isToken(x[1], &t2) {
+				g.w("\nif p.peek(1) != %s {", tokSource(t2))
+				g.w("%s", out)
+				g.w("\n}")
+			}
+
 			g.w("\nix := p.ix")
 			for _, v := range x {
 				g.expression(ctx, v, fmt.Sprintf("\np.back(ix);%s", out), false)
@@ -273,11 +303,9 @@ func (g *gen) expression(ctx closure, e ebnf.Expression, out string, braced bool
 			g.w("\np.ix++")
 			g.w("\np.budget--")
 		default:
-			g.w("\nif p.c() == %s {", tokSource(t))
-			g.w("\np.ix++")
-			g.w("\np.budget--")
+			g.w("\nif !p.accept(%s) {", tokSource(t))
+			g.w("%s", out)
 			g.w("\n}")
-			g.elsePart(out)
 		}
 	default:
 		g.w("\n//TODO %T: '%s'", x, ebnfString(e))
@@ -285,10 +313,10 @@ func (g *gen) expression(ctx closure, e ebnf.Expression, out string, braced bool
 	}
 }
 
-func (g *gen) alt(ctx closure, x ebnf.Alternative, out string) {
+func (g *gen) alt(ctx followSet, x ebnf.Alternative, out string) {
 	m := map[token.Token][]int{}
 	for i, v := range x {
-		c := g.peg.exprClosure(v).clone()
+		c := g.peg.followSet(v).clone()
 		if len(ctx) != 0 {
 			c = c.intersect(ctx)
 		}
@@ -301,7 +329,7 @@ func (g *gen) alt(ctx closure, x ebnf.Alternative, out string) {
 		mX = append(mX, k)
 	}
 	sort.Slice(mX, func(i, j int) bool { return mX[i] < mX[j] })
-	disjoint := map[string]closure{}
+	disjoint := map[string]followSet{}
 	for _, t := range mX {
 		is := m[t]
 		if len(is) == 0 {
@@ -361,7 +389,7 @@ func (g *gen) alt(ctx closure, x ebnf.Alternative, out string) {
 	g.w("\n}")
 }
 
-func (g *gen) altCases(c closure, x []ebnf.Expression, out string) {
+func (g *gen) altCases(c followSet, x []ebnf.Expression, out string) {
 	switch {
 	case len(x) == 1:
 		g.expression(c, x[0], out, false)
@@ -370,6 +398,7 @@ func (g *gen) altCases(c closure, x []ebnf.Expression, out string) {
 			next := g.id()
 			g.expression(c, v, fmt.Sprintf("\ngoto _%d", next), false)
 			g.w("\nbreak")
+			g.w("\ngoto _%d", next)
 			g.w("\n_%d:", next)
 		}
 		g.w("%s", out)

@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	ebnfBudget   = 4e6
-	parserBudget = 4e5
+	ebnfBudget   = 2e6
+	parserBudget = 1e6
 
 	epsilon = -1
 )
@@ -495,15 +495,18 @@ type parallel struct {
 	sync.Mutex
 	wg sync.WaitGroup
 
-	fails         int32
-	files         int32
-	maxBacktrack  int
-	maxBacktracks int
-	maxBudget     int
-	maxBudgetToks int
-	minToks       int
-	ok            int32
-	skipped       int32
+	allToks           int32
+	fails             int32
+	files             int32
+	maxBacktrack      int
+	maxBacktrackToks  int
+	maxBacktracksToks int
+	maxBacktracks     int
+	maxBudget         int
+	maxBudgetToks     int
+	minToks           int
+	ok                int32
+	skipped           int32
 }
 
 func newParallel() *parallel {
@@ -513,12 +516,13 @@ func newParallel() *parallel {
 	}
 }
 
-func (p *parallel) addSkipped() { atomic.AddInt32(&p.skipped, 1) }
-func (p *parallel) addFail()    { atomic.AddInt32(&p.fails, 1) }
-func (p *parallel) addFile()    { atomic.AddInt32(&p.files, 1) }
-func (p *parallel) addOk()      { atomic.AddInt32(&p.ok, 1) }
+func (p *parallel) addFail()      { atomic.AddInt32(&p.fails, 1) }
+func (p *parallel) addFile()      { atomic.AddInt32(&p.files, 1) }
+func (p *parallel) addOk()        { atomic.AddInt32(&p.ok, 1) }
+func (p *parallel) addSkipped()   { atomic.AddInt32(&p.skipped, 1) }
+func (p *parallel) addToks(n int) { atomic.AddInt32(&p.allToks, int32(n)) }
 
-func (p *parallel) recordMaxBacktrack(path string, back int, pos, origin string) {
+func (p *parallel) recordMaxBacktrack(path string, back, toks int, pos, origin string) {
 	p.Lock()
 	defer p.Unlock()
 
@@ -527,16 +531,18 @@ func (p *parallel) recordMaxBacktrack(path string, back int, pos, origin string)
 		p.maxBacktrackOrigin = origin
 		p.maxBacktrackPos = pos
 		p.maxBacktrackPath = path
+		p.maxBacktrackToks = toks
 	}
 }
 
-func (p *parallel) recordMaxBack(path string, back int) {
+func (p *parallel) recordMaxBack(path string, back, toks int) {
 	p.Lock()
 	defer p.Unlock()
 
 	if back > p.maxBacktracks {
 		p.maxBacktracks = back
 		p.maxBacktracksPath = path
+		p.maxBacktracksToks = toks
 	}
 }
 
@@ -602,16 +608,16 @@ func (p *parallel) wait() error {
 	return fmt.Errorf("%s", strings.Join(a, "\n"))
 }
 
-type closure map[token.Token]struct{}
+type followSet map[token.Token]struct{}
 
-func (c closure) has(t token.Token) (r bool) { _, r = c[t]; return r }
+func (fs followSet) has(t token.Token) (r bool) { _, r = fs[t]; return r }
 
-func (c closure) eq(d closure) (r bool) {
-	if len(c) != len(d) {
+func (fs followSet) eq(d followSet) (r bool) {
+	if len(fs) != len(d) {
 		return false
 	}
 
-	for k := range c {
+	for k := range fs {
 		if _, r := d[k]; !r {
 			return r
 		}
@@ -619,12 +625,12 @@ func (c closure) eq(d closure) (r bool) {
 	return true
 }
 
-func (c closure) intersect(d closure) (r closure) {
-	if len(c) == 0 || len(d) == 0 {
+func (fs followSet) intersect(d followSet) (r followSet) {
+	if len(fs) == 0 || len(d) == 0 {
 		return nil
 	}
-	r = closure{}
-	for k := range c {
+	r = followSet{}
+	for k := range fs {
 		if _, ok := d[k]; ok {
 			r[k] = struct{}{}
 		}
@@ -632,12 +638,12 @@ func (c closure) intersect(d closure) (r closure) {
 	return r
 }
 
-func (c closure) isSubsetOf(d closure) (r bool) {
-	if len(d) < len(c) {
+func (fs followSet) isSubsetOf(d followSet) (r bool) {
+	if len(d) < len(fs) {
 		return false
 	}
 
-	for k := range c {
+	for k := range fs {
 		if _, r := d[k]; !r {
 			return r
 		}
@@ -645,22 +651,22 @@ func (c closure) isSubsetOf(d closure) (r bool) {
 	return true
 }
 
-func (c closure) clone() (r closure) {
-	if c == nil {
+func (fs followSet) clone() (r followSet) {
+	if fs == nil {
 		return nil
 	}
 
-	r = make(closure, len(c))
-	for k := range c {
+	r = make(followSet, len(fs))
+	for k := range fs {
 		r[k] = struct{}{}
 	}
 	return r
 }
 
-func (c closure) caseStr() string {
+func (fs followSet) caseStr() string {
 	var a []string
 	var e string
-	for k := range c {
+	for k := range fs {
 		switch k {
 		case epsilon:
 			e = " /* ε */"
@@ -672,27 +678,27 @@ func (c closure) caseStr() string {
 	return strings.Join(a, ", ") + e
 }
 
-func (c closure) hasEpsilon() (r bool) { _, r = c[epsilon]; return r }
+func (fs followSet) hasEpsilon() (r bool) { _, r = fs[epsilon]; return r }
 
-func (c *closure) add(t token.Token) closure {
-	m := *c
+func (fs *followSet) add(t token.Token) followSet {
+	m := *fs
 	if m == nil {
-		m = map[token.Token]struct{}{t: {}}
-		*c = m
+		m = followSet{}
+		*fs = m
 	}
 	m[t] = struct{}{}
 	return m
 }
 
-func (c *closure) union(d closure) closure {
-	m := *c
+func (fs *followSet) union(d followSet) followSet {
+	m := *fs
 	if d == nil {
 		return m
 	}
 
 	if m == nil {
-		m = map[token.Token]struct{}{}
-		*c = m
+		m = followSet{}
+		*fs = m
 	}
 	for k, v := range d {
 		m[k] = v
@@ -701,10 +707,10 @@ func (c *closure) union(d closure) closure {
 }
 
 type grammar struct {
-	exprClosures    map[string]closure
-	g               ebnf.Grammar
-	leftRecursive   map[string]struct{}
-	productClosures map[*ebnf.Production]closure
+	expressionFollowSets map[string]followSet
+	g                    ebnf.Grammar
+	leftRecursive        map[string]struct{}
+	productionFollowSets map[*ebnf.Production]followSet
 }
 
 func newGrammar(name, start string, src []byte) (r *grammar, err error) {
@@ -718,23 +724,23 @@ func newGrammar(name, start string, src []byte) (r *grammar, err error) {
 	}
 
 	r = &grammar{
-		exprClosures:    map[string]closure{},
-		g:               g,
-		leftRecursive:   map[string]struct{}{},
-		productClosures: map[*ebnf.Production]closure{},
+		expressionFollowSets: map[string]followSet{},
+		g:                    g,
+		leftRecursive:        map[string]struct{}{},
+		productionFollowSets: map[*ebnf.Production]followSet{},
 	}
 	for nm, p := range r.g {
 		if token.IsExported(nm) {
-			var c closure
+			var fs followSet
 			e := p.Expr
 			switch {
 			case e == nil:
-				c.add(epsilon)
+				fs.add(epsilon)
 			default:
-				c = r.closure0(nm, e, map[string]struct{}{})
+				fs = r.followSet0(nm, e, map[string]struct{}{})
 			}
-			r.exprClosures[ebnfString(p.Expr)] = c
-			r.productClosures[p] = c
+			r.expressionFollowSets[ebnfString(p.Expr)] = fs
+			r.productionFollowSets[p] = fs
 		}
 	}
 	return r, nil
@@ -748,22 +754,22 @@ func (p *grammar) tok(s string) token.Token {
 	panic(todo("%q", s))
 }
 
-func (g *grammar) exprClosure(e ebnf.Expression) (r closure) {
+func (g *grammar) followSet(e ebnf.Expression) (r followSet) {
 	if e == nil {
 		panic(todo(""))
 	}
 
 	k := ebnfString(e)
-	if r, ok := g.exprClosures[k]; ok {
+	if r, ok := g.expressionFollowSets[k]; ok {
 		return r
 	}
 
-	r = g.closure0("", e, map[string]struct{}{})
-	g.exprClosures[k] = r
+	r = g.followSet0("", e, map[string]struct{}{})
+	g.expressionFollowSets[k] = r
 	return r
 }
 
-func (g *grammar) closure0(prod string, e ebnf.Expression, m map[string]struct{}) (r closure) {
+func (g *grammar) followSet0(prod string, e ebnf.Expression, m map[string]struct{}) (r followSet) {
 	if e == nil {
 		panic(todo(""))
 	}
@@ -774,16 +780,15 @@ func (g *grammar) closure0(prod string, e ebnf.Expression, m map[string]struct{}
 	}
 
 	m[k] = struct{}{}
-	r = closure{}
+	r = followSet{}
 	switch x := e.(type) {
 	case ebnf.Alternative:
-		r = closure{}
 		for _, v := range x {
-			r.union(g.closure0(prod, v, m))
+			r.union(g.followSet0(prod, v, m))
 		}
 		return r
 	case *ebnf.Group:
-		return g.closure0(prod, x.Body, m)
+		return g.followSet0(prod, x.Body, m)
 	case *ebnf.Name:
 		nm := x.String
 		if nm == prod {
@@ -796,7 +801,7 @@ func (g *grammar) closure0(prod string, e ebnf.Expression, m map[string]struct{}
 				return r.add(epsilon)
 			}
 
-			return r.union(g.closure0(prod, e, m))
+			return r.union(g.followSet0(prod, e, m))
 		}
 
 		if x, ok := toks[nm]; ok {
@@ -805,13 +810,13 @@ func (g *grammar) closure0(prod string, e ebnf.Expression, m map[string]struct{}
 		return r
 	case *ebnf.Option:
 		r.add(epsilon)
-		return r.union(g.closure0(prod, x.Body, m))
+		return r.union(g.followSet0(prod, x.Body, m))
 	case *ebnf.Repetition:
 		r.add(epsilon)
-		return r.union(g.closure0(prod, x.Body, m))
+		return r.union(g.followSet0(prod, x.Body, m))
 	case ebnf.Sequence:
 		for _, v := range x {
-			s := g.closure0(prod, v, m)
+			s := g.followSet0(prod, v, m)
 			r.union(s)
 			if _, ok := s[epsilon]; !ok {
 				delete(r, epsilon)
@@ -1065,14 +1070,16 @@ func newEBNFParser(g *grammar, path string, src []byte, trcPEG bool) (r *ebnfPar
 	}
 }
 
+func (p *ebnfParser) pos() token.Position { return p.toks[p.index].Position() }
+
 func (p *ebnfParser) indent() (r string) {
 	p.indentN++
-	return strings.Repeat("· ", p.indentN-1)
+	return fmt.Sprintf("%5d: ", p.indentN-1) + strings.Repeat("· ", p.indentN-1)
 }
 
 func (p *ebnfParser) undent() string {
 	p.indentN--
-	return strings.Repeat("· ", p.indentN)
+	return fmt.Sprintf("%5d: ", p.indentN) + strings.Repeat("· ", p.indentN)
 }
 
 func (p *ebnfParser) tok(s string) token.Token {
@@ -1128,7 +1135,15 @@ func (p *ebnfParser) errPosition() token.Position {
 	return p.f.PositionFor(p.toks[p.maxIndex].pos, true)
 }
 
-func (p *ebnfParser) parseExpression(e ebnf.Expression) bool {
+func (p *ebnfParser) parseExpression(e ebnf.Expression) (r bool) {
+	// trc("%s%v: %v '%s'", p.indent(), p.pos(), p.c(), ebnfString(e))
+	// defer func() {
+	// 	s := "REJ"
+	// 	if r {
+	// 		s = "ACC"
+	// 	}
+	// 	trc("%s%s: %v: '%s'", p.undent(), s, p.pos(), ebnfString(e))
+	// }()
 	index0 := p.index
 out:
 	switch x := e.(type) {
@@ -1143,7 +1158,7 @@ out:
 		switch nm := x.String; {
 		case token.IsExported(nm):
 			pr := p.g.g[nm]
-			fs := p.g.productClosures[pr]
+			fs := p.g.productionFollowSets[pr]
 			if _, ok := fs[p.c().tok]; ok {
 				if p.parseExpression(pr.Expr) {
 					return true
@@ -1239,6 +1254,16 @@ func (p *parser) errPosition() token.Position {
 }
 
 func (p *parser) c() token.Token { return p.peek(0) }
+
+func (p *parser) accept(t token.Token) bool {
+	if p.c() == t {
+		p.ix++
+		p.budget--
+		return true
+	}
+
+	return false
+}
 
 func (p *parser) peek(n int) token.Token {
 	if p.budget <= 0 {

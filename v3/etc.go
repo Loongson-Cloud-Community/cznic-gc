@@ -348,15 +348,18 @@ type parallel struct {
 	sync.Mutex
 	wg sync.WaitGroup
 
-	fails         int32
-	files         int32
-	maxBacktrack  int
-	maxBacktracks int
-	maxBudget     int
-	maxBudgetToks int
-	minToks       int
-	ok            int32
-	skipped       int32
+	allToks           int32
+	fails             int32
+	files             int32
+	maxBacktrack      int
+	maxBacktrackToks  int
+	maxBacktracks     int
+	maxBacktracksToks int
+	maxBudget         int
+	maxBudgetToks     int
+	minToks           int
+	ok                int32
+	skipped           int32
 }
 
 func newParallel() *parallel {
@@ -366,12 +369,13 @@ func newParallel() *parallel {
 	}
 }
 
-func (p *parallel) addSkipped() { atomic.AddInt32(&p.skipped, 1) }
-func (p *parallel) addFail()    { atomic.AddInt32(&p.fails, 1) }
-func (p *parallel) addFile()    { atomic.AddInt32(&p.files, 1) }
-func (p *parallel) addOk()      { atomic.AddInt32(&p.ok, 1) }
+func (p *parallel) addFail()      { atomic.AddInt32(&p.fails, 1) }
+func (p *parallel) addFile()      { atomic.AddInt32(&p.files, 1) }
+func (p *parallel) addOk()        { atomic.AddInt32(&p.ok, 1) }
+func (p *parallel) addSkipped()   { atomic.AddInt32(&p.skipped, 1) }
+func (p *parallel) addToks(n int) { atomic.AddInt32(&p.allToks, int32(n)) }
 
-func (p *parallel) recordMaxBacktrack(path string, back int, pos, origin string) {
+func (p *parallel) recordMaxBacktrack(path string, back, toks int, pos, origin string) {
 	p.Lock()
 	defer p.Unlock()
 
@@ -380,16 +384,18 @@ func (p *parallel) recordMaxBacktrack(path string, back int, pos, origin string)
 		p.maxBacktrackOrigin = origin
 		p.maxBacktrackPos = pos
 		p.maxBacktrackPath = path
+		p.maxBacktrackToks = toks
 	}
 }
 
-func (p *parallel) recordMaxBacktracks(path string, back int) {
+func (p *parallel) recordMaxBacktracks(path string, back, toks int) {
 	p.Lock()
 	defer p.Unlock()
 
 	if back > p.maxBacktracks {
 		p.maxBacktracks = back
 		p.maxBacktracksPath = path
+		p.maxBacktracksToks = toks
 	}
 }
 
