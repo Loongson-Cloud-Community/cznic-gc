@@ -106,11 +106,19 @@ func (g *gen) gen() (err error) {
 		g.w("\n//\n//\t%s = %s .", nm, ebnfString(p.Expr))
 		g.w("\ntype %sNode struct{ noder }", nm)
 		g.w("\n\nfunc (p *parser) %s() Node {", unexport(nm))
+		ctx := g.peg.productionFollowSets[p]
+		if *oAssert && !ctx.hasEpsilon() {
+			g.w("\nswitch p.c() {")
+			g.w("\ncase %s:", ctx.caseStr())
+			g.w("\ndefault:")
+			g.w("\npanic(todo(``, p.c()))")
+			g.w("\n}")
+		}
 		switch x := p.Expr.(type) {
 		case nil:
 			g.w("\nreturn &%sNode{}", nm)
 		case ebnf.Alternative:
-			g.expression(nil, x, "\nreturn nil", false)
+			g.expression(ctx, x, "\nreturn nil", false)
 			g.w("\nreturn &%sNode{}", nm)
 		// case *ebnf.Group:
 		case *ebnf.Name:
@@ -128,11 +136,11 @@ func (g *gen) gen() (err error) {
 			g.w("\n}")
 			g.w("\nreturn nil")
 		case *ebnf.Option:
-			g.expression(nil, x, "\npanic(`internal error`)", false)
+			g.expression(ctx, x, "\npanic(`internal error`)", false)
 			g.w("\nreturn &%sNode{}", nm)
 		// case *ebnf.Repetition:
 		case ebnf.Sequence:
-			g.expression(nil, x, "\nreturn nil", false)
+			g.expression(ctx, x, "\nreturn nil", false)
 			g.w("\nreturn &%sNode{}", nm)
 		case *ebnf.Token:
 			t := g.tok(x.String)
@@ -145,7 +153,7 @@ func (g *gen) gen() (err error) {
 		default:
 			id := g.id()
 			g.w("\nix := p.ix")
-			g.expression(nil, x, fmt.Sprintf("\ngoto _%d", id), false)
+			g.expression(ctx, x, fmt.Sprintf("\ngoto _%d", id), false)
 			g.w("\nreturn &%sNode{}", nm)
 			g.w("\ngoto _%d", id)
 			g.w("\n_%d:", id)
@@ -220,7 +228,13 @@ func (g *gen) expression(ctx followSet, e ebnf.Expression, out string, braced bo
 			break
 		}
 
-		g.w("\nif !p.accept(%s) {", tokSource(g.tok(x.String)))
+		t := g.tok(x.String)
+		if ctx.has(t) {
+			g.w("\np.expect(%s)", tokSource(t))
+			break
+		}
+
+		g.w("\nif !p.accept(%s) {", tokSource(t))
 		g.w("%s", out)
 		g.w("\n}")
 	case *ebnf.Option:
@@ -267,31 +281,27 @@ func (g *gen) expression(ctx followSet, e ebnf.Expression, out string, braced bo
 	case ebnf.Sequence:
 		switch {
 		case braced:
-			var t1, t2 token.Token
-			if len(x) > 1 && g.isToken(x[0], &t1) && g.isToken(x[1], &t2) {
-				g.w("\nif p.peek(1) != %s {", tokSource(t2))
-				g.w("%s", out)
-				g.w("\n}")
-			}
-
+			ctx2 := g.sequenceFilter(x, out)
 			g.w("\nix := p.ix")
+			if ctx != nil {
+				g.w("\n_ = ix")
+			}
 			for _, v := range x {
 				g.expression(ctx, v, fmt.Sprintf("\np.back(ix);%s", out), false)
-				ctx = nil
+				ctx = ctx2
+				ctx2 = nil
 			}
 		default:
 			g.w("\n{")
-			var t1, t2 token.Token
-			if len(x) > 1 && g.isToken(x[0], &t1) && g.isToken(x[1], &t2) {
-				g.w("\nif p.peek(1) != %s {", tokSource(t2))
-				g.w("%s", out)
-				g.w("\n}")
-			}
-
+			ctx2 := g.sequenceFilter(x, out)
 			g.w("\nix := p.ix")
+			if ctx != nil {
+				g.w("\n_ = ix")
+			}
 			for _, v := range x {
 				g.expression(ctx, v, fmt.Sprintf("\np.back(ix);%s", out), false)
-				ctx = nil
+				ctx = ctx2
+				ctx2 = nil
 			}
 			g.w("\n}")
 		}
@@ -300,8 +310,7 @@ func (g *gen) expression(ctx followSet, e ebnf.Expression, out string, braced bo
 		case t == epsilon:
 			panic(todo(""))
 		case ctx.has(t):
-			g.w("\np.ix++")
-			g.w("\np.budget--")
+			g.w("\np.expect(%s)", tokSource(t))
 		default:
 			g.w("\nif !p.accept(%s) {", tokSource(t))
 			g.w("%s", out)
@@ -310,6 +319,32 @@ func (g *gen) expression(ctx followSet, e ebnf.Expression, out string, braced bo
 	default:
 		g.w("\n//TODO %T: '%s'", x, ebnfString(e))
 		g.w("%s", out)
+	}
+}
+
+func (g *gen) sequenceFilter(x ebnf.Sequence, out string) followSet {
+	var t0, t1 token.Token
+	if len(x) < 2 || !g.isToken(x[0], &t0) {
+		return nil
+	}
+
+	switch {
+	case g.isToken(x[1], &t1):
+		g.w("\nif p.peek(1) != %s {", tokSource(t1))
+		g.w("%s", out)
+		g.w("\n}")
+		return followSet{t1: {}}
+	default:
+		fs := g.peg.followSet(x[1])
+		if fs.hasEpsilon() {
+			return nil
+		}
+
+		g.w("\nswitch p.peek(1) {")
+		g.w("\ncase %s:", fs.caseStr())
+		g.defaultPart(out)
+		g.w("\n}")
+		return fs
 	}
 }
 

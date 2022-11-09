@@ -26,6 +26,7 @@ var (
 	oReport = flag.Bool("report", false, "")
 	oTrc    = flag.Bool("trc", false, "")
 	oTrcPEG = flag.Bool("trcpeg", false, "")
+	oAssert = flag.Bool("assert", false, "verify some invariants in the generated parser")
 
 	re *regexp.Regexp
 )
@@ -84,7 +85,7 @@ type golden struct {
 }
 
 func newGolden(t *testing.T, fn string) *golden {
-	if re != nil {
+	if re != nil || *oReport {
 		return &golden{discard: true}
 	}
 

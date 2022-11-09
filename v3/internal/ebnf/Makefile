@@ -1,4 +1,9 @@
-.PHONY:	clean edit editor test gen report
+.PHONY:	clean edit editor test gen report assert
+
+assert:
+	echo "package main; type SourceFileNode struct{}; func (p *parser) sourceFile() *SourceFileNode { return nil }" > parser.go
+	go test -v -gen -assert -run TestGen 2>&1 | tee log-gen
+	gofmt -l -s -w *.go
 
 clean:
 	rm -f log-* cpu.test mem.test *.out

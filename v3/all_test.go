@@ -52,7 +52,7 @@ type golden struct {
 }
 
 func newGolden(t *testing.T, fn string) *golden {
-	if re != nil {
+	if re != nil || *oReport {
 		return &golden{discard: true}
 	}
 

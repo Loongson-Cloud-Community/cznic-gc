@@ -8781,3 +8781,4 @@ internal/ebnf/etc.go
 internal/ebnf/gen.go
 internal/ebnf/parser.go
 parser.go
+scanner.go

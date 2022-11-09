@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	ebnfBudget   = 2e6
-	parserBudget = 1e6
+	ebnfBudget   = 3e5
+	parserBudget = 3e5
 
 	epsilon = -1
 )
@@ -1265,6 +1265,12 @@ func (p *parser) accept(t token.Token) bool {
 	return false
 }
 
+func (p *parser) expect(t token.Token) {
+	if !p.accept(t) {
+		p.closed = true
+	}
+}
+
 func (p *parser) peek(n int) token.Token {
 	if p.budget <= 0 {
 		return p.toks[len(p.toks)-1].tok
@@ -1299,6 +1305,10 @@ func (p *parser) back(ix int) {
 }
 
 func (p *parser) parse() (err error) {
+	if p.c() != PACKAGE {
+		return errorf("%s: syntax error", p.errPosition())
+	}
+
 	ast := p.sourceFile()
 	if p.budget == 0 {
 		return errorf("%s: resources exhausted", p.path)
