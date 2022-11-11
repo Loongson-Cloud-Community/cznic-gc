@@ -8,6 +8,7 @@
 ../../internal/ebnf/parser.go
 ../../parser.go
 ../../scanner.go
+../../scanner_test.go
 /usr/local/go/misc/android/go_android_exec.go
 /usr/local/go/misc/cgo/errors/argposition_test.go
 /usr/local/go/misc/cgo/errors/badsym_test.go

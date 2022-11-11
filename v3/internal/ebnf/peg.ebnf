@@ -1,10 +1,10 @@
-AdditiveExpression = MultiplicativeExpression { ( "+" | "-" | "|" | "^" ) MultiplicativeExpression } .
+AdditiveExpression         = MultiplicativeExpression         { ( "+" | "-" | "|" | "^" ) MultiplicativeExpression } .
 AdditiveExpressionPreBlock = MultiplicativeExpressionPreBlock { ( "+" | "-" | "|" | "^" ) MultiplicativeExpressionPreBlock } .
 AliasDecl = identifier "=" Type .
 Arguments = "(" [ ExpressionList [ "..." ] [ "," ] ] ")" .
 ArrayLength = Expression | "..." .
 ArrayType = "[" ArrayLength "]" ElementType .
-Assignment = /* ExpressionList */ ( "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" | ":=" ) ExpressionList .
+Assignment         = /* ExpressionList */ ( "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" | ":=" ) ExpressionList .
 AssignmentPreBlock = /* ExpressionList */ ( "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" | ":=" ) ExpressionListPreBlock .
 BaseType = Type .
 BasicLit = int_lit | float_lit | imaginary_lit | rune_lit | string_lit .
@@ -28,10 +28,10 @@ EmptyStmt =  .
 ExprCaseClause = ExprSwitchCase ":" StatementList .
 ExprSwitchCase = "case" ExpressionList | "default" .
 ExprSwitchStmt = "switch" [ ExpressionPreBlock ] "{" { ExprCaseClause } "}" | "switch" SimpleStmt ";" [ ExpressionPreBlock ] "{" { ExprCaseClause } "}" .
-Expression = LogicalAndExpression { "||" LogicalAndExpression  } .
-ExpressionList = Expression { "," Expression } .
+Expression         = LogicalAndExpression         { "||" LogicalAndExpression  } .
+ExpressionPreBlock = LogicalAndExpressionPreBlock { "||" LogicalAndExpressionPreBlock } .
+ExpressionList         = Expression         { "," Expression } .
 ExpressionListPreBlock = ExpressionPreBlock { "," ExpressionPreBlock } .
-ExpressionPreBlock = LogicalAndExpressionPreBlock { ( "||" | "&&" | "==" | "!=" | "<" | "<=" | ">" | ">=" | "+" | "-" | "|" | "^" | "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" ) LogicalAndExpressionPreBlock } .
 FallthroughStmt = "fallthrough" .
 FieldDecl = ( IdentifierList Type | EmbeddedField ) [ Tag ] .
 ForClause = [ InitStmt ] ";" [ Condition ] ";" [ PostStmt ] .
@@ -59,15 +59,15 @@ Label = identifier .
 LabeledStmt = Label ":" Statement .
 Literal = BasicLit | FunctionLit .
 LiteralValue = "{" [ ElementList [ "," ] ] "}" .
-LogicalAndExpression = RelationalExpression { "&&"  RelationalExpression } .
+LogicalAndExpression         = RelationalExpression         { "&&"  RelationalExpression } .
 LogicalAndExpressionPreBlock = RelationalExpressionPreBlock { "&&"  RelationalExpressionPreBlock } .
 MapType = "map" "[" KeyType "]" ElementType .
 MethodDecl = "func" Receiver MethodName Signature [ FunctionBody ] .
 MethodElem = MethodName Signature .
 MethodName = identifier .
-MultiplicativeExpression = UnaryExpr { ( "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" ) UnaryExpr } .
+MultiplicativeExpression         = UnaryExpr         { ( "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" ) UnaryExpr } .
 MultiplicativeExpressionPreBlock = UnaryExprPreBlock { ( "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" ) UnaryExprPreBlock } .
-Operand = Literal | Type [ LiteralValue ] | "(" Expression ")" .
+Operand         = Literal                               | Type [ LiteralValue ]         | "(" Expression ")" .
 OperandPreBlock = Literal | QualifiedIdent [ TypeArgs ] | TypePreBlock [ LiteralValue ] | "(" Expression ")" .
 PackageClause = "package" PackageName .
 PackageName = identifier .
@@ -76,14 +76,14 @@ ParameterList = ParameterDecl { "," ParameterDecl } .
 Parameters = "(" [ ParameterList [ "," ] ] ")" .
 PointerType = "*" BaseType .
 PostStmt = SimpleStmtPreBlock .
-PrimaryExpr = Operand { Selector | Index | Slice | TypeAssertion | Arguments } .
+PrimaryExpr         = Operand         { Selector | Index | Slice | TypeAssertion | Arguments } .
 PrimaryExprPreBlock = OperandPreBlock { Selector | Index | Slice | TypeAssertion | Arguments } .
 QualifiedIdent = PackageName [ "." identifier ] .
 RangeClause = [ ExpressionList ( "=" | ":=" ) ] "range" ExpressionPreBlock .
 Receiver = Parameters .
 RecvExpr = Expression .
 RecvStmt = [ ExpressionList ( "=" | ":=" ) ] RecvExpr .
-RelationalExpression = AdditiveExpression { ( "==" | "!=" | "<" | "<=" | ">" | ">=" ) AdditiveExpression } .
+RelationalExpression         = AdditiveExpression         { ( "==" | "!=" | "<" | "<=" | ">" | ">=" ) AdditiveExpression } .
 RelationalExpressionPreBlock = AdditiveExpressionPreBlock { ( "==" | "!=" | "<" | "<=" | ">" | ">=" ) AdditiveExpressionPreBlock } .
 Result = Parameters | Type .
 ReturnStmt = "return" [ ExpressionList ] .
@@ -91,7 +91,7 @@ SelectStmt = "select" "{" { CommClause } "}" .
 Selector = "." identifier .
 SendStmt = Channel "<-" Expression .
 Signature = Parameters [ Result ] .
-SimpleStmt = ExpressionList [ Assignment | IncDecStmt | "<-" Expression ] | EmptyStmt .
+SimpleStmt         = ExpressionList         [ Assignment         | IncDecStmt | "<-" Expression ]         | EmptyStmt .
 SimpleStmtPreBlock = ExpressionListPreBlock [ AssignmentPreBlock | IncDecStmt | "<-" ExpressionPreBlock ] | EmptyStmt .
 Slice = "[" [ Expression ] ":" [ Expression ] "]" | "[" [ Expression ] ":" Expression ":" Expression "]" .
 SliceType = "[" "]" ElementType .
@@ -102,7 +102,8 @@ StructType = "struct" "{" [ FieldDecl { ";" FieldDecl } [ ";" ] ] "}" .
 SwitchStmt = ExprSwitchStmt | TypeSwitchStmt .
 Tag = string_lit .
 TopLevelDecl = Declaration | FunctionDecl | MethodDecl .
-Type = TypeName [ TypeArgs ] | TypeLit | "(" Type ")" .
+Type         = TypeName [ TypeArgs ] | TypeLit | "(" Type ")" .
+TypePreBlock =                         TypeLit | "(" Type ")" .
 TypeArgs = "[" TypeList [ "," ] "]" .
 TypeAssertion = "." "(" Type ")" .
 TypeCaseClause = TypeSwitchCase ":" StatementList .
@@ -116,13 +117,12 @@ TypeName = QualifiedIdent .
 TypeParamDecl = IdentifierList TypeConstraint .
 TypeParamList = TypeParamDecl { "," TypeParamDecl } .
 TypeParameters = "[" TypeParamList [ "," ] "]" .
-TypePreBlock = TypeLit | "(" Type ")" .
 TypeSpec = AliasDecl | TypeDef .
 TypeSwitchCase = "case" TypeList | "default" .
 TypeSwitchGuard = [ identifier ":=" ] PrimaryExpr "." "(" "type" ")" .
 TypeSwitchStmt = "switch" [ SimpleStmt ";" ] TypeSwitchGuard "{" { TypeCaseClause } "}" .
 TypeTerm = Type | UnderlyingType .
-UnaryExpr = PrimaryExpr | ( "+" | "-" | "!" | "^" | "*" | "&" | "<-" ) UnaryExpr .
+UnaryExpr         = PrimaryExpr         | ( "+" | "-" | "!" | "^" | "*" | "&" | "<-" ) UnaryExpr .
 UnaryExprPreBlock = PrimaryExprPreBlock | ( "+" | "-" | "!" | "^" | "*" | "&" | "<-" ) UnaryExprPreBlock .
 UnderlyingType = "~" Type .
 VarDecl = "var" ( VarSpec | "(" [ VarSpec { ";" VarSpec } [ ";" ] ] ")" ) .

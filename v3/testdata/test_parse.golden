@@ -5924,6 +5924,7 @@
 /usr/local/go/test/chancap.go
 /usr/local/go/test/chanlinear.go
 /usr/local/go/test/char_lit.go
+/usr/local/go/test/char_lit1.go
 /usr/local/go/test/checkbce.go
 /usr/local/go/test/clearfat.go
 /usr/local/go/test/closedchan.go
@@ -6097,6 +6098,7 @@
 /usr/local/go/test/fixedbugs/bug011.go
 /usr/local/go/test/fixedbugs/bug012.go
 /usr/local/go/test/fixedbugs/bug013.go
+/usr/local/go/test/fixedbugs/bug014.go
 /usr/local/go/test/fixedbugs/bug015.go
 /usr/local/go/test/fixedbugs/bug016.go
 /usr/local/go/test/fixedbugs/bug017.go
@@ -6525,6 +6527,7 @@
 /usr/local/go/test/fixedbugs/bug432.go
 /usr/local/go/test/fixedbugs/bug433.go
 /usr/local/go/test/fixedbugs/bug434.go
+/usr/local/go/test/fixedbugs/bug435.go
 /usr/local/go/test/fixedbugs/bug436.go
 /usr/local/go/test/fixedbugs/bug437.dir/one.go
 /usr/local/go/test/fixedbugs/bug437.dir/two.go
@@ -6748,6 +6751,7 @@
 /usr/local/go/test/fixedbugs/issue13263.go
 /usr/local/go/test/fixedbugs/issue13265.go
 /usr/local/go/test/fixedbugs/issue13268.go
+/usr/local/go/test/fixedbugs/issue13274.go
 /usr/local/go/test/fixedbugs/issue13337.go
 /usr/local/go/test/fixedbugs/issue13365.go
 /usr/local/go/test/fixedbugs/issue13415.go
@@ -6828,6 +6832,7 @@
 /usr/local/go/test/fixedbugs/issue15609.dir/call_decl.go
 /usr/local/go/test/fixedbugs/issue15609.dir/main.go
 /usr/local/go/test/fixedbugs/issue15609.go
+/usr/local/go/test/fixedbugs/issue15611.go
 /usr/local/go/test/fixedbugs/issue15646.dir/a.go
 /usr/local/go/test/fixedbugs/issue15646.dir/b.go
 /usr/local/go/test/fixedbugs/issue15646.go
@@ -7266,6 +7271,7 @@
 /usr/local/go/test/fixedbugs/issue30659.go
 /usr/local/go/test/fixedbugs/issue30679.go
 /usr/local/go/test/fixedbugs/issue30709.go
+/usr/local/go/test/fixedbugs/issue30722.go
 /usr/local/go/test/fixedbugs/issue30862.dir/a/a.go
 /usr/local/go/test/fixedbugs/issue30862.dir/b/b.go
 /usr/local/go/test/fixedbugs/issue30862.dir/main.go
@@ -8023,6 +8029,7 @@
 /usr/local/go/test/fixedbugs/issue8961.go
 /usr/local/go/test/fixedbugs/issue9006.go
 /usr/local/go/test/fixedbugs/issue9017.go
+/usr/local/go/test/fixedbugs/issue9036.go
 /usr/local/go/test/fixedbugs/issue9076.go
 /usr/local/go/test/fixedbugs/issue9083.go
 /usr/local/go/test/fixedbugs/issue9110.go
@@ -8782,3 +8789,4 @@ internal/ebnf/gen.go
 internal/ebnf/parser.go
 parser.go
 scanner.go
+scanner_test.go

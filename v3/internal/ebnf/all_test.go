@@ -73,6 +73,34 @@ func testGrammar(t *testing.T, fn string) {
 	for k := range peg.leftRecursive {
 		t.Errorf("left recursive: %v", k)
 	}
+
+	var a []string
+	for k := range peg.g {
+		if token.IsExported(k) {
+			a = append(a, k)
+		}
+	}
+	sort.Slice(a, func(i, j int) bool {
+		x := a[i]
+		y := a[j]
+		u := noPreBlock(x)
+		v := noPreBlock(y)
+		if u < v {
+			return true
+		}
+
+		if u > v {
+			return false
+		}
+
+		return x < y
+	})
+	for i, v := range a {
+		a[i] = fmt.Sprintf("%32s = %s", v, peg.productionFollowSets[peg.g[v]].caseStr())
+	}
+	if err := os.WriteFile(fn+".fs", []byte(strings.Join(a, "\n")), 0660); err != nil {
+		t.Fatal(err)
+	}
 }
 
 type golden struct {

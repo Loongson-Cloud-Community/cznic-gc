@@ -8,7 +8,9 @@ import (
 	"flag"
 	"fmt"
 	goparser "go/parser"
+	goscanner "go/scanner"
 	"go/token"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -18,14 +20,19 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"unicode"
 )
+
+func stack() string { return string(debug.Stack()) }
 
 var (
 	oRE     = flag.String("re", "", "")
 	oReport = flag.Bool("report", false, "")
 	oTrc    = flag.Bool("trc", false, "")
 
-	re *regexp.Regexp
+	digits  = expand(unicode.Nd)
+	letters = expand(unicode.L)
+	re      *regexp.Regexp
 )
 
 func TestMain(m *testing.M) {
@@ -40,7 +47,25 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func stack() string { return string(debug.Stack()) }
+func expand(cat *unicode.RangeTable) (r []rune) {
+	for _, v := range cat.R16 {
+		for x := v.Lo; x <= v.Hi; x += v.Stride {
+			r = append(r, rune(x))
+		}
+	}
+	for _, v := range cat.R32 {
+		for x := v.Lo; x <= v.Hi; x += v.Stride {
+			r = append(r, rune(x))
+		}
+	}
+	s := rand.NewSource(42)
+	rn := rand.New(s)
+	for i := range r {
+		j := rn.Intn(len(r))
+		r[i], r[j] = r[j], r[i]
+	}
+	return r
+}
 
 type golden struct {
 	a  []string
@@ -104,6 +129,187 @@ func (g *golden) close() {
 	if err := g.f.Close(); err != nil {
 		g.t.Fatal(err)
 	}
+}
+
+func TestScanner(t *testing.T) {
+	p := newParallel()
+	t.Run("errors", func(t *testing.T) { testScanErrors(t) })
+	t.Run("numbers", func(t *testing.T) { testNumbers(t) })
+	t.Run(".", func(t *testing.T) { testScan(p, t, ".", "") })
+	t.Run("GOROOT", func(t *testing.T) { testScan(p, t, runtime.GOROOT(), "/test/") })
+	if err := p.wait(); err != nil {
+		t.Error(err)
+	}
+	t.Logf("TOTAL files %v, ok %v, fail %v", h(p.files), h(p.ok), h(p.fails))
+}
+
+func testScan(p *parallel, t *testing.T, root, skip string) {
+	if err := filepath.Walk(root, func(path0 string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		switch {
+		case re == nil:
+			if strings.Contains(filepath.ToSlash(path0), "/errchk/") {
+				return nil
+			}
+
+			if strings.Contains(filepath.ToSlash(path0), "/testdata/") {
+				return nil
+			}
+
+			if skip != "" && strings.Contains(filepath.ToSlash(path0), skip) {
+				return nil
+			}
+		default:
+			if !re.MatchString(path0) {
+				return nil
+			}
+		}
+
+		if filepath.Ext(path0) != ".go" {
+			return nil
+		}
+
+		path := path0
+		p.addFile()
+		p.exec(func() error {
+			b, err := os.ReadFile(path)
+			if err != nil {
+				p.addFail()
+				return err
+			}
+
+			fs := token.NewFileSet()
+			fi := fs.AddFile(path, -1, len(b))
+			var s0 goscanner.Scanner
+			var err0 error
+			s0.Init(fi, b, func(pos token.Position, msg string) {
+				err0 = fmt.Errorf("%v: %s", pos, msg)
+			}, 0)
+			s := newScanner(path, b)
+			for {
+				pos0, tok0, lit0 := s0.Scan()
+				position0 := fi.Position(pos0)
+				eof0 := tok0 == token.EOF
+				eof := !s.scan()
+				err := s.errs.Err()
+				if g, e := s.token().Ch(), tok0; g != e {
+					p.addFail()
+					return fmt.Errorf("%v: token, got %v, expected %v", position0, g, e)
+				}
+
+				if g, e := s.token().Src(), lit0; g != e {
+					switch {
+					case tok0 == token.SEMICOLON && lit0 != ";":
+						// Ok, our result for injected semis is different.
+					case noGoLit(s.token().Ch()):
+						// Ok, go/scanner does not return the literal string.
+					default:
+						p.addFail()
+						return fmt.Errorf("%v: source, got %q, expected %q", position0, g, e)
+					}
+				}
+
+				if g, e := s.token().Position().String(), position0.String(); g != e {
+					ok := false
+					switch {
+					case eof || eof0:
+						if a, b := s.token().Position().Offset, position0.Offset; a-b == 1 || b-a == 1 {
+							ok = true
+						}
+					case tok0 == token.SEMICOLON && lit0 == "\n":
+						ok = s.token().Position().Filename == position0.Filename && s.token().Position().Line == position0.Line
+					}
+					if !ok {
+						p.addFail()
+						return fmt.Errorf("%v: got %v", e, g)
+					}
+				}
+
+				if g, e := err, err0; (g != nil) != (e != nil) {
+					p.addFail()
+					return fmt.Errorf("%v: error, got %v, expected %v", position0, g, e)
+				}
+
+				if g, e := eof, eof0; g != e {
+					p.addFail()
+					return fmt.Errorf("%v: EOF, got %v, expected %v", position0, g, e)
+				}
+
+				if eof {
+					break
+				}
+			}
+			p.addOk()
+			return nil
+		})
+		return nil
+	}); err != nil {
+		t.Error(err)
+	}
+}
+
+func noGoLit(c token.Token) bool {
+	switch c {
+	case
+		ADD,
+		ADD_ASSIGN,
+		AND,
+		AND_ASSIGN,
+		AND_NOT,
+		AND_NOT_ASSIGN,
+		ARROW,
+		ASSIGN,
+		COLON,
+		COMMA,
+		DEC,
+		DEFINE,
+		ELLIPSIS,
+		EQL,
+		GEQ,
+		GTR,
+		INC,
+		LAND,
+		LBRACE,
+		LBRACK,
+		LEQ,
+		LOR,
+		LPAREN,
+		LSS,
+		MUL,
+		MUL_ASSIGN,
+		NEQ,
+		NOT,
+		OR,
+		OR_ASSIGN,
+		PERIOD,
+		QUO,
+		QUO_ASSIGN,
+		RBRACE,
+		RBRACK,
+		REM,
+		REM_ASSIGN,
+		RPAREN,
+		SHL,
+		SHL_ASSIGN,
+		SHR,
+		SHR_ASSIGN,
+		SUB,
+		SUB_ASSIGN,
+		TILDE,
+		XOR,
+		XOR_ASSIGN:
+
+		return true
+	}
+
+	return false
 }
 
 func isKnownBad(fn string, pos token.Position) bool {
@@ -180,15 +386,16 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 				if err != nil {
 					p.addFail()
 					if pp != nil {
-						p.recordMinToks(path, len(pp.toks))
+						p.recordMinToks(path, len(pp.s.toks))
 					}
 				}
 				if pp != nil {
-					from := pp.toks[pp.maxBackRange[0]].Position()
-					to := pp.toks[pp.maxBackRange[1]].Position()
-					p.recordMaxBacktrack(path, pp.maxBack, len(pp.toks), fmt.Sprintf("%v: - %v:", from, to), pp.maxBackOrigin)
-					p.recordMaxBacktracks(path, pp.backs, len(pp.toks))
-					p.recordMaxBudget(path, parserBudget-pp.budget, len(pp.toks))
+					p.addToks(len(pp.s.toks))
+					from := pp.s.toks[pp.maxBackRange[0]].position(pp.s.source)
+					to := pp.s.toks[pp.maxBackRange[1]].position(pp.s.source)
+					p.recordMaxBacktrack(path, pp.maxBack, len(pp.s.toks), fmt.Sprintf("%v: - %v:", from, to), pp.maxBackOrigin)
+					p.recordMaxBacktracks(path, pp.backs, len(pp.s.toks))
+					p.recordMaxBudget(path, parserBudget-pp.budget, len(pp.s.toks))
 					if *oReport {
 						p.a.merge(pp.a)
 					}
@@ -200,13 +407,7 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 				return errorf("%s: %v", path, err)
 			}
 
-			if pp, err = newParser(path, b, *oReport); err != nil {
-				pp = nil
-				p.addSkipped()
-				return nil
-			}
-
-			p.addToks(len(pp.toks))
+			pp = newParser(path, b, *oReport)
 			if err := pp.parse(); err != nil {
 				if isKnownBad(path, pp.errPosition()) {
 					pp = nil

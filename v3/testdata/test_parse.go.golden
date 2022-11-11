@@ -8762,3 +8762,4 @@ internal/ebnf/gen.go
 internal/ebnf/parser.go
 parser.go
 scanner.go
+scanner_test.go
