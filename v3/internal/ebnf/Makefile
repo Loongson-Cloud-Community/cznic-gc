@@ -23,14 +23,14 @@ gen:
 	gofmt -l -s -w *.go
 
 test:
-	go test -v -failfast 2>&1 | tee log-test
+	go test -v -failfast -src $$HOME/src 2>&1 | tee log-test
 	@git diff testdata/
 	@git status
 	@grep TOTAL log-test || true
 	grep 'FAIL' log-test || true
 
 report:
-	go test -v -failfast -run TestParser -report 2>&1 | tee log-test
+	go test -v -failfast -run TestParser -src $$HOME/src -report 2>&1 | tee log-test
 	@git diff testdata/
 	@git status
 	@grep TOTAL log-test || true

@@ -21,6 +21,7 @@ const (
 )
 
 var (
+	oSrc    = flag.String("src", "../..", "")
 	oGen    = flag.Bool("gen", false, "")
 	oRE     = flag.String("re", "", "")
 	oReport = flag.Bool("report", false, "")
@@ -113,7 +114,7 @@ type golden struct {
 }
 
 func newGolden(t *testing.T, fn string) *golden {
-	if re != nil || *oReport {
+	if re != nil || *oReport || *oSrc != "../.." {
 		return &golden{discard: true}
 	}
 
@@ -178,7 +179,7 @@ func TestEBNFParser(t *testing.T) {
 	defer gld.close()
 
 	p := newParallel()
-	t.Run("gc", func(t *testing.T) { testEBNFParser(p, t, peg, "../..", gld) })
+	t.Run("src", func(t *testing.T) { testEBNFParser(p, t, peg, *oSrc, gld) })
 	t.Run("goroot", func(t *testing.T) { testEBNFParser(p, t, peg, runtime.GOROOT(), gld) })
 	if err := p.wait(); err != nil {
 		t.Error(err)
@@ -268,6 +269,10 @@ func testEBNFParser(p *parallel, t *testing.T, g *grammar, root string, gld *gol
 	}
 }
 
+var falseNegatives = []string{
+	"golang.org/x/tools/go/analysis/passes/unreachable/testdata/src/a/a.go",
+}
+
 func isKnownBad(fn string, pos token.Position) bool {
 	fs := token.NewFileSet()
 	ast, err := goparser.ParseFile(fs, fn, nil, goparser.SkipObjectResolution|goparser.ParseComments)
@@ -283,6 +288,13 @@ func isKnownBad(fn string, pos token.Position) bool {
 		}
 	}
 
+	s := filepath.ToSlash(fn)
+	for _, k := range falseNegatives {
+		if strings.Contains(s, k) {
+			return true
+		}
+	}
+
 	return false
 }
 
@@ -292,7 +304,7 @@ func TestParser(t *testing.T) {
 	defer gld.close()
 
 	p := newParallel()
-	t.Run("cd", func(t *testing.T) { testParser(p, t, "../..", gld) })
+	t.Run("src", func(t *testing.T) { testParser(p, t, *oSrc, gld) })
 	t.Run("goroot", func(t *testing.T) { testParser(p, t, runtime.GOROOT(), gld) })
 	if err := p.wait(); err != nil {
 		t.Error(err)
@@ -405,7 +417,7 @@ func TestGoParser(t *testing.T) {
 	defer gld.close()
 
 	p := newParallel()
-	t.Run("cd", func(t *testing.T) { testGoParser(p, t, "../..", gld) })
+	t.Run("src", func(t *testing.T) { testGoParser(p, t, *oSrc, gld) })
 	t.Run("goroot", func(t *testing.T) { testGoParser(p, t, runtime.GOROOT(), gld) })
 	if err := p.wait(); err != nil {
 		t.Error(err)

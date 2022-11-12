@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	ebnfBudget   = 3e5
-	parserBudget = 3e5
+	ebnfBudget   = 1e8
+	parserBudget = 1e8
 
 	epsilon = -1
 )
