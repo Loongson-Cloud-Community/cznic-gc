@@ -20,12 +20,16 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 	"unicode"
+
+	"modernc.org/mathutil"
 )
 
 func stack() string { return string(debug.Stack()) }
 
 var (
+	oSrc    = flag.String("src", ".", "")
 	oRE     = flag.String("re", "", "")
 	oReport = flag.Bool("report", false, "")
 	oTrc    = flag.Bool("trc", false, "")
@@ -77,7 +81,7 @@ type golden struct {
 }
 
 func newGolden(t *testing.T, fn string) *golden {
-	if re != nil || *oReport {
+	if re != nil || *oReport || *oSrc != "." {
 		return &golden{discard: true}
 	}
 
@@ -135,7 +139,7 @@ func TestScanner(t *testing.T) {
 	p := newParallel()
 	t.Run("errors", func(t *testing.T) { testScanErrors(t) })
 	t.Run("numbers", func(t *testing.T) { testNumbers(t) })
-	t.Run(".", func(t *testing.T) { testScan(p, t, ".", "") })
+	t.Run("src", func(t *testing.T) { testScan(p, t, *oSrc, "") })
 	t.Run("GOROOT", func(t *testing.T) { testScan(p, t, runtime.GOROOT(), "/test/") })
 	if err := p.wait(); err != nil {
 		t.Error(err)
@@ -176,9 +180,25 @@ func testScan(p *parallel, t *testing.T, root, skip string) {
 			return nil
 		}
 
+		sp := filepath.ToSlash(path0)
+		for _, v := range []string{
+			"github.com/bosun-monitor/bosun/cmd/scollector/collectors/awsBilling.go",
+			"github.com/llvm-mirror/llgo/test/debuginfo/emptyname.go",
+			"github.com/prometheus/prometheus/promql/parser/generated_parser.y.go",
+		} {
+			if strings.Contains(sp, v) {
+				t.Logf("TODO %v", path0)
+				return nil
+			}
+		}
+
 		path := path0
 		p.addFile()
 		p.exec(func() error {
+			if *oTrc {
+				fmt.Fprintln(os.Stderr, path)
+			}
+
 			b, err := os.ReadFile(path)
 			if err != nil {
 				p.addFail()
@@ -204,7 +224,13 @@ func testScan(p *parallel, t *testing.T, root, skip string) {
 					return fmt.Errorf("%v: token, got %v, expected %v", position0, g, e)
 				}
 
-				if g, e := s.token().Src(), lit0; g != e {
+				g, e := s.token().Src(), lit0
+				if tok0 == token.STRING && strings.HasPrefix(e, "`") {
+					// Specs: Carriage return characters ('\r') inside raw string literals are
+					// discarded from the raw string value.
+					g = strings.ReplaceAll(g, "\r", "")
+				}
+				if g != e {
 					switch {
 					case tok0 == token.SEMICOLON && lit0 != ";":
 						// Ok, our result for injected semis is different.
@@ -220,7 +246,7 @@ func testScan(p *parallel, t *testing.T, root, skip string) {
 					ok := false
 					switch {
 					case eof || eof0:
-						if a, b := s.token().Position().Offset, position0.Offset; a-b == 1 || b-a == 1 {
+						if a, b := s.token().Position().Offset, position0.Offset; a == b {
 							ok = true
 						}
 					case tok0 == token.SEMICOLON && lit0 == "\n":
@@ -228,7 +254,7 @@ func testScan(p *parallel, t *testing.T, root, skip string) {
 					}
 					if !ok {
 						p.addFail()
-						return fmt.Errorf("%v: got %v", e, g)
+						return fmt.Errorf("%v: position, got %v (%v:)", e, g, path)
 					}
 				}
 
@@ -312,6 +338,10 @@ func noGoLit(c token.Token) bool {
 	return false
 }
 
+var falseNegatives = []string{
+	"golang.org/x/tools/go/analysis/passes/unreachable/testdata/src/a/a.go",
+}
+
 func isKnownBad(fn string, pos token.Position) bool {
 	fs := token.NewFileSet()
 	ast, err := goparser.ParseFile(fs, fn, nil, goparser.SkipObjectResolution|goparser.ParseComments)
@@ -327,6 +357,13 @@ func isKnownBad(fn string, pos token.Position) bool {
 		}
 	}
 
+	s := filepath.ToSlash(fn)
+	for _, k := range falseNegatives {
+		if strings.Contains(s, k) {
+			return true
+		}
+	}
+
 	return false
 }
 
@@ -336,7 +373,7 @@ func TestParser(t *testing.T) {
 	defer gld.close()
 
 	p := newParallel()
-	t.Run("cd", func(t *testing.T) { testParser(p, t, ".", gld) })
+	t.Run("src", func(t *testing.T) { testParser(p, t, *oSrc, gld) })
 	t.Run("goroot", func(t *testing.T) { testParser(p, t, runtime.GOROOT(), gld) })
 	if err := p.wait(); err != nil {
 		t.Error(err)
@@ -350,6 +387,7 @@ func TestParser(t *testing.T) {
 	t.Logf("Max backtrack: %s, %v for %v tokens\n\t%v (%v:)", p.maxBacktrackPath, h(p.maxBacktrack), h(p.maxBacktrackToks), p.maxBacktrackPos, p.maxBacktrackOrigin)
 	t.Logf("Max backtracks: %s, %v for %v tokens", p.maxBacktracksPath, h(p.maxBacktracks), h(p.maxBacktracksToks))
 	t.Logf("Max budget used: %s, %v for %v tokens", p.maxBudgetPath, h(p.maxBudget), h(p.maxBudgetToks))
+	t.Logf("Max duration: %s, %v for %v tokens", p.maxDurationPath, p.maxDuration, h(p.maxDurationToks))
 	if *oReport {
 		t.Logf("\n%s", p.a.report())
 	}
@@ -381,6 +419,7 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 			}
 
 			var pp *parser
+			t0 := time.Now()
 
 			defer func() {
 				if err != nil {
@@ -390,9 +429,11 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 					}
 				}
 				if pp != nil {
+					p.recordMaxDuration(path, time.Since(t0), len(pp.s.toks))
 					p.addToks(len(pp.s.toks))
 					from := pp.s.toks[pp.maxBackRange[0]].position(pp.s.source)
-					to := pp.s.toks[pp.maxBackRange[1]].position(pp.s.source)
+					hi := mathutil.Min(pp.maxBackRange[1], len(pp.s.toks)-1)
+					to := pp.s.toks[hi].position(pp.s.source)
 					p.recordMaxBacktrack(path, pp.maxBack, len(pp.s.toks), fmt.Sprintf("%v: - %v:", from, to), pp.maxBackOrigin)
 					p.recordMaxBacktracks(path, pp.backs, len(pp.s.toks))
 					p.recordMaxBudget(path, parserBudget-pp.budget, len(pp.s.toks))
@@ -434,12 +475,13 @@ func TestGoParser(t *testing.T) {
 	defer gld.close()
 
 	p := newParallel()
-	t.Run("cd", func(t *testing.T) { testGoParser(p, t, ".", gld) })
+	t.Run("src", func(t *testing.T) { testGoParser(p, t, *oSrc, gld) })
 	t.Run("goroot", func(t *testing.T) { testGoParser(p, t, runtime.GOROOT(), gld) })
 	if err := p.wait(); err != nil {
 		t.Error(err)
 	}
 	t.Logf("TOTAL files %v, skip %v, ok %v, fail %v", h(p.files), h(p.skipped), h(p.ok), h(p.fails))
+	t.Logf("Max duration: %s, %v for %v tokens", p.maxDurationPath, p.maxDuration, h(p.maxDurationToks))
 }
 
 func testGoParser(p *parallel, t *testing.T, root string, gld *golden) {
@@ -466,10 +508,15 @@ func testGoParser(p *parallel, t *testing.T, root string, gld *golden) {
 				fmt.Fprintln(os.Stderr, path)
 			}
 
+			t0 := time.Now()
+
 			defer func() {
 				if err != nil {
 					p.addFail()
+					return
 				}
+
+				p.recordMaxDuration(path, time.Since(t0), -1)
 			}()
 
 			b, err := os.ReadFile(path)

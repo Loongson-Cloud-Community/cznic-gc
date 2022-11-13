@@ -186,20 +186,15 @@ func (p *parser) arrayType() Node {
 
 // AssignmentNode represents the production
 //
-//	Assignment = ExpressionList ( "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" ) ExpressionList .
+//	Assignment = ( "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" ) ExpressionList .
 type AssignmentNode struct{ noder }
 
 func (p *parser) assignment() Node {
-	// ebnf.Sequence ExpressionList ( "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" ) ExpressionList ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
+	// ebnf.Sequence ( "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" ) ExpressionList ctx [ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN]
 	{
 		ix := p.ix
 		_ = ix
-		// *ebnf.Name ExpressionList ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-		if p.expressionList() == nil {
-			p.back(ix)
-			return nil
-		}
-		// *ebnf.Group ( "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" ) ctx []
+		// *ebnf.Group ( "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" ) ctx [ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN]
 		// ebnf.Alternative "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" ctx [ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN]
 		switch p.c() {
 		case ASSIGN: // 0
@@ -258,16 +253,11 @@ func (p *parser) assignment() Node {
 }
 
 func (p *parser) assignmentPreBlock() Node {
-	// ebnf.Sequence ExpressionList ( "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" ) ExpressionListPreBlock ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
+	// ebnf.Sequence ( "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" ) ExpressionListPreBlock ctx [ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN]
 	{
 		ix := p.ix
 		_ = ix
-		// *ebnf.Name ExpressionList ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-		if p.expressionList() == nil {
-			p.back(ix)
-			return nil
-		}
-		// *ebnf.Group ( "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" ) ctx []
+		// *ebnf.Group ( "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" ) ctx [ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN]
 		// ebnf.Alternative "=" | "+=" | "-=" | "|=" | "^=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | "&=" | "&^=" ctx [ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN]
 		switch p.c() {
 		case ASSIGN: // 0
@@ -600,37 +590,12 @@ func (p *parser) commClause() Node {
 type CompositeLitNode struct{ noder }
 
 func (p *parser) compositeLit() Node {
-	// ebnf.Sequence LiteralType LiteralValue ctx [IDENT, LBRACK, MAP, STRUCT]
+	// ebnf.Sequence LiteralType LiteralValue ctx [LBRACK, MAP, STRUCT]
 	{
 		ix := p.ix
 		_ = ix
-		// *ebnf.Name LiteralType ctx [IDENT, LBRACK, MAP, STRUCT]
+		// *ebnf.Name LiteralType ctx [LBRACK, MAP, STRUCT]
 		if p.literalType() == nil {
-			p.back(ix)
-			return nil
-		}
-		// *ebnf.Name LiteralValue ctx []
-		switch p.c() {
-		case LBRACE:
-			if p.literalValue() == nil {
-				p.back(ix)
-				return nil
-			}
-		default:
-			p.back(ix)
-			return nil
-		}
-	}
-	return &CompositeLitNode{}
-}
-
-func (p *parser) compositeLitPreBlock() Node {
-	// ebnf.Sequence LiteralTypePreBlock LiteralValue ctx [LBRACK, MAP, STRUCT]
-	{
-		ix := p.ix
-		_ = ix
-		// *ebnf.Name LiteralTypePreBlock ctx [LBRACK, MAP, STRUCT]
-		if p.literalTypePreBlock() == nil {
 			p.back(ix)
 			return nil
 		}
@@ -1501,19 +1466,6 @@ func (p *parser) expressionPreBlock() Node {
 	return &ExpressionNode{}
 }
 
-// ExpressionStmtNode represents the production
-//
-//	ExpressionStmt = Expression .
-type ExpressionStmtNode struct{ noder }
-
-func (p *parser) expressionStmt() Node {
-	return p.expression()
-}
-
-func (p *parser) expressionStmtPreBlock() Node {
-	return p.expressionPreBlock()
-}
-
 // FallthroughStmtNode represents the production
 //
 //	FallthroughStmt = "fallthrough" .
@@ -2305,38 +2257,6 @@ func (p *parser) importSpec() Node {
 	return &ImportSpecNode{}
 }
 
-// IncDecStmtNode represents the production
-//
-//	IncDecStmt = Expression ( "++" | "--" ) .
-type IncDecStmtNode struct{ noder }
-
-func (p *parser) incDecStmt() Node {
-	// ebnf.Sequence Expression ( "++" | "--" ) ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-	{
-		ix := p.ix
-		_ = ix
-		// *ebnf.Name Expression ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-		if p.expression() == nil {
-			p.back(ix)
-			return nil
-		}
-		// *ebnf.Group ( "++" | "--" ) ctx []
-		// ebnf.Alternative "++" | "--" ctx [DEC, INC]
-		switch p.c() {
-		case INC: // 0
-			// *ebnf.Token "++" ctx [INC]
-			p.expect(INC)
-		case DEC: // 1
-			// *ebnf.Token "--" ctx [DEC]
-			p.expect(DEC)
-		default:
-			p.back(ix)
-			return nil
-		}
-	}
-	return &IncDecStmtNode{}
-}
-
 // IndexNode represents the production
 //
 //	Index = "[" Expression "]" .
@@ -2581,31 +2501,7 @@ func (p *parser) labeledStmt() Node {
 type LiteralNode struct{ noder }
 
 func (p *parser) literal() Node {
-	// ebnf.Alternative BasicLit | CompositeLit | FunctionLit ctx [CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, MAP, STRING, STRUCT]
-	switch p.c() {
-	case CHAR, FLOAT, IMAG, INT, STRING: // 0
-		// *ebnf.Name BasicLit ctx [CHAR, FLOAT, IMAG, INT, STRING]
-		if p.basicLit() == nil {
-			return nil
-		}
-	case IDENT, LBRACK, MAP, STRUCT: // 1
-		// *ebnf.Name CompositeLit ctx [IDENT, LBRACK, MAP, STRUCT]
-		if p.compositeLit() == nil {
-			return nil
-		}
-	case FUNC: // 2
-		// *ebnf.Name FunctionLit ctx [FUNC]
-		if p.functionLit() == nil {
-			return nil
-		}
-	default:
-		return nil
-	}
-	return &LiteralNode{}
-}
-
-func (p *parser) literalPreBlock() Node {
-	// ebnf.Alternative BasicLit | CompositeLitPreBlock | FunctionLit ctx [CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT]
+	// ebnf.Alternative BasicLit | CompositeLit | FunctionLit ctx [CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT]
 	switch p.c() {
 	case CHAR, FLOAT, IMAG, INT, STRING: // 0
 		// *ebnf.Name BasicLit ctx [CHAR, FLOAT, IMAG, INT, STRING]
@@ -2613,8 +2509,8 @@ func (p *parser) literalPreBlock() Node {
 			return nil
 		}
 	case LBRACK, MAP, STRUCT: // 1
-		// *ebnf.Name CompositeLitPreBlock ctx [LBRACK, MAP, STRUCT]
-		if p.compositeLitPreBlock() == nil {
+		// *ebnf.Name CompositeLit ctx [LBRACK, MAP, STRUCT]
+		if p.compositeLit() == nil {
 			return nil
 		}
 	case FUNC: // 2
@@ -2630,93 +2526,10 @@ func (p *parser) literalPreBlock() Node {
 
 // LiteralTypeNode represents the production
 //
-//	LiteralType = StructType | ArrayType | "[" "..." "]" ElementType | SliceType | MapType | TypeName [ TypeArgs ] .
+//	LiteralType = StructType | ArrayType | "[" "..." "]" ElementType | SliceType | MapType .
 type LiteralTypeNode struct{ noder }
 
 func (p *parser) literalType() Node {
-	// ebnf.Alternative StructType | ArrayType | "[" "..." "]" ElementType | SliceType | MapType | TypeName [ TypeArgs ] ctx [IDENT, LBRACK, MAP, STRUCT]
-	switch p.c() {
-	case STRUCT: // 0
-		// *ebnf.Name StructType ctx [STRUCT]
-		if p.structType() == nil {
-			return nil
-		}
-	case LBRACK: // 1 2 3
-		// *ebnf.Name ArrayType ctx [LBRACK]
-		if p.arrayType() == nil {
-			goto _0
-		}
-		break
-	_0:
-		// ebnf.Sequence "[" "..." "]" ElementType ctx [LBRACK]
-		{
-			if p.peek(1) != ELLIPSIS {
-				goto _1
-			}
-			ix := p.ix
-			_ = ix
-			// *ebnf.Token "[" ctx [LBRACK]
-			p.expect(LBRACK)
-			// *ebnf.Token "..." ctx [ELLIPSIS]
-			p.expect(ELLIPSIS)
-			// *ebnf.Token "]" ctx []
-			if !p.accept(RBRACK) {
-				p.back(ix)
-				goto _1
-			}
-			// *ebnf.Name ElementType ctx []
-			switch p.c() {
-			case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT:
-				if p.elementType() == nil {
-					p.back(ix)
-					goto _1
-				}
-			default:
-				p.back(ix)
-				goto _1
-			}
-		}
-		break
-	_1:
-		// *ebnf.Name SliceType ctx [LBRACK]
-		if p.sliceType() == nil {
-			goto _2
-		}
-		break
-	_2:
-		return nil
-	case MAP: // 4
-		// *ebnf.Name MapType ctx [MAP]
-		if p.mapType() == nil {
-			return nil
-		}
-	case IDENT: // 5
-		// ebnf.Sequence TypeName [ TypeArgs ] ctx [IDENT]
-		{
-			ix := p.ix
-			_ = ix
-			// *ebnf.Name TypeName ctx [IDENT]
-			if p.typeName() == nil {
-				p.back(ix)
-				return nil
-			}
-			// *ebnf.Option [ TypeArgs ] ctx []
-			switch p.c() {
-			case LBRACK:
-				// *ebnf.Name TypeArgs ctx [LBRACK]
-				if p.typeArgs() == nil {
-					goto _3
-				}
-			}
-		_3:
-		}
-	default:
-		return nil
-	}
-	return &LiteralTypeNode{}
-}
-
-func (p *parser) literalTypePreBlock() Node {
 	// ebnf.Alternative StructType | ArrayType | "[" "..." "]" ElementType | SliceType | MapType ctx [LBRACK, MAP, STRUCT]
 	switch p.c() {
 	case STRUCT: // 0
@@ -3006,46 +2819,46 @@ func (p *parser) methodName() Node {
 
 // OperandNode represents the production
 //
-//	Operand = Literal | OperandName [ TypeArgs ] | "(" Expression ")" .
+//	Operand = Literal | OperandName [ TypeArgs ] [ LiteralValue ] | "(" Expression ")" .
 type OperandNode struct{ noder }
 
 func (p *parser) operand() Node {
-	// ebnf.Alternative Literal | OperandName [ TypeArgs ] | "(" Expression ")" ctx [CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, LPAREN, MAP, STRING, STRUCT]
+	// ebnf.Alternative Literal | OperandName [ TypeArgs ] [ LiteralValue ] | "(" Expression ")" ctx [CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, LPAREN, MAP, STRING, STRUCT]
 	switch p.c() {
 	case CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT: // 0
 		// *ebnf.Name Literal ctx [CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT]
 		if p.literal() == nil {
 			return nil
 		}
-	case IDENT: // 0 1
-		// *ebnf.Name Literal ctx [IDENT]
-		if p.literal() == nil {
-			goto _0
-		}
-		break
-	_0:
-		// ebnf.Sequence OperandName [ TypeArgs ] ctx [IDENT]
+	case IDENT: // 1
+		// ebnf.Sequence OperandName [ TypeArgs ] [ LiteralValue ] ctx [IDENT]
 		{
 			ix := p.ix
 			_ = ix
 			// *ebnf.Name OperandName ctx [IDENT]
 			if p.operandName() == nil {
 				p.back(ix)
-				goto _1
+				return nil
 			}
 			// *ebnf.Option [ TypeArgs ] ctx []
 			switch p.c() {
 			case LBRACK:
 				// *ebnf.Name TypeArgs ctx [LBRACK]
 				if p.typeArgs() == nil {
-					goto _2
+					goto _0
 				}
 			}
-		_2:
+		_0:
+			// *ebnf.Option [ LiteralValue ] ctx []
+			switch p.c() {
+			case LBRACE:
+				// *ebnf.Name LiteralValue ctx [LBRACE]
+				if p.literalValue() == nil {
+					goto _1
+				}
+			}
+		_1:
 		}
-		break
-	_1:
-		return nil
 	case LPAREN: // 2
 		// ebnf.Sequence "(" Expression ")" ctx [LPAREN]
 		{
@@ -3085,11 +2898,11 @@ func (p *parser) operandName() Node {
 }
 
 func (p *parser) operandPreBlock() Node {
-	// ebnf.Alternative LiteralPreBlock | OperandName [ TypeArgs ] | "(" Expression ")" ctx [CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, LPAREN, MAP, STRING, STRUCT]
+	// ebnf.Alternative Literal | OperandName [ TypeArgs ] | "(" Expression ")" ctx [CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, LPAREN, MAP, STRING, STRUCT]
 	switch p.c() {
 	case CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT: // 0
-		// *ebnf.Name LiteralPreBlock ctx [CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT]
-		if p.literalPreBlock() == nil {
+		// *ebnf.Name Literal ctx [CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT]
+		if p.literal() == nil {
 			return nil
 		}
 	case IDENT: // 1
@@ -3916,64 +3729,25 @@ func (p *parser) sendStmt() Node {
 	return &SendStmtNode{}
 }
 
-func (p *parser) sendStmtPreBlock() Node {
-	// ebnf.Sequence Channel "<-" ExpressionPreBlock ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-	{
-		ix := p.ix
-		_ = ix
-		// *ebnf.Name Channel ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-		if p.channel() == nil {
-			p.back(ix)
-			return nil
-		}
-		// *ebnf.Token "<-" ctx []
-		if !p.accept(ARROW) {
-			p.back(ix)
-			return nil
-		}
-		// *ebnf.Name ExpressionPreBlock ctx []
-		switch p.c() {
-		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-			if p.expressionPreBlock() == nil {
-				p.back(ix)
-				return nil
-			}
-		default:
-			p.back(ix)
-			return nil
-		}
-	}
-	return &SendStmtNode{}
-}
-
 // ShortVarDeclNode represents the production
 //
-//	ShortVarDecl = IdentifierList ":=" ExpressionList .
+//	ShortVarDecl = ":=" ExpressionList .
 type ShortVarDeclNode struct{ noder }
 
 func (p *parser) shortVarDecl() Node {
-	// ebnf.Sequence IdentifierList ":=" ExpressionList ctx [IDENT]
+	// ebnf.Sequence ":=" ExpressionList ctx [DEFINE]
 	{
+		switch p.peek(1) {
+		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+		default:
+			return nil
+		}
 		ix := p.ix
 		_ = ix
-		// *ebnf.Name IdentifierList ctx [IDENT]
-		if p.identifierList() == nil {
-			p.back(ix)
-			return nil
-		}
-		// *ebnf.Token ":=" ctx []
-		if !p.accept(DEFINE) {
-			p.back(ix)
-			return nil
-		}
-		// *ebnf.Name ExpressionList ctx []
-		switch p.c() {
-		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-			if p.expressionList() == nil {
-				p.back(ix)
-				return nil
-			}
-		default:
+		// *ebnf.Token ":=" ctx [DEFINE]
+		p.expect(DEFINE)
+		// *ebnf.Name ExpressionList ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
+		if p.expressionList() == nil {
 			p.back(ix)
 			return nil
 		}
@@ -3982,28 +3756,19 @@ func (p *parser) shortVarDecl() Node {
 }
 
 func (p *parser) shortVarDeclPreBlock() Node {
-	// ebnf.Sequence IdentifierList ":=" ExpressionListPreBlock ctx [IDENT]
+	// ebnf.Sequence ":=" ExpressionListPreBlock ctx [DEFINE]
 	{
+		switch p.peek(1) {
+		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+		default:
+			return nil
+		}
 		ix := p.ix
 		_ = ix
-		// *ebnf.Name IdentifierList ctx [IDENT]
-		if p.identifierList() == nil {
-			p.back(ix)
-			return nil
-		}
-		// *ebnf.Token ":=" ctx []
-		if !p.accept(DEFINE) {
-			p.back(ix)
-			return nil
-		}
-		// *ebnf.Name ExpressionListPreBlock ctx []
-		switch p.c() {
-		case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
-			if p.expressionListPreBlock() == nil {
-				p.back(ix)
-				return nil
-			}
-		default:
+		// *ebnf.Token ":=" ctx [DEFINE]
+		p.expect(DEFINE)
+		// *ebnf.Name ExpressionListPreBlock ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
+		if p.expressionListPreBlock() == nil {
 			p.back(ix)
 			return nil
 		}
@@ -4041,71 +3806,68 @@ func (p *parser) signature() Node {
 
 // SimpleStmtNode represents the production
 //
-//	SimpleStmt = Assignment | ShortVarDecl | SendStmt | IncDecStmt | ExpressionStmt | EmptyStmt .
+//	SimpleStmt = ExpressionList [ Assignment | ShortVarDecl | "<-" Expression | "++" | "--" ] | EmptyStmt .
 type SimpleStmtNode struct{ noder }
 
 func (p *parser) simpleStmt() Node {
-	// ebnf.Alternative Assignment | ShortVarDecl | SendStmt | IncDecStmt | ExpressionStmt | EmptyStmt ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR /* ε */]
+	// ebnf.Alternative ExpressionList [ Assignment | ShortVarDecl | "<-" Expression | "++" | "--" ] | EmptyStmt ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR /* ε */]
 	switch p.c() {
-	case IDENT: // 0 1 2 3 4
-		// *ebnf.Name Assignment ctx [IDENT]
-		if p.assignment() == nil {
-			goto _0
+	case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR: // 0
+		// ebnf.Sequence ExpressionList [ Assignment | ShortVarDecl | "<-" Expression | "++" | "--" ] ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
+		{
+			ix := p.ix
+			_ = ix
+			// *ebnf.Name ExpressionList ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
+			if p.expressionList() == nil {
+				p.back(ix)
+				return nil
+			}
+			// *ebnf.Option [ Assignment | ShortVarDecl | "<-" Expression | "++" | "--" ] ctx []
+			switch p.c() {
+			case ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ARROW, ASSIGN, DEC, DEFINE, INC, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN:
+				// ebnf.Alternative Assignment | ShortVarDecl | "<-" Expression | "++" | "--" ctx [ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ARROW, ASSIGN, DEC, DEFINE, INC, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN]
+				switch p.c() {
+				case ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN: // 0
+					// *ebnf.Name Assignment ctx [ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN]
+					if p.assignment() == nil {
+						goto _0
+					}
+				case DEFINE: // 1
+					// *ebnf.Name ShortVarDecl ctx [DEFINE]
+					if p.shortVarDecl() == nil {
+						goto _0
+					}
+				case ARROW: // 2
+					// ebnf.Sequence "<-" Expression ctx [ARROW]
+					{
+						switch p.peek(1) {
+						case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+						default:
+							goto _0
+						}
+						ix := p.ix
+						_ = ix
+						// *ebnf.Token "<-" ctx [ARROW]
+						p.expect(ARROW)
+						// *ebnf.Name Expression ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
+						if p.expression() == nil {
+							p.back(ix)
+							goto _0
+						}
+					}
+				case INC: // 3
+					// *ebnf.Token "++" ctx [INC]
+					p.expect(INC)
+				case DEC: // 4
+					// *ebnf.Token "--" ctx [DEC]
+					p.expect(DEC)
+				default:
+					goto _0
+				}
+			}
+		_0:
 		}
-		break
-	_0:
-		// *ebnf.Name ShortVarDecl ctx [IDENT]
-		if p.shortVarDecl() == nil {
-			goto _1
-		}
-		break
-	_1:
-		// *ebnf.Name SendStmt ctx [IDENT]
-		if p.sendStmt() == nil {
-			goto _2
-		}
-		break
-	_2:
-		// *ebnf.Name IncDecStmt ctx [IDENT]
-		if p.incDecStmt() == nil {
-			goto _3
-		}
-		break
-	_3:
-		// *ebnf.Name ExpressionStmt ctx [IDENT]
-		if p.expressionStmt() == nil {
-			goto _4
-		}
-		break
-	_4:
-		return nil
-	case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR: // 0 2 3 4
-		// *ebnf.Name Assignment ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-		if p.assignment() == nil {
-			goto _5
-		}
-		break
-	_5:
-		// *ebnf.Name SendStmt ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-		if p.sendStmt() == nil {
-			goto _6
-		}
-		break
-	_6:
-		// *ebnf.Name IncDecStmt ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-		if p.incDecStmt() == nil {
-			goto _7
-		}
-		break
-	_7:
-		// *ebnf.Name ExpressionStmt ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-		if p.expressionStmt() == nil {
-			goto _8
-		}
-		break
-	_8:
-		return nil
-	default: //  /* ε */ 5
+	default: //  /* ε */ 1
 		// *ebnf.Name EmptyStmt ctx [ /* ε */]
 		if p.emptyStmt() == nil {
 			return nil
@@ -4115,67 +3877,64 @@ func (p *parser) simpleStmt() Node {
 }
 
 func (p *parser) simpleStmtPreBlock() Node {
-	// ebnf.Alternative AssignmentPreBlock | ShortVarDeclPreBlock | SendStmtPreBlock | IncDecStmt | ExpressionStmtPreBlock | EmptyStmt ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR /* ε */]
+	// ebnf.Alternative ExpressionListPreBlock [ AssignmentPreBlock | ShortVarDeclPreBlock | "<-" ExpressionListPreBlock | "++" | "--" ] | EmptyStmt ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR /* ε */]
 	switch p.c() {
-	case IDENT: // 0 1 2 3 4
-		// *ebnf.Name AssignmentPreBlock ctx [IDENT]
-		if p.assignmentPreBlock() == nil {
-			goto _0
+	case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR: // 0
+		// ebnf.Sequence ExpressionListPreBlock [ AssignmentPreBlock | ShortVarDeclPreBlock | "<-" ExpressionListPreBlock | "++" | "--" ] ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
+		{
+			ix := p.ix
+			_ = ix
+			// *ebnf.Name ExpressionListPreBlock ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
+			if p.expressionListPreBlock() == nil {
+				p.back(ix)
+				return nil
+			}
+			// *ebnf.Option [ AssignmentPreBlock | ShortVarDeclPreBlock | "<-" ExpressionListPreBlock | "++" | "--" ] ctx []
+			switch p.c() {
+			case ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ARROW, ASSIGN, DEC, DEFINE, INC, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN:
+				// ebnf.Alternative AssignmentPreBlock | ShortVarDeclPreBlock | "<-" ExpressionListPreBlock | "++" | "--" ctx [ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ARROW, ASSIGN, DEC, DEFINE, INC, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN]
+				switch p.c() {
+				case ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN: // 0
+					// *ebnf.Name AssignmentPreBlock ctx [ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN]
+					if p.assignmentPreBlock() == nil {
+						goto _0
+					}
+				case DEFINE: // 1
+					// *ebnf.Name ShortVarDeclPreBlock ctx [DEFINE]
+					if p.shortVarDeclPreBlock() == nil {
+						goto _0
+					}
+				case ARROW: // 2
+					// ebnf.Sequence "<-" ExpressionListPreBlock ctx [ARROW]
+					{
+						switch p.peek(1) {
+						case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR:
+						default:
+							goto _0
+						}
+						ix := p.ix
+						_ = ix
+						// *ebnf.Token "<-" ctx [ARROW]
+						p.expect(ARROW)
+						// *ebnf.Name ExpressionListPreBlock ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
+						if p.expressionListPreBlock() == nil {
+							p.back(ix)
+							goto _0
+						}
+					}
+				case INC: // 3
+					// *ebnf.Token "++" ctx [INC]
+					p.expect(INC)
+				case DEC: // 4
+					// *ebnf.Token "--" ctx [DEC]
+					p.expect(DEC)
+				default:
+					goto _0
+				}
+			}
+		_0:
 		}
-		break
-	_0:
-		// *ebnf.Name ShortVarDeclPreBlock ctx [IDENT]
-		if p.shortVarDeclPreBlock() == nil {
-			goto _1
-		}
-		break
-	_1:
-		// *ebnf.Name SendStmtPreBlock ctx [IDENT]
-		if p.sendStmtPreBlock() == nil {
-			goto _2
-		}
-		break
-	_2:
-		// *ebnf.Name IncDecStmt ctx [IDENT]
-		if p.incDecStmt() == nil {
-			goto _3
-		}
-		break
-	_3:
-		// *ebnf.Name ExpressionStmtPreBlock ctx [IDENT]
-		if p.expressionStmtPreBlock() == nil {
-			goto _4
-		}
-		break
-	_4:
-		return nil
-	case ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR: // 0 2 3 4
-		// *ebnf.Name AssignmentPreBlock ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-		if p.assignmentPreBlock() == nil {
-			goto _5
-		}
-		break
-	_5:
-		// *ebnf.Name SendStmtPreBlock ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-		if p.sendStmtPreBlock() == nil {
-			goto _6
-		}
-		break
-	_6:
-		// *ebnf.Name IncDecStmt ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-		if p.incDecStmt() == nil {
-			goto _7
-		}
-		break
-	_7:
-		// *ebnf.Name ExpressionStmtPreBlock ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-		if p.expressionStmtPreBlock() == nil {
-			goto _8
-		}
-		break
-	_8:
-		return nil
-	default: //  /* ε */ 5
+	default: //  /* ε */ 1
 		// *ebnf.Name EmptyStmt ctx [ /* ε */]
 		if p.emptyStmt() == nil {
 			return nil

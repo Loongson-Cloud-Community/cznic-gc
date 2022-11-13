@@ -2,8 +2,8 @@
                        Arguments = LPAREN
                      ArrayLength = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
                        ArrayType = LBRACK
-                      Assignment = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-              AssignmentPreBlock = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
+                      Assignment = ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN
+              AssignmentPreBlock = ADD_ASSIGN, AND_ASSIGN, AND_NOT_ASSIGN, ASSIGN, MUL_ASSIGN, OR_ASSIGN, QUO_ASSIGN, REM_ASSIGN, SHL_ASSIGN, SHR_ASSIGN, SUB_ASSIGN, XOR_ASSIGN
                         BaseType = ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
                         BasicLit = CHAR, FLOAT, IMAG, INT, STRING
                            Block = LBRACE
@@ -12,8 +12,7 @@
                      ChannelType = ARROW, CHAN
                         CommCase = CASE, DEFAULT
                       CommClause = CASE, DEFAULT
-                    CompositeLit = IDENT, LBRACK, MAP, STRUCT
-            CompositeLitPreBlock = LBRACK, MAP, STRUCT
+                    CompositeLit = LBRACK, MAP, STRUCT
                        Condition = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
                        ConstDecl = CONST
                        ConstSpec = IDENT
@@ -33,8 +32,6 @@
               ExpressionPreBlock = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
                   ExpressionList = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
           ExpressionListPreBlock = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-                  ExpressionStmt = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-          ExpressionStmtPreBlock = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
                  FallthroughStmt = FALLTHROUGH
                        FieldDecl = IDENT, MUL
                        ForClause = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, SEMICOLON, STRING, STRUCT, SUB, XOR
@@ -51,7 +48,6 @@
                       ImportDecl = IMPORT
                       ImportPath = STRING
                       ImportSpec = IDENT, PERIOD, STRING
-                      IncDecStmt = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
                            Index = LBRACK
                         InitStmt = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR /* ε */
                    InterfaceElem = ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT, TILDE
@@ -60,10 +56,8 @@
                     KeyedElement = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
                            Label = IDENT
                      LabeledStmt = IDENT
-                         Literal = CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, MAP, STRING, STRUCT
-                 LiteralPreBlock = CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT
-                     LiteralType = IDENT, LBRACK, MAP, STRUCT
-             LiteralTypePreBlock = LBRACK, MAP, STRUCT
+                         Literal = CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT
+                     LiteralType = LBRACK, MAP, STRUCT
                     LiteralValue = LBRACE
                          MapType = MAP
                       MethodDecl = FUNC
@@ -93,9 +87,8 @@
                       SelectStmt = SELECT
                         Selector = PERIOD
                         SendStmt = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-                SendStmtPreBlock = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
-                    ShortVarDecl = IDENT
-            ShortVarDeclPreBlock = IDENT
+                    ShortVarDecl = DEFINE
+            ShortVarDeclPreBlock = DEFINE
                        Signature = LPAREN
                       SimpleStmt = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR /* ε */
               SimpleStmtPreBlock = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR /* ε */

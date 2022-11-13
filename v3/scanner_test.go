@@ -44,8 +44,8 @@ func testScanErrors(t *testing.T) {
 		{"078e0", FLOAT, 0, "078e0", ""},
 		{"0E", FLOAT, 2, "0E", "exponent has no digits"}, // issue 17621
 		{"0x", INT, 2, "0x", "hexadecimal literal has no digits"},
-		{"\"abc\n   ", STRING, 4, `"abc`, "non-printable character: U+000A"},
-		{"\"abc\n", STRING, 4, `"abc`, "non-printable character: U+000A"},
+		{"\"abc\n   ", token.STRING, 0, `"abc`, "string literal not terminated"},
+		{"\"abc\n", token.STRING, 0, `"abc`, "string literal not terminated"},
 		{"\"abc\x00def\"", STRING, 4, "\"abc\x00def\"", "illegal character NUL"},
 		{"\"abc\x80def\"", STRING, 4, "\"abc\x80def\"", "illegal UTF-8 encoding"},
 		{"\"abcn   ", STRING, 0, `"abc`, "string literal not terminated"},

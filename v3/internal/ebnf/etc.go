@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"golang.org/x/exp/ebnf"
@@ -491,22 +492,26 @@ type parallel struct {
 	maxBacktrackPos    string
 	maxBacktracksPath  string
 	maxBudgetPath      string
+	maxDuration time.Duration
+	maxDurationPath    string
 	minToksPath        string
 	sync.Mutex
-	wg sync.WaitGroup
+	wg          sync.WaitGroup
 
-	allToks           int32
-	fails             int32
-	files             int32
+	allToks int32
+	fails   int32
+	files   int32
+	ok      int32
+	skipped int32
+
 	maxBacktrack      int
 	maxBacktrackToks  int
-	maxBacktracksToks int
 	maxBacktracks     int
+	maxBacktracksToks int
 	maxBudget         int
 	maxBudgetToks     int
+	maxDurationToks   int
 	minToks           int
-	ok                int32
-	skipped           int32
 }
 
 func newParallel() *parallel {
@@ -521,6 +526,17 @@ func (p *parallel) addFile()      { atomic.AddInt32(&p.files, 1) }
 func (p *parallel) addOk()        { atomic.AddInt32(&p.ok, 1) }
 func (p *parallel) addSkipped()   { atomic.AddInt32(&p.skipped, 1) }
 func (p *parallel) addToks(n int) { atomic.AddInt32(&p.allToks, int32(n)) }
+
+func (p *parallel) recordMaxDuration(path string, d time.Duration, toks int) {
+	p.Lock()
+	defer p.Unlock()
+
+	if d > p.maxDuration {
+		p.maxDuration = d
+		p.maxDurationPath = path
+		p.maxDurationToks = toks
+	}
+}
 
 func (p *parallel) recordMaxBacktrack(path string, back, toks int, pos, origin string) {
 	p.Lock()
@@ -1110,7 +1126,7 @@ func (p *ebnfParser) accept(b bool) bool {
 func (p *ebnfParser) parse(start string) error {
 	ok := p.parseExpression(p.g.g[start].Expr)
 	if p.budget == 0 {
-		return errorf("%s: resources exhausted", p.path)
+		return errorf("%s: resources exhausted", p.errPosition())
 	}
 
 	if !ok || p.index < len(p.toks)-1 {

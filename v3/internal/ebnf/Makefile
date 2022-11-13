@@ -1,4 +1,4 @@
-.PHONY:	clean edit editor test gen report assert
+.PHONY:	clean edit editor test test2 gen report report2 assert
 
 assert:
 	echo "package main; type SourceFileNode struct{}; func (p *parser) sourceFile() *SourceFileNode { return nil }" > parser.go
@@ -23,6 +23,13 @@ gen:
 	gofmt -l -s -w *.go
 
 test:
+	go test -v -failfast 2>&1 | tee log-test
+	@git diff testdata/
+	@git status
+	@grep TOTAL log-test || true
+	grep 'FAIL' log-test || true
+
+test2:
 	go test -v -failfast -src $$HOME/src 2>&1 | tee log-test
 	@git diff testdata/
 	@git status
@@ -30,6 +37,13 @@ test:
 	grep 'FAIL' log-test || true
 
 report:
+	go test -v -failfast -run TestParser -report 2>&1 | tee log-test
+	@git diff testdata/
+	@git status
+	@grep TOTAL log-test || true
+	grep 'FAIL' log-test || true
+
+report2:
 	go test -v -failfast -run TestParser -src $$HOME/src -report 2>&1 | tee log-test
 	@git diff testdata/
 	@git status

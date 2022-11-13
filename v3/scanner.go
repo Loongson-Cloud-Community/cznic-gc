@@ -5,8 +5,11 @@
 package gc // import "modernc.org/gc/v3"
 
 import (
+	"bytes"
 	"fmt"
 	"go/token"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -44,6 +47,8 @@ var (
 		"type":        TYPE,
 		"var":         VAR,
 	}
+
+	lineCommentTag = []byte("line ")
 )
 
 // Node is an item of the CST tree.
@@ -799,6 +804,8 @@ func (s *scanner) stringLiteral(off int32) {
 					panic(todo("%v: %#U", s.position(), s.c))
 				}
 			}
+		case s.c == '\n':
+			fallthrough
 		case s.eof:
 			s.err(off, "string literal not terminated")
 			return
@@ -807,11 +814,6 @@ func (s *scanner) stringLiteral(off int32) {
 		}
 
 		switch {
-		case s.c == '\t':
-			// ok
-		case s.c < ' ':
-			s.err(s.off, "non-printable character: %#U", s.c)
-			s.next()
 		case s.c >= 0x80:
 			off := s.off
 			if s.rune() == 0xfeff {
@@ -1140,10 +1142,42 @@ func (s *scanner) generalComment(off int32) (injectSemi bool) {
 }
 
 func (s *scanner) lineComment(off int32) (injectSemi bool) {
+	off0 := s.off
 	// Leading // consumed
 	for {
 		switch {
 		case s.c == '\n':
+			str := s.buf[off0:s.off]
+			switch {
+			case bytes.HasPrefix(str, lineCommentTag):
+				a := strings.SplitN(string(str[len(lineCommentTag):]), ":", 2)
+				if len(a) > 0 {
+					a[0] = strings.TrimSpace(a[0])
+					if a[0] == "" {
+						break
+					}
+				}
+
+				off1 := off0 - int32(len("//"))
+				pos := s.pos(off1)
+				if off1 != 0 && s.buf[off1-1] != '\n' && s.buf[off1-1] != '\r' {
+					break
+				}
+
+				if !filepath.IsAbs(a[0]) && filepath.IsAbs(pos.Filename) {
+					dir, _ := filepath.Split(pos.Filename)
+					a[0] = filepath.Join(dir, a[0])
+				}
+				ln := pos.Line + 1
+				if len(a) > 1 {
+					var err error
+					if ln, err = strconv.Atoi(a[1]); err != nil {
+						break
+					}
+				}
+
+				s.file.AddLineColumnInfo(int(s.off)+1, a[0], ln, 0)
+			}
 			if s.injectSemi() {
 				return true
 			}

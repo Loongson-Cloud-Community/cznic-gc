@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 const (
@@ -193,6 +194,7 @@ func TestEBNFParser(t *testing.T) {
 	t.Logf("Max backtrack: %s, %v for %v tokens\n\t%v (%v:)", p.maxBacktrackPath, h(p.maxBacktrack), h(p.maxBacktrackToks), p.maxBacktrackPos, p.maxBacktrackOrigin)
 	t.Logf("Max backtracks: %s, %v for %v tokens", p.maxBacktracksPath, h(p.maxBacktracks), h(p.maxBacktracksToks))
 	t.Logf("Max budget used: %s, %v for %v tokens", p.maxBudgetPath, h(p.maxBudget), h(p.maxBudgetToks))
+	t.Logf("Max duration: %s, %v for %v tokens", p.maxDurationPath, p.maxDuration, h(p.maxDurationToks))
 }
 
 func testEBNFParser(p *parallel, t *testing.T, g *grammar, root string, gld *golden) {
@@ -221,6 +223,7 @@ func testEBNFParser(p *parallel, t *testing.T, g *grammar, root string, gld *gol
 			}
 
 			var pp *ebnfParser
+			t0 := time.Now()
 
 			defer func() {
 				if err != nil {
@@ -230,6 +233,7 @@ func testEBNFParser(p *parallel, t *testing.T, g *grammar, root string, gld *gol
 					}
 				}
 				if pp != nil {
+					p.recordMaxDuration(path, time.Since(t0), len(pp.toks))
 					from := pp.toks[pp.maxBackRange[0]].Position()
 					to := pp.toks[pp.maxBackRange[1]].Position()
 					p.recordMaxBacktrack(path, pp.maxBack, len(pp.toks), fmt.Sprintf("%v: - %v:", from, to), pp.maxBackOrigin)
@@ -318,6 +322,7 @@ func TestParser(t *testing.T) {
 	t.Logf("Max backtrack: %s, %v for %v tokens\n\t%v (%v:)", p.maxBacktrackPath, h(p.maxBacktrack), h(p.maxBacktrackToks), p.maxBacktrackPos, p.maxBacktrackOrigin)
 	t.Logf("Max backtracks: %s, %v for %v tokens", p.maxBacktracksPath, h(p.maxBacktracks), h(p.maxBacktracksToks))
 	t.Logf("Max budget used: %s, %v for %v tokens", p.maxBudgetPath, h(p.maxBudget), h(p.maxBudgetToks))
+	t.Logf("Max duration: %s, %v for %v tokens", p.maxDurationPath, p.maxDuration, h(p.maxDurationToks))
 	if *oReport {
 		t.Logf("\n%s", p.a.report())
 	}
@@ -349,6 +354,7 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 			}
 
 			var pp *parser
+			t0 := time.Now()
 
 			defer func() {
 				if err != nil {
@@ -358,6 +364,7 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 					}
 				}
 				if pp != nil {
+					p.recordMaxDuration(path, time.Since(t0), len(pp.toks))
 					from := pp.toks[pp.maxBackRange[0]].Position()
 					to := pp.toks[pp.maxBackRange[1]].Position()
 					p.recordMaxBacktrack(path, pp.maxBack, len(pp.toks), fmt.Sprintf("%v: - %v:", from, to), pp.maxBackOrigin)
@@ -423,6 +430,7 @@ func TestGoParser(t *testing.T) {
 		t.Error(err)
 	}
 	t.Logf("TOTAL files %v, skip %v, ok %v, fail %v", h(p.files), h(p.skipped), h(p.ok), h(p.fails))
+	t.Logf("Max duration: %s, %v for %v tokens", p.maxDurationPath, p.maxDuration, h(p.maxDurationToks))
 }
 
 func testGoParser(p *parallel, t *testing.T, root string, gld *golden) {
@@ -449,10 +457,15 @@ func testGoParser(p *parallel, t *testing.T, root string, gld *golden) {
 				fmt.Fprintln(os.Stderr, path)
 			}
 
+			t0 := time.Now()
+
 			defer func() {
 				if err != nil {
 					p.addFail()
+					return
 				}
+
+				p.recordMaxDuration(path, time.Since(t0), -1)
 			}()
 
 			b, err := os.ReadFile(path)
