@@ -76,7 +76,7 @@ func testGrammar(t *testing.T, fn string) {
 		t.Errorf("left recursive: %v", k)
 	}
 
-	var a []string
+	var a, b []string
 	for k := range peg.g {
 		if token.IsExported(k) {
 			a = append(a, k)
@@ -87,22 +87,44 @@ func testGrammar(t *testing.T, fn string) {
 		y := a[j]
 		u := noPreBlock(x)
 		v := noPreBlock(y)
-		if u < v {
+		if lessString(u, v) {
 			return true
 		}
 
-		if u > v {
+		if lessString(v, u) {
 			return false
 		}
 
-		return x < y
+		return lessString(x, y)
 	})
-	for i, v := range a {
-		a[i] = fmt.Sprintf("%32s = %s", v, peg.productionFollowSets[peg.g[v]].caseStr())
+	for _, v := range a {
+		b = append(b, fmt.Sprintf("%32s = %s", v, peg.productionFollowSets[peg.g[v]].caseStr()))
 	}
-	if err := os.WriteFile(fn+".fs", []byte(strings.Join(a, "\n")), 0660); err != nil {
+	if err := os.WriteFile(fn+".fs", []byte(strings.Join(b, "\n")), 0660); err != nil {
 		t.Fatal(err)
 	}
+	for i, v := range a {
+		b[i] = fmt.Sprintf("%32s = %s", v, peg.productionClosures[peg.g[v]])
+	}
+	if err := os.WriteFile(fn+".cls", []byte(strings.Join(b, "\n")), 0660); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func lessString(a, b string) bool {
+	switch {
+	case a[0] >= 'a' && a[0] <= 'z':
+		switch {
+		case b[0] >= 'A' && b[0] <= 'Z':
+			return true
+		}
+	case a[0] >= 'A' && a[0] <= 'Z':
+		switch {
+		case b[0] >= 'a' && b[0] <= 'z':
+			return false
+		}
+	}
+	return a < b
 }
 
 type golden struct {

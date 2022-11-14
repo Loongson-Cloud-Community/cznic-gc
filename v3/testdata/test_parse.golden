@@ -6133,6 +6133,7 @@
 /usr/local/go/test/fixedbugs/bug065.go
 /usr/local/go/test/fixedbugs/bug066.go
 /usr/local/go/test/fixedbugs/bug067.go
+/usr/local/go/test/fixedbugs/bug068.go
 /usr/local/go/test/fixedbugs/bug069.go
 /usr/local/go/test/fixedbugs/bug070.go
 /usr/local/go/test/fixedbugs/bug071.go

@@ -492,11 +492,11 @@ type parallel struct {
 	maxBacktrackPos    string
 	maxBacktracksPath  string
 	maxBudgetPath      string
-	maxDuration time.Duration
+	maxDuration        time.Duration
 	maxDurationPath    string
 	minToksPath        string
 	sync.Mutex
-	wg          sync.WaitGroup
+	wg sync.WaitGroup
 
 	allToks int32
 	fails   int32
@@ -722,10 +722,39 @@ func (fs *followSet) union(d followSet) followSet {
 	return m
 }
 
+type closure map[string]ebnf.Expression
+
+func (c *closure) union(d closure) closure {
+	m := *c
+	if d == nil {
+		return m
+	}
+
+	if m == nil {
+		m = closure{}
+		*c = m
+	}
+	for k, v := range d {
+		m[k] = v
+	}
+	return m
+}
+
+func (c closure) String() string {
+	var a []string
+	for k := range c {
+		a = append(a, k)
+	}
+	sort.Slice(a, func(i, j int) bool { return lessString(a[i], a[j]) })
+	return strings.Join(a, " ")
+}
+
 type grammar struct {
+	expressionClosures   map[string]closure
 	expressionFollowSets map[string]followSet
 	g                    ebnf.Grammar
 	leftRecursive        map[string]struct{}
+	productionClosures   map[*ebnf.Production]closure
 	productionFollowSets map[*ebnf.Production]followSet
 }
 
@@ -740,9 +769,11 @@ func newGrammar(name, start string, src []byte) (r *grammar, err error) {
 	}
 
 	r = &grammar{
+		expressionClosures:   map[string]closure{},
 		expressionFollowSets: map[string]followSet{},
 		g:                    g,
 		leftRecursive:        map[string]struct{}{},
+		productionClosures:   map[*ebnf.Production]closure{},
 		productionFollowSets: map[*ebnf.Production]followSet{},
 	}
 	for nm, p := range r.g {
@@ -757,6 +788,7 @@ func newGrammar(name, start string, src []byte) (r *grammar, err error) {
 			}
 			r.expressionFollowSets[ebnfString(p.Expr)] = fs
 			r.productionFollowSets[p] = fs
+			r.productionClosures[p] = r.closure(p.Expr)
 		}
 	}
 	return r, nil
@@ -768,6 +800,68 @@ func (p *grammar) tok(s string) token.Token {
 	}
 
 	panic(todo("%q", s))
+}
+
+func (g *grammar) closure(e ebnf.Expression) (r closure) {
+	k := ebnfString(e)
+	if r, ok := g.expressionClosures[k]; ok {
+		return r
+	}
+
+	r = g.closure0(e, map[string]struct{}{})
+	g.expressionClosures[k] = r
+	return r
+}
+
+func (g *grammar) closure0(e ebnf.Expression, m map[string]struct{}) (r closure) {
+	k := ebnfString(e)
+	if _, ok := m[k]; ok {
+		return nil
+	}
+
+	m[k] = struct{}{}
+	r = closure{}
+	switch x := e.(type) {
+	case ebnf.Alternative:
+		for _, v := range x {
+			r.union(g.closure0(v, m))
+		}
+		return r
+	case *ebnf.Group:
+		return g.closure0(x.Body, m)
+	case *ebnf.Name:
+		nm := x.String
+		p := g.g[nm]
+		e := p.Expr
+		r[nm] = x
+		if token.IsExported(nm) {
+			r.union(g.closure0(e, m))
+		}
+		return r
+	case *ebnf.Option:
+		r[""] = nil
+		return r.union(g.closure0(x.Body, m))
+	case *ebnf.Repetition:
+		r[""] = nil
+		return r.union(g.closure0(x.Body, m))
+	case ebnf.Sequence:
+		for _, v := range x {
+			s := g.closure0(v, m)
+			r.union(s)
+			if _, ok := s[""]; !ok {
+				delete(r, "")
+				break
+			}
+		}
+		return r
+	case *ebnf.Token:
+		r[k] = x
+		return r
+	case nil:
+		r[k] = nil
+		return r
+	}
+	panic(todo("%T %s", e, k))
 }
 
 func (g *grammar) followSet(e ebnf.Expression) (r followSet) {

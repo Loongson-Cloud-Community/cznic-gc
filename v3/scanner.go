@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"go/token"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
+	"modernc.org/mathutil"
 	mtoken "modernc.org/token"
 )
 
@@ -70,7 +70,8 @@ func (t Token) Ch() token.Token { return token.Token(t.ch) }
 // Positions implements Node.
 func (t Token) Position() (r token.Position) {
 	s := t.source
-	return token.Position(s.file.PositionFor(mtoken.Pos(s.base+s.toks[t.index].off), true))
+	off := mathutil.MinInt32(int32(len(s.buf)), s.toks[t.index].off)
+	return token.Position(s.file.PositionFor(mtoken.Pos(s.base+off), true))
 }
 
 // Prev returns the token preceding t or a zero value if no such token exists.
@@ -220,6 +221,7 @@ func (e *errList) err(pos token.Position, msg string, args ...interface{}) {
 
 type scanner struct {
 	*source
+	dir  string
 	errs errList
 	tok  tok
 
@@ -234,7 +236,8 @@ type scanner struct {
 }
 
 func newScanner(name string, buf []byte) *scanner {
-	r := &scanner{source: newSource(name, buf), errBudget: 10}
+	dir, _ := filepath.Split(name)
+	r := &scanner{source: newSource(name, buf), errBudget: 10, dir: dir}
 	switch {
 	case len(buf) == 0:
 		r.eof = true
@@ -445,6 +448,7 @@ func (s *scanner) scan0() (r bool) {
 		s.next()
 		if s.c != '.' {
 			s.off = off
+			s.c = '.'
 			s.tok.ch = int32(PERIOD)
 			return true
 		}
@@ -786,9 +790,6 @@ func (s *scanner) stringLiteral(off int32) {
 			case 'U':
 				s.u(8)
 				continue
-			case '\'':
-				s.err(off, "unknown escape")
-				return
 			default:
 				switch {
 				case isOctalDigit(s.c):
@@ -801,7 +802,7 @@ func (s *scanner) stringLiteral(off int32) {
 					}
 					continue
 				default:
-					panic(todo("%v: %#U", s.position(), s.c))
+					s.err(off-1, "unknown escape sequence")
 				}
 			}
 		case s.c == '\n':
@@ -838,9 +839,9 @@ func (s *scanner) u(n int) (r rune) {
 			case s.c >= '0' && s.c <= '9':
 				n = rune(s.c) - '0'
 			case s.c >= 'a' && s.c <= 'f':
-				n = rune(s.c) - 'a'
+				n = rune(s.c) - 'a' + 10
 			case s.c >= 'A' && s.c <= 'F':
-				n = rune(s.c) - 'A'
+				n = rune(s.c) - 'A' + 10
 			}
 			r = 16*r + n
 		default:
@@ -855,7 +856,7 @@ func (s *scanner) u(n int) (r rune) {
 
 		s.next()
 	}
-	if r > unicode.MaxRune {
+	if r < 0 || r > unicode.MaxRune || r >= 0xd800 && r <= 0xdfff {
 		s.err(off-1, "escape sequence is invalid Unicode code point")
 	}
 	return r
@@ -868,11 +869,14 @@ out:
 		case isIDNext(s.c):
 			s.next()
 		case s.c >= 0x80:
+			off := s.off
+			c := s.c
 			switch r := s.rune(); {
 			case unicode.IsLetter(r) || unicode.IsDigit(r):
 				// already consumed
 			default:
-				s.err(s.off, "invalid character %#U in identifier", r)
+				s.off = off
+				s.c = c
 				break out
 			}
 		case s.eof:
@@ -988,7 +992,12 @@ more:
 	case '.':
 		s.next()
 		s.dot(hasHexMantissa, needFrac)
-	case 'e', 'E', 'p', 'P':
+	case 'p', 'P':
+		if !hasHexMantissa {
+			s.err(s.off, "'%c' exponent requires hexadecimal mantissa", s.c)
+		}
+		fallthrough
+	case 'e', 'E':
 		s.exponent()
 		if s.c == 'i' {
 			s.next()
@@ -1112,6 +1121,7 @@ func (s *scanner) binaryLiteral() {
 
 func (s *scanner) generalComment(off int32) (injectSemi bool) {
 	// Leading /* consumed
+	off0 := s.off - 2
 	var nl bool
 	for {
 		switch {
@@ -1119,6 +1129,7 @@ func (s *scanner) generalComment(off int32) (injectSemi bool) {
 			s.next()
 			switch s.c {
 			case '/':
+				s.lineInfo(off0, s.off+1)
 				s.next()
 				if nl {
 					return s.injectSemi()
@@ -1142,42 +1153,12 @@ func (s *scanner) generalComment(off int32) (injectSemi bool) {
 }
 
 func (s *scanner) lineComment(off int32) (injectSemi bool) {
-	off0 := s.off
 	// Leading // consumed
+	off0 := s.off - 2
 	for {
 		switch {
 		case s.c == '\n':
-			str := s.buf[off0:s.off]
-			switch {
-			case bytes.HasPrefix(str, lineCommentTag):
-				a := strings.SplitN(string(str[len(lineCommentTag):]), ":", 2)
-				if len(a) > 0 {
-					a[0] = strings.TrimSpace(a[0])
-					if a[0] == "" {
-						break
-					}
-				}
-
-				off1 := off0 - int32(len("//"))
-				pos := s.pos(off1)
-				if off1 != 0 && s.buf[off1-1] != '\n' && s.buf[off1-1] != '\r' {
-					break
-				}
-
-				if !filepath.IsAbs(a[0]) && filepath.IsAbs(pos.Filename) {
-					dir, _ := filepath.Split(pos.Filename)
-					a[0] = filepath.Join(dir, a[0])
-				}
-				ln := pos.Line + 1
-				if len(a) > 1 {
-					var err error
-					if ln, err = strconv.Atoi(a[1]); err != nil {
-						break
-					}
-				}
-
-				s.file.AddLineColumnInfo(int(s.off)+1, a[0], ln, 0)
-			}
+			s.lineInfo(off0, s.off+1)
 			if s.injectSemi() {
 				return true
 			}
@@ -1201,6 +1182,86 @@ func (s *scanner) lineComment(off int32) (injectSemi bool) {
 			s.next()
 		}
 	}
+}
+
+func (s *scanner) lineInfo(off, next int32) {
+	if off != 0 && s.buf[off+1] != '*' && s.buf[off-1] != '\n' && s.buf[off-1] != '\r' {
+		return
+	}
+
+	str := s.buf[off:next]
+	if !bytes.HasPrefix(str[len("//"):], lineCommentTag) {
+		return
+	}
+
+	switch {
+	case str[1] == '*':
+		str = str[:len(str)-len("*/")]
+	default:
+		str = str[:len(str)-len("\n")]
+	}
+	str = str[len("//"):]
+
+	str, ln, ok := s.lineInfoNum(str[len("line "):])
+	col := 0
+	if ok == liBadNum || ok == liNoNum {
+		return
+	}
+
+	hasCol := false
+	var n int
+	if str, n, ok = s.lineInfoNum(str); ok == liBadNum {
+		return
+	}
+
+	if ok != liNoNum {
+		col = ln
+		ln = n
+		hasCol = true
+	}
+
+	fn := strings.TrimSpace(string(str))
+	switch {
+	case fn == "" && hasCol:
+		fn = s.pos(off).Filename
+	case fn != "":
+		fn = filepath.Clean(fn)
+		if !filepath.IsAbs(fn) {
+			fn = filepath.Join(s.dir, fn)
+		}
+	}
+	// trc("set %v %q %v %v", next, fn, ln, col)
+	s.file.AddLineColumnInfo(int(next), fn, ln, col)
+}
+
+const (
+	liNoNum = iota
+	liBadNum
+	liOK
+)
+
+func (s *scanner) lineInfoNum(str []byte) (_ []byte, n, r int) {
+	// trc("==== %q", str)
+	x := len(str) - 1
+	if x < 0 || !isDigit(str[x]) {
+		return str, 0, liNoNum
+	}
+
+	mul := 1
+	for x > 0 && isDigit(str[x]) {
+		n += mul * (int(str[x]) - '0')
+		mul *= 10
+		x--
+		if n < 0 {
+			return str, 0, liBadNum
+		}
+	}
+	if x < 0 || str[x] != ':' {
+		return str, 0, liBadNum
+	}
+
+	// trc("---- %q %v %v", str[:x], n, liOK)
+	return str[:x], n, liOK
 }
 
 func (s *scanner) rune() rune {

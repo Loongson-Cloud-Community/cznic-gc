@@ -2135,11 +2135,11 @@ func (p *parser) ifStmt() Node {
 
 // ImportDeclNode represents the production
 //
-//	ImportDecl = "import" ( ImportSpec | "(" { ImportSpec ";" } ")" ) .
+//	ImportDecl = "import" ( ImportSpec | "(" [ ImportSpec { ";" ImportSpec } [ ";" ] ] ")" ) .
 type ImportDeclNode struct{ noder }
 
 func (p *parser) importDecl() Node {
-	// ebnf.Sequence "import" ( ImportSpec | "(" { ImportSpec ";" } ")" ) ctx [IMPORT]
+	// ebnf.Sequence "import" ( ImportSpec | "(" [ ImportSpec { ";" ImportSpec } [ ";" ] ] ")" ) ctx [IMPORT]
 	{
 		switch p.peek(1) {
 		case IDENT, LPAREN, PERIOD, STRING:
@@ -2150,8 +2150,8 @@ func (p *parser) importDecl() Node {
 		_ = ix
 		// *ebnf.Token "import" ctx [IMPORT]
 		p.expect(IMPORT)
-		// *ebnf.Group ( ImportSpec | "(" { ImportSpec ";" } ")" ) ctx [IDENT, LPAREN, PERIOD, STRING]
-		// ebnf.Alternative ImportSpec | "(" { ImportSpec ";" } ")" ctx [IDENT, LPAREN, PERIOD, STRING]
+		// *ebnf.Group ( ImportSpec | "(" [ ImportSpec { ";" ImportSpec } [ ";" ] ] ")" ) ctx [IDENT, LPAREN, PERIOD, STRING]
+		// ebnf.Alternative ImportSpec | "(" [ ImportSpec { ";" ImportSpec } [ ";" ] ] ")" ctx [IDENT, LPAREN, PERIOD, STRING]
 		switch p.c() {
 		case IDENT, PERIOD, STRING: // 0
 			// *ebnf.Name ImportSpec ctx [IDENT, PERIOD, STRING]
@@ -2160,32 +2160,55 @@ func (p *parser) importDecl() Node {
 				return nil
 			}
 		case LPAREN: // 1
-			// ebnf.Sequence "(" { ImportSpec ";" } ")" ctx [LPAREN]
+			// ebnf.Sequence "(" [ ImportSpec { ";" ImportSpec } [ ";" ] ] ")" ctx [LPAREN]
 			{
 				ix := p.ix
 				_ = ix
 				// *ebnf.Token "(" ctx [LPAREN]
 				p.expect(LPAREN)
-				// *ebnf.Repetition { ImportSpec ";" } ctx []
-			_0:
+				// *ebnf.Option [ ImportSpec { ";" ImportSpec } [ ";" ] ] ctx []
 				switch p.c() {
 				case IDENT, PERIOD, STRING:
-					// ebnf.Sequence ImportSpec ";" ctx [IDENT, PERIOD, STRING]
-					ix := p.ix
-					_ = ix
-					// *ebnf.Name ImportSpec ctx [IDENT, PERIOD, STRING]
-					if p.importSpec() == nil {
-						p.back(ix)
-						goto _1
+					// ebnf.Sequence ImportSpec { ";" ImportSpec } [ ";" ] ctx [IDENT, PERIOD, STRING]
+					{
+						ix := p.ix
+						_ = ix
+						// *ebnf.Name ImportSpec ctx [IDENT, PERIOD, STRING]
+						if p.importSpec() == nil {
+							p.back(ix)
+							goto _0
+						}
+						// *ebnf.Repetition { ";" ImportSpec } ctx []
+					_1:
+						switch p.c() {
+						case SEMICOLON:
+							// ebnf.Sequence ";" ImportSpec ctx [SEMICOLON]
+							switch p.peek(1) {
+							case IDENT, PERIOD, STRING:
+							default:
+								goto _2
+							}
+							ix := p.ix
+							_ = ix
+							// *ebnf.Token ";" ctx [SEMICOLON]
+							p.expect(SEMICOLON)
+							// *ebnf.Name ImportSpec ctx [IDENT, PERIOD, STRING]
+							if p.importSpec() == nil {
+								p.back(ix)
+								goto _2
+							}
+							goto _1
+						}
+					_2:
+						// *ebnf.Option [ ";" ] ctx []
+						switch p.c() {
+						case SEMICOLON:
+							// *ebnf.Token ";" ctx [SEMICOLON]
+							p.expect(SEMICOLON)
+						}
 					}
-					// *ebnf.Token ";" ctx []
-					if !p.accept(SEMICOLON) {
-						p.back(ix)
-						goto _1
-					}
-					goto _0
 				}
-			_1:
+			_0:
 				// *ebnf.Token ")" ctx []
 				if !p.accept(RPAREN) {
 					p.back(ix)

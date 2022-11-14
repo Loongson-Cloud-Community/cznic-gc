@@ -139,15 +139,15 @@ func TestScanner(t *testing.T) {
 	p := newParallel()
 	t.Run("errors", func(t *testing.T) { testScanErrors(t) })
 	t.Run("numbers", func(t *testing.T) { testNumbers(t) })
-	t.Run("src", func(t *testing.T) { testScan(p, t, *oSrc, "") })
-	t.Run("GOROOT", func(t *testing.T) { testScan(p, t, runtime.GOROOT(), "/test/") })
+	t.Run("src", func(t *testing.T) { testScan(p, t, *oSrc) })
+	t.Run("GOROOT", func(t *testing.T) { testScan(p, t, runtime.GOROOT()) })
 	if err := p.wait(); err != nil {
 		t.Error(err)
 	}
 	t.Logf("TOTAL files %v, ok %v, fail %v", h(p.files), h(p.ok), h(p.fails))
 }
 
-func testScan(p *parallel, t *testing.T, root, skip string) {
+func testScan(p *parallel, t *testing.T, root string) {
 	if err := filepath.Walk(root, func(path0 string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -157,39 +157,12 @@ func testScan(p *parallel, t *testing.T, root, skip string) {
 			return nil
 		}
 
-		switch {
-		case re == nil:
-			if strings.Contains(filepath.ToSlash(path0), "/errchk/") {
-				return nil
-			}
-
-			if strings.Contains(filepath.ToSlash(path0), "/testdata/") {
-				return nil
-			}
-
-			if skip != "" && strings.Contains(filepath.ToSlash(path0), skip) {
-				return nil
-			}
-		default:
-			if !re.MatchString(path0) {
-				return nil
-			}
+		if re != nil && !re.MatchString(path0) {
+			return nil
 		}
 
 		if filepath.Ext(path0) != ".go" {
 			return nil
-		}
-
-		sp := filepath.ToSlash(path0)
-		for _, v := range []string{
-			"github.com/bosun-monitor/bosun/cmd/scollector/collectors/awsBilling.go",
-			"github.com/llvm-mirror/llgo/test/debuginfo/emptyname.go",
-			"github.com/prometheus/prometheus/promql/parser/generated_parser.y.go",
-		} {
-			if strings.Contains(sp, v) {
-				t.Logf("TODO %v", path0)
-				return nil
-			}
 		}
 
 		path := path0
@@ -217,11 +190,23 @@ func testScan(p *parallel, t *testing.T, root, skip string) {
 				pos0, tok0, lit0 := s0.Scan()
 				position0 := fi.Position(pos0)
 				eof0 := tok0 == token.EOF
+				// trc("", position0, tok0, lit0, eof0)
 				eof := !s.scan()
+				// trc("", s.token().Position(), s.token().Ch(), s.token().Src(), s.eof)
 				err := s.errs.Err()
 				if g, e := s.token().Ch(), tok0; g != e {
 					p.addFail()
 					return fmt.Errorf("%v: token, got %v, expected %v", position0, g, e)
+				}
+
+				if g, e := err, err0; (g != nil) != (e != nil) {
+					p.addFail()
+					return fmt.Errorf("%v: error, got %v, expected %v", position0, g, e)
+				}
+
+				if err != nil {
+					p.addOk()
+					return nil
 				}
 
 				g, e := s.token().Src(), lit0
@@ -238,7 +223,7 @@ func testScan(p *parallel, t *testing.T, root, skip string) {
 						// Ok, go/scanner does not return the literal string.
 					default:
 						p.addFail()
-						return fmt.Errorf("%v: source, got %q, expected %q", position0, g, e)
+						return fmt.Errorf("%v: source, got %q(`%[2]s`), expected %q(`%[3]s`)", position0, g, e)
 					}
 				}
 
@@ -254,13 +239,8 @@ func testScan(p *parallel, t *testing.T, root, skip string) {
 					}
 					if !ok {
 						p.addFail()
-						return fmt.Errorf("%v: position, got %v (%v:)", e, g, path)
+						return fmt.Errorf("%v: position, got %v (%v: %s %q)", e, g, path, tok0, lit0)
 					}
-				}
-
-				if g, e := err, err0; (g != nil) != (e != nil) {
-					p.addFail()
-					return fmt.Errorf("%v: error, got %v, expected %v", position0, g, e)
 				}
 
 				if g, e := eof, eof0; g != e {
