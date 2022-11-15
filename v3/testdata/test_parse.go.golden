@@ -8764,3 +8764,5 @@ internal/ebnf/testdata/parser/bug.go
 parser.go
 scanner.go
 scanner_test.go
+type.go
+value.go
