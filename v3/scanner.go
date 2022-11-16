@@ -136,6 +136,9 @@ func (t Token) SetSrc(s string) {
 	src.srcPatches[t.index] = s
 }
 
+// IsValid reports t is a valid token. Zero value reports false.
+func (t Token) IsValid() bool { return t.source != nil }
+
 type tok struct { // 12 bytes
 	ch     int32
 	sepOff int32 //TODO sep

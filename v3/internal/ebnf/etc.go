@@ -1315,6 +1315,12 @@ out:
 	return false
 }
 
+type Token struct{}
+
+func (t *Token) Position() token.Position {
+	panic(todo(""))
+}
+
 type parser struct {
 	a             *analyzer
 	f             *token.File
@@ -1365,20 +1371,22 @@ func (p *parser) errPosition() token.Position {
 
 func (p *parser) c() token.Token { return p.peek(0) }
 
-func (p *parser) accept(t token.Token) bool {
+func (p *parser) accept(t token.Token) (Token, bool) {
 	if p.c() == t {
 		p.ix++
 		p.budget--
-		return true
+		return Token{}, true
 	}
 
-	return false
+	return Token{}, false
 }
 
-func (p *parser) expect(t token.Token) {
-	if !p.accept(t) {
+func (p *parser) expect(t token.Token) (r Token) {
+	r, ok := p.accept(t)
+	if !ok {
 		p.closed = true
 	}
+	return r
 }
 
 func (p *parser) peek(n int) token.Token {
@@ -1459,4 +1467,20 @@ func loadPEG(fn string) (*grammar, error) {
 	}
 
 	return newGrammar(fn, startProduction, b)
+}
+
+func lessString(a, b string) bool {
+	switch {
+	case a[0] >= 'a' && a[0] <= 'z':
+		switch {
+		case b[0] >= 'A' && b[0] <= 'Z':
+			return true
+		}
+	case a[0] >= 'A' && a[0] <= 'Z':
+		switch {
+		case b[0] >= 'a' && b[0] <= 'z':
+			return false
+		}
+	}
+	return a < b
 }

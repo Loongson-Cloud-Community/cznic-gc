@@ -111,22 +111,6 @@ func testGrammar(t *testing.T, fn string) {
 	}
 }
 
-func lessString(a, b string) bool {
-	switch {
-	case a[0] >= 'a' && a[0] <= 'z':
-		switch {
-		case b[0] >= 'A' && b[0] <= 'Z':
-			return true
-		}
-	case a[0] >= 'A' && a[0] <= 'Z':
-		switch {
-		case b[0] >= 'a' && b[0] <= 'z':
-			return false
-		}
-	}
-	return a < b
-}
-
 type golden struct {
 	a  []string
 	f  *os.File
