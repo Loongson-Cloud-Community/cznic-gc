@@ -22,9 +22,10 @@ func generate(dst, src string) error {
 }
 
 type gen struct {
-	b   bytes.Buffer
-	dst string
-	peg *grammar
+	b        bytes.Buffer
+	dst      string
+	listItem []struct{ fldName, varName string }
+	peg      *grammar
 
 	nextID int
 }
@@ -128,28 +129,28 @@ func (g *gen) gen() (err error) {
 		case nil:
 			n.ret()
 		case ebnf.Alternative:
-			g.expression(n, ctx, x, "\nreturn nil", false)
+			g.expression(n, nil, ctx, x, "\nreturn nil", false)
 			n.ret()
 		case *ebnf.Group:
 			panic(todo(""))
 		case *ebnf.Name:
-			g.expression(n, ctx, x, "\nreturn nil", false)
+			g.expression(n, nil, ctx, x, "\nreturn nil", false)
 			n.ret()
 		case *ebnf.Option:
-			g.expression(n, ctx, x, "\npanic(`internal error`)", false)
+			g.expression(n, nil, ctx, x, "\npanic(`internal error`)", false)
 			n.ret()
 		case *ebnf.Repetition:
 			panic(todo(""))
 		case ebnf.Sequence:
-			g.expression(n, ctx, x, "\nreturn nil", false)
+			g.expression(n, nil, ctx, x, "\nreturn nil", false)
 			n.ret()
 		case *ebnf.Token:
-			g.expression(n, ctx, x, "\nreturn nil", false)
+			g.expression(n, nil, ctx, x, "\nreturn nil", false)
 			n.ret()
 		default:
 			id := g.id()
 			g.w("\nix := p.ix")
-			l := g.expression(n, ctx, x, fmt.Sprintf("\ngoto _%d", id), false)
+			l := g.expression(n, nil, ctx, x, fmt.Sprintf("\ngoto _%d", id), false)
 			n.ret()
 			if l {
 				g.w("\n_%d:", id)
@@ -193,7 +194,7 @@ func (g *gen) defaultPart(out string) (r bool) {
 }
 
 // nil c -> unconstrained by caller
-func (g *gen) expression(n *node, ctx followSet, e ebnf.Expression, out string, braced bool) (r bool) {
+func (g *gen) expression(n, inRepeat *node, ctx followSet, e ebnf.Expression, out string, braced bool) (r bool) {
 	defer func() {
 		if out == "" {
 			r = false
@@ -207,14 +208,17 @@ func (g *gen) expression(n *node, ctx followSet, e ebnf.Expression, out string, 
 		if len(ctx) != 0 {
 			c = c.intersect(ctx)
 		}
-		return g.alt(n, c, x, out)
+		return g.alt(n, inRepeat, c, x, out)
 	case *ebnf.Group:
 		c := g.peg.followSet(x.Body)
 		if len(ctx) != 0 {
 			c = c.intersect(ctx)
 		}
-		return g.expression(n, c, x.Body, out, false)
+		return g.expression(n, inRepeat, c, x.Body, out, false)
 	case *ebnf.Name:
+		if inRepeat != nil {
+			g.listItem = append(g.listItem, struct{ fldName, varName string }{inRepeat.field(x).name, n.varName(x)})
+		}
 		nm := x.String
 		if token.IsExported(nm) {
 			switch p := g.peg.g[nm]; {
@@ -264,12 +268,12 @@ func (g *gen) expression(n *node, ctx followSet, e ebnf.Expression, out string, 
 		}
 		switch {
 		case len(ctx) != 0 && ctx.isSubsetOf(c):
-			return g.expression(n, c, x.Body, "", false)
+			return g.expression(n, inRepeat, c, x.Body, "", false)
 		default:
 			g.w("\nswitch p.c() {")
 			g.w("\ncase %v:", c.caseStr())
 			ok := g.id()
-			l := g.expression(n, c, x.Body, fmt.Sprintf("\ngoto _%d", ok), false)
+			l := g.expression(n, inRepeat, c, x.Body, fmt.Sprintf("\ngoto _%d", ok), false)
 			g.w("\n}")
 			if l {
 				g.w("\n_%[1]d:", ok)
@@ -284,20 +288,30 @@ func (g *gen) expression(n *node, ctx followSet, e ebnf.Expression, out string, 
 		}
 		switch {
 		case len(ctx) != 0 && ctx.isSubsetOf(c):
-			id := g.id()
-			g.w("\n_%d:", id)
-			ok := g.id()
-			l := g.expression(n, c, x.Body, fmt.Sprintf("\ngoto _%d", ok), true)
-			if l {
-				g.w("\n_%[1]d:", ok)
-			}
+			panic(todo(""))
+			// id := g.id()
+			// g.w("\n_%d:", id)
+			// ok := g.id()
+			// l := g.expression(n, c, x.Body, fmt.Sprintf("\ngoto _%d", ok), true)
+			// g.w("\ngoto _%d", id)
+			// if l {
+			// 	g.w("\n_%[1]d:", ok)
+			// }
 		default:
 			id := g.id()
 			g.w("\n_%d:", id)
 			ok := g.id()
 			g.w("\nswitch p.c() {")
 			g.w("\ncase %v:", c.caseStr())
-			l := g.expression(n, c, x.Body, fmt.Sprintf("\ngoto _%d", ok), true)
+			sv := g.listItem
+			items := n.items[x]
+			l := g.expression(n, items, c, x.Body, fmt.Sprintf("\ngoto _%d", ok), true)
+			g.w("\n%s = append(%[1]s, %s{", n.varName(x), n.field(x).typ[2:])
+			for _, v := range g.listItem {
+				g.w("%s: %s, ", v.fldName, v.varName)
+			}
+			g.w("})")
+			g.listItem = sv
 			g.w("\ngoto _%d", id)
 			g.w("\n}")
 			if l {
@@ -329,7 +343,7 @@ func (g *gen) expression(n *node, ctx followSet, e ebnf.Expression, out string, 
 				}
 			}
 			for _, v := range x {
-				if g.expression(n, ctx, v, out2, false) {
+				if g.expression(n, inRepeat, ctx, v, out2, false) {
 					r = true
 				}
 				ctx = ctx2
@@ -343,7 +357,7 @@ func (g *gen) expression(n *node, ctx followSet, e ebnf.Expression, out string, 
 				g.w("\n_ = ix")
 			}
 			for _, v := range x {
-				if g.expression(n, ctx, v, out2, false) {
+				if g.expression(n, inRepeat, ctx, v, out2, false) {
 					r = true
 				}
 				ctx = ctx2
@@ -353,6 +367,9 @@ func (g *gen) expression(n *node, ctx followSet, e ebnf.Expression, out string, 
 		}
 		return r
 	case *ebnf.Token:
+		if inRepeat != nil {
+			g.listItem = append(g.listItem, struct{ fldName, varName string }{inRepeat.field(x).name, n.varName(x)})
+		}
 		switch t := g.tok(x.String); {
 		case t == epsilon:
 			panic(todo(""))
@@ -404,7 +421,7 @@ func (g *gen) sequenceFilter(x ebnf.Sequence, out string) (fs followSet, r bool)
 	}
 }
 
-func (g *gen) alt(n *node, ctx followSet, x ebnf.Alternative, out string) (r bool) {
+func (g *gen) alt(n, inRepeat *node, ctx followSet, x ebnf.Alternative, out string) (r bool) {
 	defer func() {
 		if out == "" {
 			r = false
@@ -474,21 +491,21 @@ func (g *gen) alt(n *node, ctx followSet, x ebnf.Alternative, out string) (r boo
 		switch {
 		case len(c) == 1 && c.hasEpsilon():
 			g.w("\ndefault: // %v %v", c.caseStr(), k)
-			r = g.altCases(n, c, xs, out)
+			r = g.altCases(n, inRepeat, c, xs, out)
 		default:
 			g.w("\ncase %v: // %v", c.caseStr(), k)
-			r = g.altCases(n, c, xs, out)
+			r = g.altCases(n, inRepeat, c, xs, out)
 		}
 	}
 	if needDefault {
-		g.w("\ndefault:%s", out)
+		g.w("\n;default:%s", out)
 		r = true
 	}
 	g.w("\n}")
 	return r
 }
 
-func (g *gen) altCases(n *node, c followSet, x []ebnf.Expression, out string) (r bool) {
+func (g *gen) altCases(n, inRepeat *node, c followSet, x []ebnf.Expression, out string) (r bool) {
 	defer func() {
 		if out == "" {
 			r = false
@@ -497,11 +514,11 @@ func (g *gen) altCases(n *node, c followSet, x []ebnf.Expression, out string) (r
 
 	switch {
 	case len(x) == 1:
-		return g.expression(n, c, x[0], out, false)
+		return g.expression(n, inRepeat, c, x[0], out, false)
 	default:
 		for _, v := range x {
 			next := g.id()
-			l := g.expression(n, c, v, fmt.Sprintf("\ngoto _%d", next), false)
+			l := g.expression(n, inRepeat, c, v, fmt.Sprintf("\ngoto _%d", next), false)
 			g.w("\nbreak")
 			if l {
 				g.w("\n_%d:", next)
@@ -514,11 +531,10 @@ func (g *gen) altCases(n *node, c followSet, x []ebnf.Expression, out string) (r
 }
 
 type field struct {
-	e    ebnf.Expression
-	name string
-	typ  string
-
-	inRepeat bool
+	e        ebnf.Expression
+	name     string
+	typ      string
+	inRepeat *node
 }
 
 type node struct {
@@ -526,6 +542,7 @@ type node struct {
 	fieldSuffixes map[string]int
 	fields        []*field
 	g             *gen
+	items         map[*ebnf.Repetition]*node
 	p             *ebnf.Production
 	pname         string
 }
@@ -535,10 +552,31 @@ func (g *gen) newNode(p *ebnf.Production, pname string) *node {
 		expr2field:    map[ebnf.Expression]*field{},
 		fieldSuffixes: map[string]int{},
 		g:             g,
+		items:         map[*ebnf.Repetition]*node{},
 		p:             p,
 		pname:         pname,
 	}
-	n.collectFields(p.Expr, 0, false)
+	n.collectFields(p.Expr, 0, nil)
+	m := map[string]bool{}
+	w := 0
+	for _, f := range n.fields {
+		if !m[f.name] {
+			n.fields[w] = f
+			w++
+		}
+		m[f.name] = true
+	}
+	n.fields = n.fields[:w]
+	return n
+}
+
+func (g *gen) newItemNode(p *ebnf.Repetition) *node {
+	n := &node{
+		expr2field:    map[ebnf.Expression]*field{},
+		fieldSuffixes: map[string]int{},
+		g:             g,
+	}
+	n.collectFields(p.Body, 0, nil)
 	m := map[string]bool{}
 	w := 0
 	for _, f := range n.fields {
@@ -566,7 +604,7 @@ func (n *node) addField(f *field) {
 	n.fields = append(n.fields, f)
 }
 
-func (n *node) collectFields(expr ebnf.Expression, lvl int, inRepeat bool) {
+func (n *node) collectFields(expr ebnf.Expression, lvl int, inRepeat *node) {
 	switch x := expr.(type) {
 	case ebnf.Alternative:
 		for _, v := range x {
@@ -590,8 +628,16 @@ func (n *node) collectFields(expr ebnf.Expression, lvl int, inRepeat bool) {
 	case *ebnf.Option:
 		n.collectFields(x.Body, lvl+1, inRepeat)
 	case *ebnf.Repetition:
-		n.addField(&field{x, "List", "Node", inRepeat})
-		n.collectFields(x.Body, lvl+1, true)
+		item := n.g.newItemNode(x)
+		n.items[x] = item
+		var b strings.Builder
+		b.WriteString("[]struct{")
+		for _, f := range item.fields {
+			fmt.Fprintf(&b, "%s %s;", f.name, f.typ)
+		}
+		b.WriteString("}")
+		n.addField(&field{x, "List", b.String(), inRepeat})
+		n.collectFields(x.Body, lvl+1, item)
 	case ebnf.Sequence:
 		for _, v := range x {
 			n.collectFields(v, lvl+1, inRepeat)
@@ -612,7 +658,7 @@ func (n *node) declareType() {
 	n.g.w("\n//\n//\t%s = %s .", n.pname, ebnfString(n.p.Expr))
 	n.g.w("\ntype %sNode struct{", n.pname)
 	for _, f := range n.fields {
-		if !f.inRepeat {
+		if f.inRepeat == nil {
 			n.g.w("\n\t%s\t%s", f.name, f.typ)
 		}
 	}
@@ -653,17 +699,9 @@ func (n *node) declareVars() {
 	n.g.w("\n\tok bool")
 	for _, f := range n.fields {
 		n.g.w("\n\t%s\t%s", n.unexport(f.name), f.typ)
-		if f.inRepeat {
-			n.g.w("\t// list item")
-		}
 	}
 	n.g.w("\n)")
 	n.g.w("\n_ = ok")
-	for _, f := range n.fields {
-		if f.inRepeat {
-			n.g.w("\n\t_ = %s //TODO list", n.unexport(f.name))
-		}
-	}
 }
 
 var rename = map[string]string{
@@ -687,7 +725,7 @@ func (n *node) unexport(s string) string {
 func (n *node) ret() {
 	n.g.w("\nreturn &%sNode{", n.pname)
 	for _, f := range n.fields {
-		if !f.inRepeat {
+		if f.inRepeat == nil {
 			n.g.w("\n%s: %s, ", f.name, n.varName(f.e))
 		}
 	}

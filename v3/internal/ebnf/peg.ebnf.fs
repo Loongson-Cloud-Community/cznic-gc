@@ -1,3 +1,5 @@
+              AdditiveExpression = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
+      AdditiveExpressionPreBlock = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
                        AliasDecl = IDENT
                        Arguments = LPAREN
                      ArrayLength = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
@@ -12,8 +14,9 @@
                      ChannelType = ARROW, CHAN
                         CommCase = CASE, DEFAULT
                       CommClause = CASE, DEFAULT
-                    CompositeLit = LBRACK, MAP, STRUCT
+            CompositeLitPreBlock = LBRACK, MAP, STRUCT
                        Condition = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
+               ConditionPreBlock = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
                        ConstDecl = CONST
                        ConstSpec = IDENT
                     ContinueStmt = CONTINUE
@@ -57,13 +60,17 @@
                            Label = IDENT
                      LabeledStmt = IDENT
                          Literal = CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT
-                     LiteralType = LBRACK, MAP, STRUCT
+             LiteralTypePreBlock = LBRACK, MAP, STRUCT
                     LiteralValue = LBRACE
+            LogicalAndExpression = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
+    LogicalAndExpressionPreBlock = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
                          MapType = MAP
                       MethodDecl = FUNC
                       MethodElem = IDENT
                       MethodExpr = ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
                       MethodName = IDENT
+        MultiplicativeExpression = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
+MultiplicativeExpressionPreBlock = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
                          Operand = CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, LPAREN, MAP, STRING, STRUCT
                  OperandPreBlock = CHAR, FLOAT, FUNC, IDENT, IMAG, INT, LBRACK, LPAREN, MAP, STRING, STRUCT
                      OperandName = IDENT
@@ -82,6 +89,8 @@
                     ReceiverType = ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
                         RecvExpr = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
                         RecvStmt = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
+            RelationalExpression = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
+    RelationalExpressionPreBlock = ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR
                           Result = ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT
                       ReturnStmt = RETURN
                       SelectStmt = SELECT
