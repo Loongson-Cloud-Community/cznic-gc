@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"flag"
 	"fmt"
 	goparser "go/parser"
@@ -14,6 +15,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/pmezard/go-difflib/difflib"
 )
 
 const (
@@ -366,16 +369,16 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 				if err != nil {
 					p.addFail()
 					if pp != nil {
-						p.recordMinToks(path, len(pp.toks))
+						p.recordMinToks(path, len(pp.s.toks))
 					}
 				}
 				if pp != nil {
-					p.recordMaxDuration(path, time.Since(t0), len(pp.toks))
-					from := pp.toks[pp.maxBackRange[0]].Position()
-					to := pp.toks[pp.maxBackRange[1]].Position()
-					p.recordMaxBacktrack(path, pp.maxBack, len(pp.toks), fmt.Sprintf("%v: - %v:", from, to), pp.maxBackOrigin)
-					p.recordMaxBack(path, pp.backs, len(pp.toks))
-					p.recordMaxBudget(path, parserBudget-pp.budget, len(pp.toks))
+					p.recordMaxDuration(path, time.Since(t0), len(pp.s.toks))
+					from := pp.s.toks[pp.maxBackRange[0]].position(pp.s.source)
+					to := pp.s.toks[pp.maxBackRange[1]].position(pp.s.source)
+					p.recordMaxBacktrack(path, pp.maxBack, len(pp.s.toks), fmt.Sprintf("%v: - %v:", from, to), pp.maxBackOrigin)
+					p.recordMaxBack(path, pp.backs, len(pp.s.toks))
+					p.recordMaxBudget(path, parserBudget-pp.budget, len(pp.s.toks))
 					if *oReport {
 						p.a.merge(pp.a)
 					}
@@ -393,8 +396,9 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 				return nil
 			}
 
-			p.addToks(len(pp.toks))
-			if err := pp.parse(); err != nil {
+			p.addToks(len(pp.s.toks))
+			ast, err := pp.parse()
+			if err != nil {
 				if isKnownBad(path, pp.errPosition()) {
 					pp = nil
 					p.addSkipped()
@@ -402,6 +406,23 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 				}
 
 				return errorf("%s", err)
+			}
+
+			srcA := string(b)
+			srcB := ast.Source(true)
+			if srcA != srcB {
+				diff := difflib.UnifiedDiff{
+					A:        difflib.SplitLines(srcA),
+					B:        difflib.SplitLines(srcB),
+					FromFile: "expected",
+					ToFile:   "got",
+					Context:  0,
+				}
+				s, _ := difflib.GetUnifiedDiffString(diff)
+				return errorf(
+					"%v: ast.Source differs\n%v\n--- expexted\n%s\n\n--- got\n%s\n\n--- expected\n%s\n--- got\n%s",
+					path0, s, srcA, srcB, hex.Dump([]byte(srcA)), hex.Dump([]byte(srcB)),
+				)
 			}
 
 			p.addOk()

@@ -5,6 +5,7 @@
 package gc // modernc.org/gc/v3
 
 import (
+	"encoding/hex"
 	"flag"
 	"fmt"
 	goparser "go/parser"
@@ -23,6 +24,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/pmezard/go-difflib/difflib"
 	"modernc.org/mathutil"
 )
 
@@ -373,6 +375,13 @@ func TestParser(t *testing.T) {
 	}
 }
 
+var TODO = []string{
+	"/golang.org/x/tools/gopls/internal/lsp/testdata/danglingstmt/dangling_if_eof.go",
+	"/test/fixedbugs/bug435.go",
+	"/test/fixedbugs/issue13274.go",
+	"/test/fixedbugs/issue15611.go",
+}
+
 func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 	if err := filepath.Walk(filepath.FromSlash(root), func(path0 string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -394,6 +403,14 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 		p.addFile()
 		path := path0
 		p.exec(func() (err error) {
+			sp := filepath.ToSlash(path)
+			for _, v := range TODO {
+				if strings.Contains(sp, v) {
+					t.Logf("TODO %v", sp)
+					return nil
+				}
+			}
+
 			if *oTrc {
 				fmt.Fprintln(os.Stderr, path)
 			}
@@ -429,7 +446,8 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 			}
 
 			pp = newParser(path, b, *oReport)
-			if err := pp.parse(); err != nil {
+			ast, err := pp.parse()
+			if err != nil {
 				if isKnownBad(path, pp.errPosition()) {
 					pp = nil
 					p.addSkipped()
@@ -437,6 +455,24 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 				}
 
 				return errorf("%s", err)
+			}
+
+			// trc("\n%s", dump(ast))
+			srcA := string(b)
+			srcB := ast.Source(true)
+			if srcA != srcB {
+				diff := difflib.UnifiedDiff{
+					A:        difflib.SplitLines(srcA),
+					B:        difflib.SplitLines(srcB),
+					FromFile: "expected",
+					ToFile:   "got",
+					Context:  0,
+				}
+				s, _ := difflib.GetUnifiedDiffString(diff)
+				return errorf(
+					"%v: ast.Source differs\n%v\n--- expexted\n%s\n\n--- got\n%s\n\n--- expected\n%s\n--- got\n%s",
+					path0, s, srcA, srcB, hex.Dump([]byte(srcA)), hex.Dump([]byte(srcB)),
+				)
 			}
 
 			p.addOk()

@@ -8760,7 +8760,9 @@ internal/ebnf/ebnflint.go
 internal/ebnf/etc.go
 internal/ebnf/gen.go
 internal/ebnf/parser.go
-internal/ebnf/testdata/parser/bug.go
+internal/ebnf/scanner.go
+internal/ebnf/testdata/fixebugs/bug.go
+internal/ebnf/testdata/fixebugs/eof1.go
 parser.go
 scanner.go
 scanner_test.go

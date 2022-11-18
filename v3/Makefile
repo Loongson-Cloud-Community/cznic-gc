@@ -14,42 +14,42 @@ editor:
 
 test:
 	go test -v -failfast 2>&1 | tee log-test
-	@git diff testdata/
+	@git diff testdata/ || true
 	@git status
 	@grep TOTAL log-test || true
 	grep 'FAIL' log-test || true
 
 test2:
 	go test -v -failfast -src $$HOME/src 2>&1 | tee log-test
-	@git diff testdata/
+	@git diff testdata/ || true
 	@git status
 	@grep TOTAL log-test || true
 	grep 'FAIL' log-test || true
 
 parser2:
 	go test -v -failfast -run TestParser -src $$HOME/src 2>&1 | tee log-test
-	@git diff testdata/
+	@git diff testdata/ || true
 	@git status
 	@grep TOTAL log-test || true
 	grep 'FAIL' log-test || true
 
 back:
 	go test -v -failfast -noback 2>&1 | tee log-test
-	@git diff testdata/
+	@git diff testdata/ || true
 	@git status
 	@grep TOTAL log-test || true
 	grep 'FAIL' log-test || true
 
 report:
 	go test -v -failfast -run TestParser -report 2>&1 | tee log-test
-	@git diff testdata/
+	@git diff testdata/ || true
 	@git status
 	@grep TOTAL log-test || true
 	grep 'FAIL' log-test || true
 
 report2:
 	go test -v -failfast -run TestParser -src $$HOME/src -report 2>&1 | tee log-test
-	@git diff testdata/
+	@git diff testdata/ || true
 	@git status
 	@grep TOTAL log-test || true
 	grep 'FAIL' log-test || true

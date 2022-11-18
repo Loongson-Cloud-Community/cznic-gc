@@ -3,12 +3,13 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"go/scanner"
+	goscanner "go/scanner"
 	"go/token"
 	"io"
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"sort"
 	"strconv"
@@ -20,6 +21,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"golang.org/x/exp/ebnf"
 	"modernc.org/mathutil"
+	"modernc.org/strutil"
 )
 
 const (
@@ -503,6 +505,7 @@ type parallel struct {
 	files   int32
 	ok      int32
 	skipped int32
+	stopped int32
 
 	maxBacktrack      int
 	maxBacktrackToks  int
@@ -526,6 +529,7 @@ func (p *parallel) addFile()      { atomic.AddInt32(&p.files, 1) }
 func (p *parallel) addOk()        { atomic.AddInt32(&p.ok, 1) }
 func (p *parallel) addSkipped()   { atomic.AddInt32(&p.skipped, 1) }
 func (p *parallel) addToks(n int) { atomic.AddInt32(&p.allToks, int32(n)) }
+func (p *parallel) stop()         { atomic.StoreInt32(&p.stopped, 1) }
 
 func (p *parallel) recordMaxDuration(path string, d time.Duration, toks int) {
 	p.Lock()
@@ -598,6 +602,10 @@ func (p *parallel) err(err error) {
 }
 
 func (p *parallel) exec(run func() error) {
+	if atomic.LoadInt32(&p.stopped) != 0 {
+		return
+	}
+
 	p.limit <- struct{}{}
 	p.wg.Add(1)
 
@@ -940,16 +948,16 @@ func (g *grammar) followSet0(prod string, e ebnf.Expression, m map[string]struct
 	panic(todo("%q %T %s", prod, e, k))
 }
 
-type tok struct {
+type ebnfTok struct {
 	f   *token.File
 	pos token.Pos
 	tok token.Token
 	lit string
 }
 
-func (n tok) Position() token.Position { return n.f.PositionFor(n.pos, true) }
+func (n ebnfTok) Position() token.Position { return n.f.PositionFor(n.pos, true) }
 
-func (t tok) String() string {
+func (t ebnfTok) String() string {
 	lit := t.lit
 	if lit == "" {
 		lit = fmt.Sprint(t.tok)
@@ -1143,7 +1151,7 @@ type ebnfParser struct {
 	maxBackOrigin string
 	maxBackRange  [2]int
 	path          string
-	toks          []tok
+	toks          []ebnfTok
 
 	backs    int
 	budget   int
@@ -1162,14 +1170,14 @@ func newEBNFParser(g *grammar, path string, src []byte, trcPEG bool) (r *ebnfPar
 		path:   path,
 		trcPEG: trcPEG,
 	}
-	var s scanner.Scanner
+	var s goscanner.Scanner
 	fs := token.NewFileSet()
 	f := fs.AddFile(path, -1, len(src))
 	r.f = f
 	s.Init(r.f, src, func(pos token.Position, msg string) { err = errorf("%v: %s", pos, msg) }, 0)
 	for {
 		pos, t, lit := s.Scan()
-		r.toks = append(r.toks, tok{f, pos, t, lit})
+		r.toks = append(r.toks, ebnfTok{f, pos, t, lit})
 		if err != nil {
 			return nil, err
 		}
@@ -1200,7 +1208,7 @@ func (p *ebnfParser) tok(s string) token.Token {
 	panic(todo("%q", s))
 }
 
-func (p *ebnfParser) c() tok {
+func (p *ebnfParser) c() ebnfTok {
 	if p.budget == 0 {
 		return p.toks[len(p.toks)-1]
 	}
@@ -1315,19 +1323,13 @@ out:
 	return false
 }
 
-type Token struct{}
-
-func (t *Token) Position() token.Position {
-	panic(todo(""))
-}
-
 type parser struct {
 	a             *analyzer
 	f             *token.File
 	maxBackOrigin string
 	maxBackRange  [2]int
 	path          string
-	toks          []tok
+	s             *scanner
 
 	backs         int
 	budget        int
@@ -1341,44 +1343,36 @@ type parser struct {
 }
 
 func newParser(path string, src []byte, record bool) (r *parser, err error) {
+	s := newScanner(path, src)
+	for s.scan() {
+	}
+	if err = s.errs.Err(); err != nil {
+		return nil, err
+	}
+
 	r = &parser{
 		a:      newAnalyzer(),
 		budget: parserBudget,
 		path:   path,
 		record: record,
+		s:      s,
 	}
-	var s scanner.Scanner
-	fs := token.NewFileSet()
-	f := fs.AddFile(path, -1, len(src))
-	r.f = f
-	s.Init(r.f, src, func(pos token.Position, msg string) { err = errorf("%v: %s", pos, msg) }, 0)
-	for {
-		pos, t, lit := s.Scan()
-		r.toks = append(r.toks, tok{f, pos, t, lit})
-		if err != nil {
-			return nil, err
-		}
-
-		if t == EOF {
-			return r, nil
-		}
-	}
+	return r, nil
 }
 
-func (p *parser) errPosition() token.Position {
-	return p.f.PositionFor(p.toks[p.maxIx].pos, true)
-}
+func (p *parser) errPosition() token.Position { return p.s.toks[p.maxIx].position(p.s.source) }
 
 func (p *parser) c() token.Token { return p.peek(0) }
 
-func (p *parser) accept(t token.Token) (Token, bool) {
+func (p *parser) accept(t token.Token) (r Token, ok bool) {
 	if p.c() == t {
+		r = Token{p.s.source, p.s.toks[p.ix].ch, int32(p.ix)}
 		p.ix++
 		p.budget--
-		return Token{}, true
+		return r, true
 	}
 
-	return Token{}, false
+	return r, false
 }
 
 func (p *parser) expect(t token.Token) (r Token) {
@@ -1391,11 +1385,11 @@ func (p *parser) expect(t token.Token) (r Token) {
 
 func (p *parser) peek(n int) token.Token {
 	if p.budget <= 0 {
-		return p.toks[len(p.toks)-1].tok
+		return p.s.toks[len(p.s.toks)-1].token()
 	}
 
 	p.maxIx = mathutil.Max(p.maxIx, p.ix+n)
-	return p.toks[p.ix+n].tok
+	return p.s.toks[p.ix+n].token()
 }
 
 func (p *parser) recordBacktrack(ix int) {
@@ -1422,30 +1416,30 @@ func (p *parser) back(ix int) {
 	p.recordBacktrack(ix)
 }
 
-func (p *parser) parse() (err error) {
+func (p *parser) parse() (ast *AST, err error) {
 	if p.c() != PACKAGE {
-		return errorf("%s: syntax error", p.errPosition())
+		return nil, errorf("%s: syntax error", p.errPosition())
 	}
 
-	ast := p.sourceFile()
+	sourceFile := p.sourceFile()
 	if p.budget == 0 {
-		return errorf("%s: resources exhausted", p.path)
+		return nil, errorf("%s: resources exhausted", p.path)
 	}
 
-	if ast == nil || p.ix < len(p.toks)-1 {
-		return errorf("%s: syntax error", p.errPosition())
+	if eof, ok := p.accept(EOF); ok {
+		return &AST{sourceFile, eof}, nil
 	}
 
-	return nil
+	return nil, errorf("%s: syntax error", p.errPosition())
 }
 
-type Node interface {
-	Position() token.Position
+type AST struct {
+	SourceFile *SourceFileNode
+	EOF        Token
 }
 
-type noder struct{}
-
-func (*noder) Position() (r token.Position) { return r }
+func (n *AST) Position() token.Position { return n.SourceFile.Position() }
+func (n *AST) Source(full bool) string  { return nodeSource(n, full) }
 
 func ints(s string) (r []int) {
 	a := strings.Split(s, " ")
@@ -1484,3 +1478,79 @@ func lessString(a, b string) bool {
 	}
 	return a < b
 }
+
+// Node is an item of the CST tree.
+type Node interface {
+	Position() token.Position
+	Source(full bool) string
+}
+
+// nodeSource returns the source text of n. If full is false, every non empty
+// separator is replaced by a single space.
+func nodeSource(n Node, full bool) string {
+	var a []int32
+	var t Token
+	nodeSource0(&t.source, &a, n)
+	if len(a) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	sort.Slice(a, func(i, j int) bool { return a[i] < a[j] })
+	for _, v := range a {
+		t.index = v
+		t.ch = t.source.toks[t.index].ch
+		b.WriteString(t.Source(full))
+	}
+	return b.String()
+}
+
+func nodeSource0(ps **source, a *[]int32, n interface{}) {
+	if n == nil {
+		return
+	}
+
+	if t, ok := n.(Token); ok {
+		if t.IsValid() {
+			*ps = t.source
+			*a = append(*a, t.index)
+		}
+		return
+	}
+
+	t := reflect.TypeOf(n)
+	v := reflect.ValueOf(n)
+	switch t.Kind() {
+	case reflect.Pointer:
+		if !v.IsZero() {
+			nodeSource0(ps, a, v.Elem().Interface())
+		}
+	case reflect.Struct:
+		for i := 0; i < t.NumField(); i++ {
+			nodeSource0(ps, a, v.Field(i).Interface())
+		}
+	case reflect.Slice:
+		for i := 0; i < v.Len(); i++ {
+			nodeSource0(ps, a, v.Index(i).Interface())
+		}
+	default:
+		panic(todo("", t.Kind()))
+	}
+}
+
+var hooks = strutil.PrettyPrintHooks{
+	reflect.TypeOf(Token{}): func(f strutil.Formatter, v interface{}, prefix, suffix string) {
+		t := v.(Token)
+		if !t.IsValid() {
+			return
+		}
+
+		pos := t.Position()
+		if pos.Filename != "" {
+			pos.Filename = filepath.Base(pos.Filename)
+		}
+		f.Format(string(prefix)+"%v: %10s %q %q"+string(suffix), pos, tokSource(t.Ch()), t.Sep(), t.Src())
+	},
+}
+
+func dump(n Node) string { return strutil.PrettyString(n, "", "", hooks) }

@@ -6519,7 +6519,6 @@
 /usr/local/go/test/fixedbugs/bug432.go
 /usr/local/go/test/fixedbugs/bug433.go
 /usr/local/go/test/fixedbugs/bug434.go
-/usr/local/go/test/fixedbugs/bug435.go
 /usr/local/go/test/fixedbugs/bug436.go
 /usr/local/go/test/fixedbugs/bug437.dir/one.go
 /usr/local/go/test/fixedbugs/bug437.dir/two.go
@@ -6742,7 +6741,6 @@
 /usr/local/go/test/fixedbugs/issue13263.go
 /usr/local/go/test/fixedbugs/issue13265.go
 /usr/local/go/test/fixedbugs/issue13268.go
-/usr/local/go/test/fixedbugs/issue13274.go
 /usr/local/go/test/fixedbugs/issue13337.go
 /usr/local/go/test/fixedbugs/issue13365.go
 /usr/local/go/test/fixedbugs/issue13415.go
@@ -6822,7 +6820,6 @@
 /usr/local/go/test/fixedbugs/issue15609.dir/call_decl.go
 /usr/local/go/test/fixedbugs/issue15609.dir/main.go
 /usr/local/go/test/fixedbugs/issue15609.go
-/usr/local/go/test/fixedbugs/issue15611.go
 /usr/local/go/test/fixedbugs/issue15646.dir/a.go
 /usr/local/go/test/fixedbugs/issue15646.dir/b.go
 /usr/local/go/test/fixedbugs/issue15646.go
@@ -8773,7 +8770,9 @@ internal/ebnf/ebnflint.go
 internal/ebnf/etc.go
 internal/ebnf/gen.go
 internal/ebnf/parser.go
-internal/ebnf/testdata/parser/bug.go
+internal/ebnf/scanner.go
+internal/ebnf/testdata/fixebugs/bug.go
+internal/ebnf/testdata/fixebugs/eof1.go
 parser.go
 scanner.go
 scanner_test.go
