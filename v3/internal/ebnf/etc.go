@@ -1409,10 +1409,6 @@ func (p *parser) recordBacktrack(ix int) {
 }
 
 func (p *parser) back(ix int) {
-	if p.closed {
-		return
-	}
-
 	p.recordBacktrack(ix)
 }
 

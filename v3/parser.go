@@ -40,7 +40,7 @@ var hooks = strutil.PrettyPrintHooks{
 		if pos.Filename != "" {
 			pos.Filename = filepath.Base(pos.Filename)
 		}
-		f.Format(string(prefix)+"%v: %10s %q %q"+string(suffix), pos, tokSource(t.Ch()), t.Sep(), t.Src())
+		f.Format(string(prefix)+"%10s %q %q\t(%v:)"+string(suffix), tokSource(t.Ch()), t.Sep(), t.Src(), pos)
 	},
 }
 
@@ -171,7 +171,7 @@ func (p *parser) peek(n int) token.Token {
 			p.isClosed = true
 		}
 	}
-	p.maxIx = mathutil.Max(p.maxIx, p.ix+n)
+	p.maxIx = mathutil.Max(p.maxIx, p.ix)
 	return token.Token(p.s.toks[p.ix+n].ch)
 }
 
@@ -192,11 +192,11 @@ func (p *parser) recordBacktrack(ix int, record bool) {
 }
 
 func (p *parser) back(ix int) {
+	p.recordBacktrack(ix, true)
 	if p.isClosed {
 		return
 	}
 
-	p.recordBacktrack(ix, true)
 	if noBack {
 		p.isClosed = true
 	}

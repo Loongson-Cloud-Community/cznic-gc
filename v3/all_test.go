@@ -375,13 +375,6 @@ func TestParser(t *testing.T) {
 	}
 }
 
-var TODO = []string{
-	"/golang.org/x/tools/gopls/internal/lsp/testdata/danglingstmt/dangling_if_eof.go",
-	"/test/fixedbugs/bug435.go",
-	"/test/fixedbugs/issue13274.go",
-	"/test/fixedbugs/issue15611.go",
-}
-
 func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 	if err := filepath.Walk(filepath.FromSlash(root), func(path0 string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -403,14 +396,6 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 		p.addFile()
 		path := path0
 		p.exec(func() (err error) {
-			sp := filepath.ToSlash(path)
-			for _, v := range TODO {
-				if strings.Contains(sp, v) {
-					t.Logf("TODO %v", sp)
-					return nil
-				}
-			}
-
 			if *oTrc {
 				fmt.Fprintln(os.Stderr, path)
 			}

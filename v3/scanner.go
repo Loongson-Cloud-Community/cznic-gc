@@ -353,6 +353,7 @@ func (s *scanner) scan() (r bool) {
 	for {
 		if r = s.scan0(); !r || s.tok.ch >= 0 {
 			s.toks = append(s.toks, s.tok)
+			// trc("", dump(s.token()))
 			return r
 		}
 	}
