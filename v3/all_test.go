@@ -543,3 +543,108 @@ func testGoParser(p *parallel, t *testing.T, root string, gld *golden) {
 		t.Error(err)
 	}
 }
+
+func BenchmarkParser(b *testing.B) {
+	var sum int64
+	root := runtime.GOROOT()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if err := filepath.Walk(filepath.FromSlash(root), func(path0 string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			if info.IsDir() {
+				return nil
+			}
+
+			if re != nil && !re.MatchString(path0) {
+				return nil
+			}
+
+			if filepath.Ext(path0) != ".go" {
+				return nil
+			}
+
+			path := path0
+			if err := func() (err error) {
+				if *oTrc {
+					fmt.Fprintln(os.Stderr, path)
+				}
+
+				var pp *parser
+				b, err := os.ReadFile(path)
+				sum += int64(len(b))
+				if err != nil {
+					return errorf("%s: %v", path, err)
+				}
+
+				pp = newParser(path, b, *oReport)
+				if _, err := pp.parse(); err != nil {
+					if isKnownBad(path, pp.errPosition()) {
+						return nil
+					}
+
+					return errorf("%s", err)
+				}
+
+				return nil
+			}(); err != nil {
+				b.Fatal(err)
+			}
+			return nil
+		}); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.SetBytes(sum)
+}
+
+func BenchmarkGoParser(b *testing.B) {
+	var sum int64
+	root := runtime.GOROOT()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if err := filepath.Walk(filepath.FromSlash(root), func(path0 string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				return nil
+			}
+
+			if re != nil && !re.MatchString(path0) {
+				return nil
+			}
+
+			if filepath.Ext(path0) != ".go" {
+				return nil
+			}
+
+			path := path0
+			if err := func() (err error) {
+				b, err := os.ReadFile(path)
+				sum += int64(len(b))
+				if err != nil {
+					return errorf("%s: %v", path, err)
+				}
+
+				if _, err = goparser.ParseFile(token.NewFileSet(), path, b, goparser.SkipObjectResolution); err != nil {
+					if pos, ok := extractPos(err.Error()); !ok || isKnownBad(path, pos) {
+						return nil
+					}
+
+					return errorf("%s", err)
+				}
+
+				return nil
+			}(); err != nil {
+				b.Fatal(err)
+			}
+			return nil
+		}); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.SetBytes(sum)
+}

@@ -1,4 +1,4 @@
-.PHONY:	clean edit editor test test2 gen report report2 assert
+.PHONY:	clean edit editor test test2 gen report report2 assert benchmarks
 
 assert:
 	echo "package main; type SourceFileNode struct{}; func (p *parser) sourceFile() *SourceFileNode { return nil }" > parser.go
@@ -49,3 +49,6 @@ report2:
 	@git status
 	@grep TOTAL log-test || true
 	grep 'FAIL' log-test || true
+
+benchmarks:
+	go test -v -run @ -bench . 2>&1 | tee log-benchmarks

@@ -1,4 +1,4 @@
-.PHONY:	clean edit editor test test2 back report report2 parser2
+.PHONY:	clean edit editor test test2 back report report2 parser2 benchmarks
 
 clean:
 	rm -f log-* cpu.test mem.test *.out
@@ -53,4 +53,8 @@ report2:
 	@git status
 	@grep TOTAL log-test || true
 	grep 'FAIL' log-test || true
+
+
+benchmarks:
+	go test -v -run @ -bench . 2>&1 | tee log-benchmarks
 
