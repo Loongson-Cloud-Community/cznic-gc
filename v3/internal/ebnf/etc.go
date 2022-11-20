@@ -487,6 +487,7 @@ func h(v interface{}) string {
 
 type parallel struct {
 	a                  *analyzer
+	asts               []interface{}
 	errors             []error
 	limit              chan struct{}
 	maxBacktrackOrigin string
@@ -530,6 +531,13 @@ func (p *parallel) addOk()        { atomic.AddInt32(&p.ok, 1) }
 func (p *parallel) addSkipped()   { atomic.AddInt32(&p.skipped, 1) }
 func (p *parallel) addToks(n int) { atomic.AddInt32(&p.allToks, int32(n)) }
 func (p *parallel) stop()         { atomic.StoreInt32(&p.stopped, 1) }
+
+func (p *parallel) addAST(ast interface{}) {
+	p.Lock()
+	defer p.Unlock()
+
+	p.asts = append(p.asts, ast)
+}
 
 func (p *parallel) recordMaxDuration(path string, d time.Duration, toks int) {
 	p.Lock()

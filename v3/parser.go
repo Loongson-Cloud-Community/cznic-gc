@@ -19,6 +19,11 @@
 // BenchmarkParser-24      	       1	5361272584 ns/op	  13.09 MB/s	2122389744 B/op	26966665 allocs/op
 // BenchmarkParser-24      	       1	5402511361 ns/op	  12.99 MB/s	2138109528 B/op	25629078 allocs/op
 // BenchmarkParser-24      	       1	5278073632 ns/op	  13.30 MB/s	2057989584 B/op	24870758 allocs/op
+// BenchmarkParser-24      	       1	5097343024 ns/op	  13.77 MB/s	1987967968 B/op	23533027 allocs/op
+// BenchmarkParser-24      	       1	5046280503 ns/op	  13.91 MB/s	1821836280 B/op	23532757 allocs/op
+// BenchmarkParser-24      	       1	4868115159 ns/op	  14.41 MB/s	1798902776 B/op	23532845 allocs/op
+// BenchmarkParser-24      	       1	4866396896 ns/op	  14.42 MB/s	1740396504 B/op	23532596 allocs/op
+// BenchmarkParser-24      	       1	4559016831 ns/op	  15.39 MB/s	1594812888 B/op	20503295 allocs/op
 
 package gc // modernc.org/gc/v3
 
@@ -4212,13 +4217,9 @@ func (p *parser) multiplicativeExpression(preBlock bool) (r Expression) {
 //
 //	Operand = Literal | OperandName [ TypeArgs ] [ LiteralValue ] | "(" Expression ")" .
 type OperandNode struct {
-	Literal      Expression
 	OperandName  *OperandNameNode
 	TypeArgs     *TypeArgsNode
 	LiteralValue *LiteralValueNode
-	LPAREN       Token
-	Expression   Expression
-	RPAREN       Token
 }
 
 // Source implements Node.
@@ -4227,7 +4228,19 @@ func (n *OperandNode) Source(full bool) string { return nodeSource(n, full) }
 // Position implements Node.
 func (n *OperandNode) Position() token.Position { panic("TODO") }
 
-func (p *parser) operand(preBlock bool) *OperandNode {
+type ParenthesizedExpression struct {
+	LPAREN     Token
+	Expression Expression
+	RPAREN     Token
+}
+
+// Source implements Node.
+func (n *ParenthesizedExpression) Source(full bool) string { return nodeSource(n, full) }
+
+// Position implements Node.
+func (n *ParenthesizedExpression) Position() token.Position { return n.LPAREN.Position() }
+
+func (p *parser) operand(preBlock bool) Expression {
 	var (
 		ok           bool
 		literal      Expression
@@ -4243,12 +4256,9 @@ func (p *parser) operand(preBlock bool) *OperandNode {
 	case CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT: // 0
 		// *ebnf.Name Literal ctx [CHAR, FLOAT, FUNC, IMAG, INT, LBRACK, MAP, STRING, STRUCT]
 		if literal = p.literal(); literal == nil {
-			goto _0
+			return nil
 		}
-		break
-	_0:
-		literal = nil
-		return nil
+		return literal
 	case IDENT: // 1
 		// ebnf.Sequence OperandName [ TypeArgs ] [ LiteralValue ] ctx [IDENT]
 		{
@@ -4313,7 +4323,7 @@ func (p *parser) operand(preBlock bool) *OperandNode {
 				goto _8
 			}
 		}
-		break
+		return &ParenthesizedExpression{lparenTok, expression, rparenTok}
 	_8:
 		expression = nil
 		lparenTok = Token{}
@@ -4323,13 +4333,9 @@ func (p *parser) operand(preBlock bool) *OperandNode {
 		return nil
 	}
 	return &OperandNode{
-		Literal:      literal,
 		OperandName:  operandName,
 		TypeArgs:     typeArgs,
 		LiteralValue: literalValue,
-		LPAREN:       lparenTok,
-		Expression:   expression,
-		RPAREN:       rparenTok,
 	}
 }
 
@@ -4765,16 +4771,8 @@ func (p *parser) postStmt() *PostStmtNode {
 //
 //	PrimaryExpr = ( Operand | Conversion | MethodExpr ) { Selector | Index | Slice | TypeAssertion | Arguments } .
 type PrimaryExprNode struct {
-	Operand    *OperandNode
-	Conversion *ConversionNode
-	MethodExpr *MethodExprNode
-	List       []struct {
-		Selector      *SelectorNode
-		Index         *IndexNode
-		Slice         *SliceNode
-		TypeAssertion *TypeAssertionNode
-		Arguments     *ArgumentsNode
-	}
+	Operand Expression
+	List    []Node
 }
 
 // Source implements Node.
@@ -4783,18 +4781,13 @@ func (n *PrimaryExprNode) Source(full bool) string { return nodeSource(n, full) 
 // Position implements Node.
 func (n *PrimaryExprNode) Position() token.Position { panic("TODO") }
 
-func (p *parser) primaryExpr(preBlock bool) *PrimaryExprNode {
+func (p *parser) primaryExpr(preBlock bool) Expression {
 	var (
-		operand    *OperandNode
+		item0      Expression
+		operand    Expression
 		conversion *ConversionNode
 		methodExpr *MethodExprNode
-		list       []struct {
-			Selector      *SelectorNode
-			Index         *IndexNode
-			Slice         *SliceNode
-			TypeAssertion *TypeAssertionNode
-			Arguments     *ArgumentsNode
-		}
+		list       []Node
 	)
 	// ebnf.Sequence ( Operand | Conversion | MethodExpr ) { Selector | Index | Slice | TypeAssertion | Arguments } ctx [ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRING, STRUCT]
 	{
@@ -4807,6 +4800,7 @@ func (p *parser) primaryExpr(preBlock bool) *PrimaryExprNode {
 			if operand = p.operand(preBlock); operand == nil {
 				goto _0
 			}
+			item0 = operand
 			break
 		_0:
 			operand = nil
@@ -4817,6 +4811,7 @@ func (p *parser) primaryExpr(preBlock bool) *PrimaryExprNode {
 			if operand = p.operand(preBlock); operand == nil {
 				goto _2
 			}
+			item0 = operand
 			break
 		_2:
 			operand = nil
@@ -4824,6 +4819,7 @@ func (p *parser) primaryExpr(preBlock bool) *PrimaryExprNode {
 			if conversion = p.conversion(); conversion == nil {
 				goto _3
 			}
+			item0 = conversion
 			break
 		_3:
 			conversion = nil
@@ -4831,6 +4827,7 @@ func (p *parser) primaryExpr(preBlock bool) *PrimaryExprNode {
 			if methodExpr = p.methodExpr(); methodExpr == nil {
 				goto _4
 			}
+			item0 = methodExpr
 			break
 		_4:
 			methodExpr = nil
@@ -4841,6 +4838,7 @@ func (p *parser) primaryExpr(preBlock bool) *PrimaryExprNode {
 			if conversion = p.conversion(); conversion == nil {
 				goto _5
 			}
+			item0 = conversion
 			break
 		_5:
 			conversion = nil
@@ -4848,6 +4846,7 @@ func (p *parser) primaryExpr(preBlock bool) *PrimaryExprNode {
 			if methodExpr = p.methodExpr(); methodExpr == nil {
 				goto _6
 			}
+			item0 = methodExpr
 			break
 		_6:
 			methodExpr = nil
@@ -4860,6 +4859,7 @@ func (p *parser) primaryExpr(preBlock bool) *PrimaryExprNode {
 		// *ebnf.Repetition { Selector | Index | Slice | TypeAssertion | Arguments } ctx []
 	_7:
 		{
+			var item Node
 			var selector *SelectorNode
 			var index *IndexNode
 			var slice *SliceNode
@@ -4874,12 +4874,14 @@ func (p *parser) primaryExpr(preBlock bool) *PrimaryExprNode {
 					if selector = p.selector(); selector == nil {
 						goto _9
 					}
+					item = selector
 					break
 				_9:
 					// *ebnf.Name TypeAssertion ctx [PERIOD]
 					if typeAssertion = p.typeAssertion(); typeAssertion == nil {
 						goto _10
 					}
+					item = typeAssertion
 					break
 				_10:
 					goto _8
@@ -4888,12 +4890,14 @@ func (p *parser) primaryExpr(preBlock bool) *PrimaryExprNode {
 					if index = p.index(); index == nil {
 						goto _11
 					}
+					item = index
 					break
 				_11:
 					// *ebnf.Name Slice ctx [LBRACK]
 					if slice = p.slice(); slice == nil {
 						goto _12
 					}
+					item = slice
 					break
 				_12:
 					goto _8
@@ -4902,29 +4906,26 @@ func (p *parser) primaryExpr(preBlock bool) *PrimaryExprNode {
 					if arguments = p.arguments(); arguments == nil {
 						goto _13
 					}
+					item = arguments
 					break
 				_13:
 					goto _8
 				default:
 					goto _8
 				}
-				list = append(list, struct {
-					Selector      *SelectorNode
-					Index         *IndexNode
-					Slice         *SliceNode
-					TypeAssertion *TypeAssertionNode
-					Arguments     *ArgumentsNode
-				}{Selector: selector, TypeAssertion: typeAssertion, Index: index, Slice: slice, Arguments: arguments})
+				list = append(list, item)
 				goto _7
 			}
 		_8:
 		}
 	}
+	if len(list) == 0 {
+		return item0
+	}
+
 	return &PrimaryExprNode{
-		Operand:    operand,
-		Conversion: conversion,
-		MethodExpr: methodExpr,
-		List:       list,
+		Operand: item0,
+		List:    list,
 	}
 }
 
@@ -7674,7 +7675,7 @@ func (p *parser) typeSwitchCase() *TypeSwitchCaseNode {
 type TypeSwitchGuardNode struct {
 	IDENT       Token
 	DEFINE      Token
-	PrimaryExpr *PrimaryExprNode
+	PrimaryExpr Expression
 	PERIOD      Token
 	LPAREN      Token
 	TYPE        Token
@@ -7692,7 +7693,7 @@ func (p *parser) typeSwitchGuard() *TypeSwitchGuardNode {
 		ok          bool
 		identTok    Token
 		defineTok   Token
-		primaryExpr *PrimaryExprNode
+		primaryExpr Expression
 		periodTok   Token
 		lparenTok   Token
 		typeTok     Token
@@ -7939,7 +7940,7 @@ func (n *UnaryExprNode) Position() token.Position { panic("TODO") }
 
 func (p *parser) unaryExpr(preBlock bool) Expression {
 	var (
-		primaryExpr *PrimaryExprNode
+		primaryExpr Expression
 		op          Token
 		unaryExpr   Expression
 	)

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -20,18 +21,20 @@ import (
 )
 
 const (
+	defaultSrc      = "../.."
 	pegEBNF         = "peg.ebnf"
 	startProduction = "SourceFile"
 )
 
 var (
-	oSrc    = flag.String("src", "../..", "")
+	oAssert = flag.Bool("assert", false, "verify some invariants in the generated parser")
+	oBSrc   = flag.String("bsrc", runtime.GOROOT(), "")
 	oGen    = flag.Bool("gen", false, "")
 	oRE     = flag.String("re", "", "")
 	oReport = flag.Bool("report", false, "")
+	oSrc    = flag.String("src", defaultSrc, "")
 	oTrc    = flag.Bool("trc", false, "")
 	oTrcPEG = flag.Bool("trcpeg", false, "")
-	oAssert = flag.Bool("assert", false, "verify some invariants in the generated parser")
 
 	re *regexp.Regexp
 )
@@ -124,7 +127,7 @@ type golden struct {
 }
 
 func newGolden(t *testing.T, fn string) *golden {
-	if re != nil || *oReport || *oSrc != "../.." {
+	if re != nil || *oReport || *oSrc != defaultSrc {
 		return &golden{discard: true}
 	}
 
@@ -316,6 +319,9 @@ func TestParser(t *testing.T) {
 
 	defer gld.close()
 
+	var ms0, ms runtime.MemStats
+	debug.FreeOSMemory()
+	runtime.ReadMemStats(&ms0)
 	p := newParallel()
 	t.Run("src", func(t *testing.T) { testParser(p, t, *oSrc, gld) })
 	t.Run("goroot", func(t *testing.T) { testParser(p, t, runtime.GOROOT(), gld) })
@@ -334,6 +340,11 @@ func TestParser(t *testing.T) {
 	t.Logf("Max duration: %s, %v for %v tokens", p.maxDurationPath, p.maxDuration, h(p.maxDurationToks))
 	if *oReport {
 		t.Logf("\n%s", p.a.report())
+	}
+	debug.FreeOSMemory()
+	runtime.ReadMemStats(&ms)
+	if *oSrc == defaultSrc {
+		t.Logf("ast count %v, heap %s", h(len(p.asts)), h(ms.HeapAlloc-ms0.HeapAlloc))
 	}
 }
 
@@ -425,6 +436,9 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 				)
 			}
 
+			if *oSrc == defaultSrc {
+				p.addAST(ast)
+			}
 			p.addOk()
 			gld.w("%s\n", path)
 			return nil
@@ -450,6 +464,9 @@ func TestGoParser(t *testing.T) {
 
 	defer gld.close()
 
+	var ms0, ms runtime.MemStats
+	debug.FreeOSMemory()
+	runtime.ReadMemStats(&ms0)
 	p := newParallel()
 	t.Run("src", func(t *testing.T) { testGoParser(p, t, *oSrc, gld) })
 	t.Run("goroot", func(t *testing.T) { testGoParser(p, t, runtime.GOROOT(), gld) })
@@ -458,6 +475,11 @@ func TestGoParser(t *testing.T) {
 	}
 	t.Logf("TOTAL files %v, skip %v, ok %v, fail %v", h(p.files), h(p.skipped), h(p.ok), h(p.fails))
 	t.Logf("Max duration: %s, %v for %v tokens", p.maxDurationPath, p.maxDuration, h(p.maxDurationToks))
+	debug.FreeOSMemory()
+	runtime.ReadMemStats(&ms)
+	if *oSrc == defaultSrc {
+		t.Logf("ast count %v, heap %s", h(len(p.asts)), h(ms.HeapAlloc-ms0.HeapAlloc))
+	}
 }
 
 func testGoParser(p *parallel, t *testing.T, root string, gld *golden) {
@@ -500,7 +522,8 @@ func testGoParser(p *parallel, t *testing.T, root string, gld *golden) {
 				return errorf("%s: %v", path, err)
 			}
 
-			if _, err = goparser.ParseFile(token.NewFileSet(), path, b, goparser.SkipObjectResolution); err != nil {
+			ast, err := goparser.ParseFile(token.NewFileSet(), path, b, goparser.SkipObjectResolution)
+			if err != nil {
 				if pos, ok := extractPos(err.Error()); !ok || isKnownBad(path, pos) {
 					p.addSkipped()
 					return nil
@@ -509,6 +532,9 @@ func testGoParser(p *parallel, t *testing.T, root string, gld *golden) {
 				return errorf("%s", err)
 			}
 
+			if *oSrc == defaultSrc {
+				p.addAST(ast)
+			}
 			p.addOk()
 			gld.w("%s\n", path)
 			return nil
@@ -521,7 +547,7 @@ func testGoParser(p *parallel, t *testing.T, root string, gld *golden) {
 
 func BenchmarkParser(b *testing.B) {
 	var sum int64
-	root := runtime.GOROOT()
+	root := *oBSrc
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		if err := filepath.Walk(filepath.FromSlash(root), func(path0 string, info os.FileInfo, err error) error {
@@ -543,10 +569,6 @@ func BenchmarkParser(b *testing.B) {
 
 			path := path0
 			if err := func() (err error) {
-				if *oTrc {
-					fmt.Fprintln(os.Stderr, path)
-				}
-
 				var pp *parser
 				b, err := os.ReadFile(path)
 				sum += int64(len(b))
@@ -580,7 +602,7 @@ func BenchmarkParser(b *testing.B) {
 
 func BenchmarkGoParser(b *testing.B) {
 	var sum int64
-	root := runtime.GOROOT()
+	root := *oBSrc
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		if err := filepath.Walk(filepath.FromSlash(root), func(path0 string, info os.FileInfo, err error) error {
