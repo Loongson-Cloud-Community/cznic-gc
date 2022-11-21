@@ -8212,7 +8212,7 @@ func (p *parser) statement() *StatementNode {
 
 // StatementListNode represents the production
 //
-//	StatementList = [ Statement { ";" Statement } [ ";" ] ] .
+//	StatementList = Statement { ";" Statement } [ ";" ] .
 type StatementListNode struct {
 	Statement *StatementNode
 	List      []struct {
@@ -8226,7 +8226,7 @@ type StatementListNode struct {
 func (n *StatementListNode) Source(full bool) string { return nodeSource(n, full) }
 
 // Position implements Node.
-func (n *StatementListNode) Position() token.Position { panic("TODO") }
+func (n *StatementListNode) Position() token.Position { return n.Statement.Position() }
 
 func (p *parser) statementList() *StatementListNode {
 	var (
@@ -8239,7 +8239,6 @@ func (p *parser) statementList() *StatementListNode {
 		semicolonTok Token
 	)
 	_ = ok
-	// *ebnf.Option [ Statement { ";" Statement } [ ";" ] ] ctx [ADD, AND, ARROW, BREAK, CHAN, CHAR, CONST, CONTINUE, DEFER, FALLTHROUGH, FLOAT, FOR, FUNC, GO, GOTO, IDENT, IF, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, RETURN, SELECT, SEMICOLON, STRING, STRUCT, SUB, SWITCH, TYPE, VAR, XOR /* ε */]
 	// ebnf.Sequence Statement { ";" Statement } [ ";" ] ctx [ADD, AND, ARROW, BREAK, CHAN, CHAR, CONST, CONTINUE, DEFER, FALLTHROUGH, FLOAT, FOR, FUNC, GO, GOTO, IDENT, IF, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, RETURN, SELECT, SEMICOLON, STRING, STRUCT, SUB, SWITCH, TYPE, VAR, XOR /* ε */]
 	{
 		ix := p.ix
@@ -8249,11 +8248,11 @@ func (p *parser) statementList() *StatementListNode {
 		case ADD, AND, ARROW, BREAK, CHAN, CHAR, CONST, CONTINUE, DEFER, FALLTHROUGH, FLOAT, FOR, FUNC, GO, GOTO, IDENT, IF, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, RETURN, SELECT, STRING, STRUCT, SUB, SWITCH, TYPE, VAR, XOR /* ε */ :
 			if statement = p.statement(); statement == nil {
 				p.back(ix)
-				goto _0
+				return nil
 			}
 		}
 		// *ebnf.Repetition { ";" Statement } ctx []
-	_2:
+	_0:
 		{
 			var semicolonTok Token
 			var statement *StatementNode
@@ -8269,16 +8268,16 @@ func (p *parser) statementList() *StatementListNode {
 				case ADD, AND, ARROW, BREAK, CHAN, CHAR, CONST, CONTINUE, DEFER, FALLTHROUGH, FLOAT, FOR, FUNC, GO, GOTO, IDENT, IF, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, RETURN, SELECT, STRING, STRUCT, SUB, SWITCH, TYPE, VAR, XOR /* ε */ :
 					if statement = p.statement(); statement == nil {
 						p.back(ix)
-						goto _3
+						goto _1
 					}
 				}
 				list = append(list, struct {
 					SEMICOLON Token
 					Statement *StatementNode
 				}{SEMICOLON: semicolonTok, Statement: statement})
-				goto _2
+				goto _0
 			}
-		_3:
+		_1:
 		}
 		// *ebnf.Option [ ";" ] ctx []
 		switch p.c() {
@@ -8287,11 +8286,6 @@ func (p *parser) statementList() *StatementListNode {
 			semicolonTok = p.expect(SEMICOLON)
 		}
 	}
-	goto _1
-_0:
-	semicolonTok = Token{}
-	statement = nil
-_1:
 	return &StatementListNode{
 		Statement: statement,
 		List:      list,

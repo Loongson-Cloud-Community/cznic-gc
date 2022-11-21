@@ -914,7 +914,6 @@
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/decls2/decls2b.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/decls3.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/decls4.go
-/usr/local/go/src/cmd/compile/internal/types2/testdata/check/decls5.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/errors.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/expr1.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/expr2.go
@@ -938,7 +937,6 @@
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/labels.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/linalg.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/literals.go
-/usr/local/go/src/cmd/compile/internal/types2/testdata/check/main0.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/main1.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/map0.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/map1.go
@@ -987,7 +985,6 @@
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue42758.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue42881.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue43056.go
-/usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue43087.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue43109.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue43110.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue43124.go
@@ -2879,7 +2876,6 @@
 /usr/local/go/src/go/doc/testdata/c.go
 /usr/local/go/src/go/doc/testdata/d1.go
 /usr/local/go/src/go/doc/testdata/d2.go
-/usr/local/go/src/go/doc/testdata/e.go
 /usr/local/go/src/go/doc/testdata/error1.go
 /usr/local/go/src/go/doc/testdata/error2.go
 /usr/local/go/src/go/doc/testdata/example.go
@@ -3074,7 +3070,6 @@
 /usr/local/go/src/go/types/testdata/check/decls2/decls2b.go
 /usr/local/go/src/go/types/testdata/check/decls3.go
 /usr/local/go/src/go/types/testdata/check/decls4.go
-/usr/local/go/src/go/types/testdata/check/decls5.go
 /usr/local/go/src/go/types/testdata/check/errors.go
 /usr/local/go/src/go/types/testdata/check/expr1.go
 /usr/local/go/src/go/types/testdata/check/expr2.go
@@ -3098,7 +3093,6 @@
 /usr/local/go/src/go/types/testdata/check/labels.go
 /usr/local/go/src/go/types/testdata/check/linalg.go
 /usr/local/go/src/go/types/testdata/check/literals.go
-/usr/local/go/src/go/types/testdata/check/main0.go
 /usr/local/go/src/go/types/testdata/check/main1.go
 /usr/local/go/src/go/types/testdata/check/map0.go
 /usr/local/go/src/go/types/testdata/check/map1.go
@@ -3148,7 +3142,6 @@
 /usr/local/go/src/go/types/testdata/fixedbugs/issue42758.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue42881.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue43056.go
-/usr/local/go/src/go/types/testdata/fixedbugs/issue43087.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue43109.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue43110.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue43124.go
@@ -5920,7 +5913,6 @@
 /usr/local/go/test/chancap.go
 /usr/local/go/test/chanlinear.go
 /usr/local/go/test/char_lit.go
-/usr/local/go/test/char_lit1.go
 /usr/local/go/test/checkbce.go
 /usr/local/go/test/clearfat.go
 /usr/local/go/test/closedchan.go
@@ -6013,7 +6005,6 @@
 /usr/local/go/test/ddd2.dir/ddd3.go
 /usr/local/go/test/ddd2.go
 /usr/local/go/test/decl.go
-/usr/local/go/test/declbad.go
 /usr/local/go/test/defer.go
 /usr/local/go/test/defererrcheck.go
 /usr/local/go/test/deferfin.go
@@ -6093,7 +6084,6 @@
 /usr/local/go/test/fixedbugs/bug011.go
 /usr/local/go/test/fixedbugs/bug012.go
 /usr/local/go/test/fixedbugs/bug013.go
-/usr/local/go/test/fixedbugs/bug014.go
 /usr/local/go/test/fixedbugs/bug015.go
 /usr/local/go/test/fixedbugs/bug016.go
 /usr/local/go/test/fixedbugs/bug017.go
@@ -6133,7 +6123,6 @@
 /usr/local/go/test/fixedbugs/bug065.go
 /usr/local/go/test/fixedbugs/bug066.go
 /usr/local/go/test/fixedbugs/bug067.go
-/usr/local/go/test/fixedbugs/bug068.go
 /usr/local/go/test/fixedbugs/bug069.go
 /usr/local/go/test/fixedbugs/bug070.go
 /usr/local/go/test/fixedbugs/bug071.go
@@ -6419,7 +6408,6 @@
 /usr/local/go/test/fixedbugs/bug347.go
 /usr/local/go/test/fixedbugs/bug348.go
 /usr/local/go/test/fixedbugs/bug350.go
-/usr/local/go/test/fixedbugs/bug351.go
 /usr/local/go/test/fixedbugs/bug352.go
 /usr/local/go/test/fixedbugs/bug353.go
 /usr/local/go/test/fixedbugs/bug354.go
@@ -6462,7 +6450,6 @@
 /usr/local/go/test/fixedbugs/bug385_64.go
 /usr/local/go/test/fixedbugs/bug386.go
 /usr/local/go/test/fixedbugs/bug387.go
-/usr/local/go/test/fixedbugs/bug388a.go
 /usr/local/go/test/fixedbugs/bug389.go
 /usr/local/go/test/fixedbugs/bug390.go
 /usr/local/go/test/fixedbugs/bug391.go
@@ -6890,7 +6877,6 @@
 /usr/local/go/test/fixedbugs/issue17645.go
 /usr/local/go/test/fixedbugs/issue17710.go
 /usr/local/go/test/fixedbugs/issue17752.go
-/usr/local/go/test/fixedbugs/issue17758.go
 /usr/local/go/test/fixedbugs/issue17918.go
 /usr/local/go/test/fixedbugs/issue18089.go
 /usr/local/go/test/fixedbugs/issue18149.go
@@ -7255,7 +7241,6 @@
 /usr/local/go/test/fixedbugs/issue30659.go
 /usr/local/go/test/fixedbugs/issue30679.go
 /usr/local/go/test/fixedbugs/issue30709.go
-/usr/local/go/test/fixedbugs/issue30722.go
 /usr/local/go/test/fixedbugs/issue30862.dir/a/a.go
 /usr/local/go/test/fixedbugs/issue30862.dir/b/b.go
 /usr/local/go/test/fixedbugs/issue30862.dir/main.go
@@ -7576,7 +7561,6 @@
 /usr/local/go/test/fixedbugs/issue45175.go
 /usr/local/go/test/fixedbugs/issue4517a.go
 /usr/local/go/test/fixedbugs/issue4517b.go
-/usr/local/go/test/fixedbugs/issue4517c.go
 /usr/local/go/test/fixedbugs/issue4517d.go
 /usr/local/go/test/fixedbugs/issue4518.go
 /usr/local/go/test/fixedbugs/issue45242.go
@@ -8012,7 +7996,6 @@
 /usr/local/go/test/fixedbugs/issue8961.go
 /usr/local/go/test/fixedbugs/issue9006.go
 /usr/local/go/test/fixedbugs/issue9017.go
-/usr/local/go/test/fixedbugs/issue9036.go
 /usr/local/go/test/fixedbugs/issue9076.go
 /usr/local/go/test/fixedbugs/issue9083.go
 /usr/local/go/test/fixedbugs/issue9110.go
@@ -8189,7 +8172,6 @@
 /usr/local/go/test/live_regabi.go
 /usr/local/go/test/live_uintptrkeepalive.go
 /usr/local/go/test/loopbce.go
-/usr/local/go/test/mainsig.go
 /usr/local/go/test/makechan.go
 /usr/local/go/test/makemap.go
 /usr/local/go/test/makenew.go
@@ -8202,7 +8184,6 @@
 /usr/local/go/test/maymorestack.go
 /usr/local/go/test/mergemul.go
 /usr/local/go/test/method.go
-/usr/local/go/test/method1.go
 /usr/local/go/test/method2.go
 /usr/local/go/test/method3.go
 /usr/local/go/test/method4.dir/method4a.go
@@ -8764,6 +8745,7 @@
 /usr/local/go/test/zerodivide.go
 all_test.go
 etc.go
+gc.go
 internal/abi.go
 internal/ebnf/all_test.go
 internal/ebnf/ebnflint.go

@@ -23,7 +23,7 @@ gen:
 	gofmt -l -s -w *.go
 
 test:
-	go test -v -failfast 2>&1 | tee log-test
+	go test -v -failfast -heap 2>&1 | tee log-test
 	@git diff testdata/ || true
 	@git status
 	@grep TOTAL log-test || true

@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unicode"
@@ -36,9 +37,10 @@ const (
 
 var (
 	oBSrc   = flag.String("bsrc", runtime.GOROOT(), "")
-	oSrc    = flag.String("src", defaultSrc, "")
+	oHeap   = flag.Bool("heap", false, "")
 	oRE     = flag.String("re", "", "")
 	oReport = flag.Bool("report", false, "")
+	oSrc    = flag.String("src", defaultSrc, "")
 	oTrc    = flag.Bool("trc", false, "")
 
 	digits  = expand(unicode.Nd)
@@ -142,6 +144,155 @@ func (g *golden) close() {
 	}
 }
 
+type testParallel struct {
+	a                  *analyzer
+	asts               []interface{}
+	errors             []error
+	limit              chan struct{}
+	maxBacktrackOrigin string
+	maxBacktrackPath   string
+	maxBacktrackPos    string
+	maxBacktracksPath  string
+	maxBudgetPath      string
+	maxDuration        time.Duration
+	maxDurationPath    string
+	minToksPath        string
+	sync.Mutex
+	wg sync.WaitGroup
+
+	maxBacktrack      int
+	maxBacktrackToks  int
+	maxBacktracks     int
+	maxBacktracksToks int
+	maxDurationToks   int
+	maxBudget         int
+	maxBudgetToks     int
+	minToks           int
+
+	allToks int32
+	fails   int32
+	files   int32
+	ok      int32
+	skipped int32
+}
+
+func newParallel() *testParallel {
+	return &testParallel{
+		a:     newAnalyzer(),
+		limit: make(chan struct{}, runtime.GOMAXPROCS(0)),
+	}
+}
+
+func (p *testParallel) addFail()      { atomic.AddInt32(&p.fails, 1) }
+func (p *testParallel) addFile()      { atomic.AddInt32(&p.files, 1) }
+func (p *testParallel) addOk()        { atomic.AddInt32(&p.ok, 1) }
+func (p *testParallel) addSkipped()   { atomic.AddInt32(&p.skipped, 1) }
+func (p *testParallel) addToks(n int) { atomic.AddInt32(&p.allToks, int32(n)) }
+
+func (p *testParallel) addAST(ast interface{}) {
+	p.Lock()
+	defer p.Unlock()
+
+	p.asts = append(p.asts, ast)
+}
+
+func (p *testParallel) recordMaxDuration(path string, d time.Duration, toks int) {
+	p.Lock()
+	defer p.Unlock()
+
+	if d > p.maxDuration {
+		p.maxDuration = d
+		p.maxDurationPath = path
+		p.maxDurationToks = toks
+	}
+}
+
+func (p *testParallel) recordMaxBacktrack(path string, back, toks int, pos, origin string) {
+	p.Lock()
+	defer p.Unlock()
+
+	if back > p.maxBacktrack {
+		p.maxBacktrack = back
+		p.maxBacktrackOrigin = origin
+		p.maxBacktrackPos = pos
+		p.maxBacktrackPath = path
+		p.maxBacktrackToks = toks
+	}
+}
+
+func (p *testParallel) recordMaxBacktracks(path string, back, toks int) {
+	p.Lock()
+	defer p.Unlock()
+
+	if back > p.maxBacktracks {
+		p.maxBacktracks = back
+		p.maxBacktracksPath = path
+		p.maxBacktracksToks = toks
+	}
+}
+
+func (p *testParallel) recordMaxBudget(path string, budget, toks int) {
+	p.Lock()
+	defer p.Unlock()
+
+	if budget > p.maxBudget {
+		p.maxBudget = budget
+		p.maxBudgetToks = toks
+		p.maxBudgetPath = path
+	}
+}
+
+func (p *testParallel) recordMinToks(path string, toks int) {
+	p.Lock()
+	defer p.Unlock()
+
+	if p.minToks == 0 || toks < p.minToks {
+		p.minToks = toks
+		p.minToksPath = path
+	}
+}
+
+func (p *testParallel) err(err error) {
+	if err == nil {
+		return
+	}
+
+	s := err.Error()
+	if x := strings.Index(s, "TODO"); x >= 0 {
+		fmt.Println(s[x:])
+	}
+	p.Lock()
+	p.errors = append(p.errors, err)
+	p.Unlock()
+}
+
+func (p *testParallel) exec(run func() error) {
+	p.limit <- struct{}{}
+	p.wg.Add(1)
+
+	go func() {
+		defer func() {
+			p.wg.Done()
+			<-p.limit
+		}()
+
+		p.err(run())
+	}()
+}
+
+func (p *testParallel) wait() error {
+	p.wg.Wait()
+	if len(p.errors) == 0 {
+		return nil
+	}
+
+	var a []string
+	for _, v := range p.errors {
+		a = append(a, v.Error())
+	}
+	return fmt.Errorf("%s", strings.Join(a, "\n"))
+}
+
 func TestScanner(t *testing.T) {
 	p := newParallel()
 	t.Run("errors", func(t *testing.T) { testScanErrors(t) })
@@ -154,7 +305,7 @@ func TestScanner(t *testing.T) {
 	t.Logf("TOTAL files %v, ok %v, fail %v", h(p.files), h(p.ok), h(p.fails))
 }
 
-func testScan(p *parallel, t *testing.T, root string) {
+func testScan(p *testParallel, t *testing.T, root string) {
 	if err := filepath.Walk(root, func(path0 string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -331,7 +482,7 @@ var falseNegatives = []string{
 
 func isKnownBad(fn string, pos token.Position) bool {
 	fs := token.NewFileSet()
-	ast, err := goparser.ParseFile(fs, fn, nil, goparser.SkipObjectResolution|goparser.ParseComments)
+	ast, err := goparser.ParseFile(fs, fn, nil, goparser.ParseComments|goparser.DeclarationErrors)
 	if err != nil {
 		return true
 	}
@@ -383,12 +534,12 @@ func TestParser(t *testing.T) {
 	}
 	debug.FreeOSMemory()
 	runtime.ReadMemStats(&ms)
-	if *oSrc == defaultSrc {
+	if *oHeap && *oSrc == defaultSrc {
 		t.Logf("ast count %v, heap %s", h(len(p.asts)), h(ms.HeapAlloc-ms0.HeapAlloc))
 	}
 }
 
-func testParser(p *parallel, t *testing.T, root string, gld *golden) {
+func testParser(p *testParallel, t *testing.T, root string, gld *golden) {
 	if err := filepath.Walk(filepath.FromSlash(root), func(path0 string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -443,10 +594,12 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 				return errorf("%s: %v", path, err)
 			}
 
-			pp = newParser(path, b, *oReport)
+			pp = newParser(newScope(nil, scPackage), path, b, *oReport)
+			pp.reportDeclarationErrors = true
 			ast, err := pp.parse()
 			if err != nil {
 				if isKnownBad(path, pp.errPosition()) {
+					t.Log(err)
 					pp = nil
 					p.addSkipped()
 					return nil
@@ -473,7 +626,7 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 				)
 			}
 
-			if *oSrc == defaultSrc {
+			if *oHeap && *oSrc == defaultSrc {
 				p.addAST(ast)
 			}
 			p.addOk()
@@ -504,12 +657,12 @@ func TestGoParser(t *testing.T) {
 	t.Logf("Max duration: %s, %v for %v tokens", p.maxDurationPath, p.maxDuration, h(p.maxDurationToks))
 	debug.FreeOSMemory()
 	runtime.ReadMemStats(&ms)
-	if *oSrc == defaultSrc {
+	if *oHeap && *oSrc == defaultSrc {
 		t.Logf("ast count %v, heap %s", h(len(p.asts)), h(ms.HeapAlloc-ms0.HeapAlloc))
 	}
 }
 
-func testGoParser(p *parallel, t *testing.T, root string, gld *golden) {
+func testGoParser(p *testParallel, t *testing.T, root string, gld *golden) {
 	if err := filepath.Walk(filepath.FromSlash(root), func(path0 string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -549,7 +702,7 @@ func testGoParser(p *parallel, t *testing.T, root string, gld *golden) {
 				return errorf("%s: %v", path, err)
 			}
 
-			ast, err := goparser.ParseFile(token.NewFileSet(), path, b, goparser.SkipObjectResolution)
+			ast, err := goparser.ParseFile(token.NewFileSet(), path, b, goparser.DeclarationErrors)
 			if err != nil {
 				if pos, ok := extractPos(err.Error()); !ok || isKnownBad(path, pos) {
 					p.addSkipped()
@@ -559,7 +712,7 @@ func testGoParser(p *parallel, t *testing.T, root string, gld *golden) {
 				return errorf("%s", err)
 			}
 
-			if *oSrc == defaultSrc {
+			if *oHeap && *oSrc == defaultSrc {
 				p.addAST(ast)
 			}
 			p.addOk()
@@ -603,7 +756,7 @@ func BenchmarkParser(b *testing.B) {
 					return errorf("%s: %v", path, err)
 				}
 
-				pp = newParser(path, b, *oReport)
+				pp = newParser(newScope(nil, scPackage), path, b, *oReport)
 				if _, err := pp.parse(); err != nil {
 					if isKnownBad(path, pp.errPosition()) {
 						return nil
@@ -653,7 +806,7 @@ func BenchmarkGoParser(b *testing.B) {
 					return errorf("%s: %v", path, err)
 				}
 
-				if _, err = goparser.ParseFile(token.NewFileSet(), path, b, goparser.SkipObjectResolution); err != nil {
+				if _, err = goparser.ParseFile(token.NewFileSet(), path, b, goparser.DeclarationErrors); err != nil {
 					if pos, ok := extractPos(err.Error()); !ok || isKnownBad(path, pos) {
 						return nil
 					}
@@ -671,4 +824,42 @@ func BenchmarkGoParser(b *testing.B) {
 		}
 	}
 	b.SetBytes(sum)
+}
+
+func TestNewPackage(t *testing.T) {
+	fs := os.DirFS(".")
+	cfg, err := NewConfig(
+		fs,
+		runtime.GOOS, runtime.GOARCH,
+		nil, nil,
+		func(importPath string) (fsPath string, err error) {
+			return ".", nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p, err := NewPackage(cfg, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var a []string
+	for k := range p.AST {
+		a = append(a, k)
+	}
+	sort.Strings(a)
+	t.Log(a)
+	a = a[:0]
+	for k := range p.Scope.nodes {
+		if token.IsExported(k) {
+			a = append(a, k)
+		}
+	}
+	sort.Strings(a)
+	if len(a) > 10 {
+		a = append(a[:10], "...")
+	}
+	t.Log(a)
 }

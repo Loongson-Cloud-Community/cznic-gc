@@ -30,6 +30,7 @@ var (
 	oAssert = flag.Bool("assert", false, "verify some invariants in the generated parser")
 	oBSrc   = flag.String("bsrc", runtime.GOROOT(), "")
 	oGen    = flag.Bool("gen", false, "")
+	oHeap   = flag.Bool("heap", false, "")
 	oRE     = flag.String("re", "", "")
 	oReport = flag.Bool("report", false, "")
 	oSrc    = flag.String("src", defaultSrc, "")
@@ -343,7 +344,7 @@ func TestParser(t *testing.T) {
 	}
 	debug.FreeOSMemory()
 	runtime.ReadMemStats(&ms)
-	if *oSrc == defaultSrc {
+	if *oHeap && *oSrc == defaultSrc {
 		t.Logf("ast count %v, heap %s", h(len(p.asts)), h(ms.HeapAlloc-ms0.HeapAlloc))
 	}
 }
@@ -436,7 +437,7 @@ func testParser(p *parallel, t *testing.T, root string, gld *golden) {
 				)
 			}
 
-			if *oSrc == defaultSrc {
+			if *oHeap && *oSrc == defaultSrc {
 				p.addAST(ast)
 			}
 			p.addOk()
@@ -477,7 +478,7 @@ func TestGoParser(t *testing.T) {
 	t.Logf("Max duration: %s, %v for %v tokens", p.maxDurationPath, p.maxDuration, h(p.maxDurationToks))
 	debug.FreeOSMemory()
 	runtime.ReadMemStats(&ms)
-	if *oSrc == defaultSrc {
+	if *oHeap && *oSrc == defaultSrc {
 		t.Logf("ast count %v, heap %s", h(len(p.asts)), h(ms.HeapAlloc-ms0.HeapAlloc))
 	}
 }
@@ -532,7 +533,7 @@ func testGoParser(p *parallel, t *testing.T, root string, gld *golden) {
 				return errorf("%s", err)
 			}
 
-			if *oSrc == defaultSrc {
+			if *oHeap && *oSrc == defaultSrc {
 				p.addAST(ast)
 			}
 			p.addOk()
