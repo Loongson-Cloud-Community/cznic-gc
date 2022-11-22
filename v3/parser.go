@@ -331,7 +331,8 @@ func (p *parser) back(ix int) {
 
 func (p *parser) parse() (ast *AST, err error) {
 	if p.c() != PACKAGE {
-		return nil, errorf("%s: syntax error", p.errPosition())
+		p.s.errs.err(p.errPosition(), "syntax error")
+		return nil, p.s.errs
 	}
 
 	sourceFile := p.sourceFile()
@@ -343,7 +344,8 @@ func (p *parser) parse() (ast *AST, err error) {
 		return &AST{p.fileScope, sourceFile, eof}, p.s.errs.Err()
 	}
 
-	return nil, errorf("%s: syntax error", p.errPosition())
+	p.s.errs.err(p.errPosition(), "syntax error")
+	return nil, p.s.errs
 }
 
 type Expression interface {

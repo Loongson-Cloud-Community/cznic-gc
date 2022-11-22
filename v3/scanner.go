@@ -207,6 +207,10 @@ func (e errList) Err() (r error) {
 		return nil
 	}
 
+	return e
+}
+
+func (e errList) Error() string {
 	w := 0
 	prev := errWithPosition{pos: token.Position{Offset: -1}}
 	for _, v := range e {
@@ -221,7 +225,7 @@ func (e errList) Err() (r error) {
 	for _, v := range e {
 		a = append(a, fmt.Sprint(v))
 	}
-	return fmt.Errorf("%s", strings.Join(a, "\n"))
+	return strings.Join(a, "\n")
 }
 
 func (e *errList) err(pos token.Position, msg string, args ...interface{}) {

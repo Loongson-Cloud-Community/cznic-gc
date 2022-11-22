@@ -11,6 +11,7 @@ import (
 	goparser "go/parser"
 	goscanner "go/scanner"
 	"go/token"
+	"io/fs"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -36,12 +37,13 @@ const (
 )
 
 var (
-	oBSrc   = flag.String("bsrc", runtime.GOROOT(), "")
-	oHeap   = flag.Bool("heap", false, "")
-	oRE     = flag.String("re", "", "")
-	oReport = flag.Bool("report", false, "")
-	oSrc    = flag.String("src", defaultSrc, "")
-	oTrc    = flag.Bool("trc", false, "")
+	oBSrc              = flag.String("bsrc", runtime.GOROOT(), "")
+	oHeap              = flag.Bool("heap", false, "")
+	oRE                = flag.String("re", "", "")
+	oReport            = flag.Bool("report", false, "")
+	oSrc               = flag.String("src", defaultSrc, "")
+	oTrc               = flag.Bool("trc", false, "")
+	oTrcExpectedErrors = flag.Bool("trce", false, "")
 
 	digits  = expand(unicode.Nd)
 	letters = expand(unicode.L)
@@ -169,11 +171,12 @@ type testParallel struct {
 	maxBudgetToks     int
 	minToks           int
 
-	allToks int32
-	fails   int32
-	files   int32
-	ok      int32
-	skipped int32
+	allToks  int32
+	packages int32
+	fails    int32
+	files    int32
+	ok       int32
+	skipped  int32
 }
 
 func newParallel() *testParallel {
@@ -183,11 +186,13 @@ func newParallel() *testParallel {
 	}
 }
 
-func (p *testParallel) addFail()      { atomic.AddInt32(&p.fails, 1) }
-func (p *testParallel) addFile()      { atomic.AddInt32(&p.files, 1) }
-func (p *testParallel) addOk()        { atomic.AddInt32(&p.ok, 1) }
-func (p *testParallel) addSkipped()   { atomic.AddInt32(&p.skipped, 1) }
-func (p *testParallel) addToks(n int) { atomic.AddInt32(&p.allToks, int32(n)) }
+func (p *testParallel) addPackage()    { atomic.AddInt32(&p.packages, 1) }
+func (p *testParallel) addFail()       { atomic.AddInt32(&p.fails, 1) }
+func (p *testParallel) addFile()       { atomic.AddInt32(&p.files, 1) }
+func (p *testParallel) addFileN(n int) { atomic.AddInt32(&p.files, int32(n)) }
+func (p *testParallel) addOk()         { atomic.AddInt32(&p.ok, 1) }
+func (p *testParallel) addSkipped()    { atomic.AddInt32(&p.skipped, 1) }
+func (p *testParallel) addToks(n int)  { atomic.AddInt32(&p.allToks, int32(n)) }
 
 func (p *testParallel) addAST(ast interface{}) {
 	p.Lock()
@@ -480,7 +485,7 @@ var falseNegatives = []string{
 	"golang.org/x/tools/go/analysis/passes/unreachable/testdata/src/a/a.go",
 }
 
-func isKnownBad(fn string, pos token.Position) bool {
+func isKnownBadFile(fn string, pos token.Position) bool {
 	fs := token.NewFileSet()
 	ast, err := goparser.ParseFile(fs, fn, nil, goparser.ParseComments|goparser.DeclarationErrors)
 	if err != nil {
@@ -598,8 +603,10 @@ func testParser(p *testParallel, t *testing.T, root string, gld *golden) {
 			pp.reportDeclarationErrors = true
 			ast, err := pp.parse()
 			if err != nil {
-				if isKnownBad(path, pp.errPosition()) {
-					t.Log(err)
+				if isKnownBadFile(path, pp.errPosition()) {
+					if *oTrcExpectedErrors {
+						t.Log(err)
+					}
 					pp = nil
 					p.addSkipped()
 					return nil
@@ -704,7 +711,7 @@ func testGoParser(p *testParallel, t *testing.T, root string, gld *golden) {
 
 			ast, err := goparser.ParseFile(token.NewFileSet(), path, b, goparser.DeclarationErrors)
 			if err != nil {
-				if pos, ok := extractPos(err.Error()); !ok || isKnownBad(path, pos) {
+				if pos, ok := extractPos(err.Error()); !ok || isKnownBadFile(path, pos) {
 					p.addSkipped()
 					return nil
 				}
@@ -758,7 +765,7 @@ func BenchmarkParser(b *testing.B) {
 
 				pp = newParser(newScope(nil, scPackage), path, b, *oReport)
 				if _, err := pp.parse(); err != nil {
-					if isKnownBad(path, pp.errPosition()) {
+					if isKnownBadFile(path, pp.errPosition()) {
 						return nil
 					}
 
@@ -807,7 +814,7 @@ func BenchmarkGoParser(b *testing.B) {
 				}
 
 				if _, err = goparser.ParseFile(token.NewFileSet(), path, b, goparser.DeclarationErrors); err != nil {
-					if pos, ok := extractPos(err.Error()); !ok || isKnownBad(path, pos) {
+					if pos, ok := extractPos(err.Error()); !ok || isKnownBadFile(path, pos) {
 						return nil
 					}
 
@@ -826,21 +833,18 @@ func BenchmarkGoParser(b *testing.B) {
 	b.SetBytes(sum)
 }
 
-func TestNewPackage(t *testing.T) {
-	fs := os.DirFS(".")
+func TestNewPackage1(t *testing.T) {
 	cfg, err := NewConfig(
-		fs,
-		runtime.GOOS, runtime.GOARCH,
-		nil, nil,
-		func(importPath string) (fsPath string, err error) {
+		ConfigFS(os.DirFS(".")),
+		ConfigLookup(func(dir, importPath, version string) (fsPath string, err error) {
 			return ".", nil
-		},
+		}),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	p, err := NewPackage(cfg, "")
+	p, err := cfg.NewPackage("", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -862,4 +866,128 @@ func TestNewPackage(t *testing.T) {
 		a = append(a[:10], "...")
 	}
 	t.Log(a)
+}
+
+var (
+	_ fs.FS     = (*testFS)(nil)
+	_ fs.GlobFS = (*testFS)(nil)
+)
+
+type testFS struct {
+	exposed map[string]struct{}
+	fs.FS
+	sync.Mutex
+}
+
+func newTestFS(fs fs.FS) *testFS { return &testFS{FS: fs, exposed: map[string]struct{}{}} }
+
+func (f *testFS) Glob(pattern string) ([]string, error) {
+	matches, err := fs.Glob(f.FS, pattern)
+	if err != nil {
+		return nil, err
+	}
+
+	w := 0
+	f.Lock()
+
+	defer f.Unlock()
+
+	for _, v := range matches {
+		if _, ok := f.exposed[v]; ok {
+			matches[w] = v
+			w++
+		}
+	}
+	return matches[:w], nil
+}
+
+func (f *testFS) expose(files []string) {
+	f.Lock()
+
+	defer f.Unlock()
+
+	for _, v := range files {
+		f.exposed[v] = struct{}{}
+	}
+}
+
+func TestNewPackage2(t *testing.T) {
+	debug.FreeOSMemory()
+	tfs := newTestFS(os.DirFS("/"))
+	cfg, err := NewConfig(ConfigFS(tfs))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := newParallel()
+	t.Run("GOROOT", func(t *testing.T) { testNewPackage2(tfs, cfg, p, t, filepath.Join(runtime.GOROOT(), "src")[1:]) })
+	if *oSrc != defaultSrc {
+		t.Run("src", func(t *testing.T) { testNewPackage2(tfs, cfg, p, t, (*oSrc)[1:]) })
+	}
+	if err := p.wait(); err != nil {
+		t.Error(err)
+	}
+	t.Logf("TOTAL packages %v, files %v, skip %v, ok %v, fail %v", h(p.packages), h(p.files), h(p.skipped), h(p.ok), h(p.fails))
+}
+
+func testNewPackage2(tfs *testFS, cfg *Config, p *testParallel, t *testing.T, root string) {
+	if err := fs.WalkDir(cfg.fs, root, func(path0 string, info fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() || strings.Contains(path0, "/testdata/") {
+			return nil
+		}
+
+		if re != nil && !re.MatchString(path0) {
+			return nil
+		}
+
+		matches, err := fs.Glob(tfs.FS, filepath.Join(path0, "*.go"))
+		if err != nil {
+			return err
+		}
+
+		if len(matches) == 0 {
+			return nil
+		}
+
+		tfs.expose(matches)
+		p.addPackage()
+		importPath := path0[len(root)+1:]
+		p.exec(func() error {
+			if *oTrc {
+				fmt.Fprintln(os.Stderr, importPath)
+			}
+			pkg, err := cfg.NewPackage("", importPath, "")
+			if err != nil {
+				p.addFail()
+				return err
+
+			}
+
+			for path, err := range pkg.ErrorGoFiles {
+				switch x := err.(type) {
+				case errList:
+					pos := x[0].pos
+					if !isKnownBadFile("/"+pos.Filename, pos) {
+						p.addFail()
+						return err
+					}
+				default:
+					panic(todo("%T %q %q", x, x, path))
+				}
+				p.addSkipped()
+				return nil
+			}
+
+			p.addFileN(len(pkg.GoFiles))
+			p.addOk()
+			return nil
+		})
+		return nil
+	}); err != nil {
+		t.Error(err)
+	}
 }
