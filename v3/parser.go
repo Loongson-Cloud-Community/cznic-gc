@@ -194,9 +194,10 @@ func nodeSource0(ps **source, a *[]int32, n interface{}) {
 }
 
 type AST struct {
-	FileScope  *Scope
-	SourceFile *SourceFileNode
-	EOF        Token
+	EOF          Token
+	FileScope    *Scope
+	SourceFile   *SourceFileNode
+	packageScope *Scope // For the individual file, enables parallelism, consolidated by Package.Check()
 }
 
 func (n *AST) Position() token.Position { return n.SourceFile.Position() }
@@ -341,7 +342,7 @@ func (p *parser) parse() (ast *AST, err error) {
 	}
 
 	if eof, ok := p.accept(EOF); ok && p.ix == len(p.s.toks) {
-		return &AST{p.fileScope, sourceFile, eof}, p.s.errs.Err()
+		return &AST{packageScope: p.packageScope, FileScope: p.fileScope, SourceFile: sourceFile, EOF: eof}, p.s.errs.Err()
 	}
 
 	p.s.errs.err(p.errPosition(), "syntax error")

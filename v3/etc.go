@@ -504,3 +504,30 @@ func h(v interface{}) string {
 	}
 	return fmt.Sprint(v)
 }
+
+type parallel struct {
+	limit chan struct{}
+	wg    sync.WaitGroup
+}
+
+func newParallel() *parallel {
+	return &parallel{
+		limit: make(chan struct{}, runtime.GOMAXPROCS(0)),
+	}
+}
+
+func (p *parallel) wait() { p.wg.Wait() }
+
+func (p *parallel) exec(run func()) {
+	p.limit <- struct{}{}
+	p.wg.Add(1)
+
+	go func() {
+		defer func() {
+			p.wg.Done()
+			<-p.limit
+		}()
+
+		run()
+	}()
+}

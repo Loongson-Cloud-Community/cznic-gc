@@ -48,6 +48,7 @@ var (
 	digits  = expand(unicode.Nd)
 	letters = expand(unicode.L)
 	re      *regexp.Regexp
+	wd      string
 )
 
 func TestMain(m *testing.M) {
@@ -57,6 +58,11 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 	if s := *oRE; s != "" {
 		re = regexp.MustCompile(s)
+	}
+
+	var err error
+	if wd, err = os.Getwd(); err != nil {
+		panic(err)
 	}
 
 	os.Exit(m.Run())
@@ -179,10 +185,13 @@ type testParallel struct {
 	skipped  int32
 }
 
-func newParallel() *testParallel {
+func newTestParallel(limit int) *testParallel {
+	if limit <= 0 {
+		limit = runtime.GOMAXPROCS(0)
+	}
 	return &testParallel{
 		a:     newAnalyzer(),
-		limit: make(chan struct{}, runtime.GOMAXPROCS(0)),
+		limit: make(chan struct{}, limit),
 	}
 }
 
@@ -299,7 +308,7 @@ func (p *testParallel) wait() error {
 }
 
 func TestScanner(t *testing.T) {
-	p := newParallel()
+	p := newTestParallel(0)
 	t.Run("errors", func(t *testing.T) { testScanErrors(t) })
 	t.Run("numbers", func(t *testing.T) { testNumbers(t) })
 	t.Run("src", func(t *testing.T) { testScan(p, t, *oSrc) })
@@ -511,14 +520,14 @@ func isKnownBadFile(fn string, pos token.Position) bool {
 }
 
 func TestParser(t *testing.T) {
-	gld := newGolden(t, "testdata/test_parse.golden")
+	gld := newGolden(t, fmt.Sprintf("testdata/test_parser_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
 
 	defer gld.close()
 
 	var ms0, ms runtime.MemStats
 	debug.FreeOSMemory()
 	runtime.ReadMemStats(&ms0)
-	p := newParallel()
+	p := newTestParallel(0)
 	t.Run("src", func(t *testing.T) { testParser(p, t, *oSrc, gld) })
 	t.Run("goroot", func(t *testing.T) { testParser(p, t, runtime.GOROOT(), gld) })
 	if err := p.wait(); err != nil {
@@ -647,14 +656,14 @@ func testParser(p *testParallel, t *testing.T, root string, gld *golden) {
 }
 
 func TestGoParser(t *testing.T) {
-	gld := newGolden(t, "testdata/test_parse.go.golden")
+	gld := newGolden(t, fmt.Sprintf("testdata/test_goparser_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
 
 	defer gld.close()
 
 	var ms0, ms runtime.MemStats
 	debug.FreeOSMemory()
 	runtime.ReadMemStats(&ms0)
-	p := newParallel()
+	p := newTestParallel(0)
 	t.Run("src", func(t *testing.T) { testGoParser(p, t, *oSrc, gld) })
 	t.Run("goroot", func(t *testing.T) { testGoParser(p, t, runtime.GOROOT(), gld) })
 	if err := p.wait(); err != nil {
@@ -835,94 +844,50 @@ func BenchmarkGoParser(b *testing.B) {
 
 func TestNewPackage1(t *testing.T) {
 	cfg, err := NewConfig(
-		ConfigFS(os.DirFS(".")),
+		ConfigFS(os.DirFS(wd)),
 		ConfigLookup(func(dir, importPath, version string) (fsPath string, err error) {
-			return ".", nil
+			return "", nil
 		}),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	p, err := cfg.NewPackage("", "", "")
+	p, err := cfg.NewPackage("", "", "", nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var a []string
-	for k := range p.AST {
-		a = append(a, k)
-	}
-	sort.Strings(a)
-	t.Log(a)
-	a = a[:0]
-	for k := range p.Scope.nodes {
-		if token.IsExported(k) {
-			a = append(a, k)
+	var files, names []string
+	for file, ast := range p.AST {
+		files = append(files, file)
+		for name := range ast.packageScope.nodes {
+			if token.IsExported(name) {
+				names = append(names, name)
+			}
 		}
 	}
-	sort.Strings(a)
-	if len(a) > 10 {
-		a = append(a[:10], "...")
+	sort.Strings(files)
+	t.Log(files)
+	sort.Strings(names)
+	if len(names) > 10 {
+		names = append(names[:10], "...")
 	}
-	t.Log(a)
-}
-
-var (
-	_ fs.FS     = (*testFS)(nil)
-	_ fs.GlobFS = (*testFS)(nil)
-)
-
-type testFS struct {
-	exposed map[string]struct{}
-	fs.FS
-	sync.Mutex
-}
-
-func newTestFS(fs fs.FS) *testFS { return &testFS{FS: fs, exposed: map[string]struct{}{}} }
-
-func (f *testFS) Glob(pattern string) ([]string, error) {
-	matches, err := fs.Glob(f.FS, pattern)
-	if err != nil {
-		return nil, err
-	}
-
-	w := 0
-	f.Lock()
-
-	defer f.Unlock()
-
-	for _, v := range matches {
-		if _, ok := f.exposed[v]; ok {
-			matches[w] = v
-			w++
-		}
-	}
-	return matches[:w], nil
-}
-
-func (f *testFS) expose(files []string) {
-	f.Lock()
-
-	defer f.Unlock()
-
-	for _, v := range files {
-		f.exposed[v] = struct{}{}
-	}
+	t.Log(names)
 }
 
 func TestNewPackage2(t *testing.T) {
 	debug.FreeOSMemory()
-	tfs := newTestFS(os.DirFS("/"))
-	cfg, err := NewConfig(ConfigFS(tfs))
+	cfg, err := NewConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	p := newParallel()
-	t.Run("GOROOT", func(t *testing.T) { testNewPackage2(tfs, cfg, p, t, filepath.Join(runtime.GOROOT(), "src")[1:]) })
-	if *oSrc != defaultSrc {
-		t.Run("src", func(t *testing.T) { testNewPackage2(tfs, cfg, p, t, (*oSrc)[1:]) })
+	p := newTestParallel(0)
+	root := filepath.Join(runtime.GOROOT(), "src")
+	t.Run("GOROOT", func(t *testing.T) { testNewPackage2(cfg, p, t, root) })
+	if root = *oSrc; root != defaultSrc {
+		t.Run("src", func(t *testing.T) { testNewPackage2(cfg, p, t, root) })
 	}
 	if err := p.wait(); err != nil {
 		t.Error(err)
@@ -930,8 +895,8 @@ func TestNewPackage2(t *testing.T) {
 	t.Logf("TOTAL packages %v, files %v, skip %v, ok %v, fail %v", h(p.packages), h(p.files), h(p.skipped), h(p.ok), h(p.fails))
 }
 
-func testNewPackage2(tfs *testFS, cfg *Config, p *testParallel, t *testing.T, root string) {
-	if err := fs.WalkDir(cfg.fs, root, func(path0 string, info fs.DirEntry, err error) error {
+func testNewPackage2(cfg *Config, p *testParallel, t *testing.T, root string) {
+	if err := filepath.Walk(root, func(path0 string, info fs.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -944,7 +909,7 @@ func testNewPackage2(tfs *testFS, cfg *Config, p *testParallel, t *testing.T, ro
 			return nil
 		}
 
-		matches, err := fs.Glob(tfs.FS, filepath.Join(path0, "*.go"))
+		matches, err := filepath.Glob(filepath.Join(path0, "*.go"))
 		if err != nil {
 			return err
 		}
@@ -953,21 +918,20 @@ func testNewPackage2(tfs *testFS, cfg *Config, p *testParallel, t *testing.T, ro
 			return nil
 		}
 
-		tfs.expose(matches)
 		p.addPackage()
-		importPath := path0[len(root)+1:]
+		importPath := filepath.ToSlash(path0[len(root)+1:])
 		p.exec(func() error {
 			if *oTrc {
 				fmt.Fprintln(os.Stderr, importPath)
 			}
-			pkg, err := cfg.NewPackage("", importPath, "")
+			pkg, err := cfg.NewPackage("", importPath, "", nil, true)
 			if err != nil {
 				p.addFail()
 				return err
 
 			}
 
-			for path, err := range pkg.ErrorGoFiles {
+			for path, err := range pkg.InvalidGoFiles {
 				switch x := err.(type) {
 				case errList:
 					pos := x[0].pos

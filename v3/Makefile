@@ -1,4 +1,4 @@
-.PHONY:	clean edit editor test test2 back report report2 parser2 benchmarks benchmarks2 mem memgo
+.PHONY:	clean edit editor test test2 back report report2 parser2 benchmarks benchmarks2 mem memgo race
 
 clean:
 	rm -f cpu.test mem.test *.out
@@ -11,6 +11,12 @@ edit:
 editor:
 	gofmt -l -s -w *.go
 	go test -c -o /dev/null 2>&1 | tee log-editor
+race:
+	go test -v -failfast -heap -race 2>&1 | tee log-test
+	@git diff testdata/ || true
+	@git status
+	@grep TOTAL log-test || true
+	grep 'FAIL' log-test || true
 
 test:
 	go test -v -failfast -heap 2>&1 | tee log-test

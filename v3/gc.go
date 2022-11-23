@@ -10,10 +10,10 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"unicode"
 )
 
@@ -37,25 +37,24 @@ type Config struct {
 	goos          string
 	gopath        string
 	goroot        string
-	lookup        func(dir, importPath, version string) (fsPath string, err error)
+	lookup        func(rel, importPath, version string) (fsPath string, err error)
+	parallel      *parallel
 	searchGoPaths []string
 	searchGoroot  []string
 
-	configured  bool
-	isDefaultFS bool
+	configured bool
 }
 
 // NewConfig returns a newly created config or an error, if any.
 func NewConfig(opts ...ConfigOption) (*Config, error) {
 	r := &Config{
-		env:         map[string]string{},
-		fs:          os.DirFS("/"),
-		isDefaultFS: true,
+		env:      map[string]string{},
+		parallel: newParallel(),
 	}
 
 	defer func() { r.configured = true }()
 
-	r.lookup = r.defaultLookup
+	r.lookup = r.DefaultLookup
 	for _, opt := range opts {
 		if err := opt(r); err != nil {
 			return nil, err
@@ -65,16 +64,33 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 	r.goos = r.getenv("GOOS", ctx.GOOS)
 	r.goarch = r.getenv("GOARCH", ctx.GOARCH)
 	r.goroot = r.getenv("GOROOT", ctx.GOROOT)
-	r.searchGoroot = []string{path.Join(r.goroot, "src")}
+	r.searchGoroot = []string{filepath.Join(r.goroot, "src")}
 	r.gopath = r.getenv("GOPATH", ctx.GOPATH)
 	r.searchGoPaths = filepath.SplitList(r.gopath)
 	for i, v := range r.searchGoPaths {
-		r.searchGoPaths[i] = path.Join(v, "src")
+		r.searchGoPaths[i] = filepath.Join(v, "src")
 	}
 	return r, nil
 }
 
-func (c *Config) defaultLookup(dir, importPath, version string) (fsPath string, err error) {
+func (c *Config) open(name string) (fs.File, error) {
+	if c.fs == nil {
+		return os.Open(name)
+	}
+
+	return c.fs.Open(name)
+}
+
+func (c *Config) glob(pattern string) (matches []string, err error) {
+	if c.fs == nil {
+		return filepath.Glob(pattern)
+	}
+
+	return fs.Glob(c.fs, pattern)
+}
+
+// Default lookup translates import paths, possibly relative to rel, to file system paths.
+func (c *Config) DefaultLookup(rel, importPath, version string) (fsPath string, err error) {
 	if importPath == "" {
 		return "", fmt.Errorf("import path cannot be emtpy")
 	}
@@ -101,8 +117,8 @@ func (c *Config) defaultLookup(dir, importPath, version string) (fsPath string, 
 	ip0 := importPath
 	switch slash := strings.IndexByte(importPath, '/'); {
 	case strings.HasPrefix(importPath, "./"):
-		if dir != "" {
-			return c.defaultLookup("", path.Join(filepath.ToSlash(dir), importPath), version)
+		if rel != "" {
+			panic(todo(""))
 		}
 
 		return "", fmt.Errorf("invalid import path: %s", importPath)
@@ -122,11 +138,8 @@ func (c *Config) defaultLookup(dir, importPath, version string) (fsPath string, 
 		}
 	}
 	for _, v := range search {
-		fsPath = path.Join(v, importPath)
-		if strings.HasPrefix(fsPath, "/") {
-			fsPath = fsPath[1:]
-		}
-		dir, err := c.fs.Open(fsPath)
+		fsPath = filepath.Join(v, importPath)
+		dir, err := c.open(fsPath)
 		if err != nil {
 			continue
 		}
@@ -155,6 +168,54 @@ func (c *Config) getenv(nm, deflt string) (r string) {
 	}
 
 	return deflt
+}
+
+func (c *Config) DefaultFileFilter(matchedFSPaths []string, withTests bool) (pkgFiles []string, err error) {
+	w := 0
+	for _, v := range matchedFSPaths {
+		base := filepath.Base(v)
+		base = base[:len(base)-len(filepath.Ext(base))]
+		const testSuffix = "_test"
+		if strings.HasSuffix(base, testSuffix) {
+			if !withTests {
+				continue
+			}
+
+			base = base[:len(base)-len(testSuffix)]
+		}
+		if x := strings.LastIndexByte(base, '_'); x > 0 {
+			last := base[x+1:]
+			base = base[:x]
+			var prevLast string
+			if x := strings.LastIndexByte(base, '_'); x > 0 {
+				prevLast = base[x+1:]
+			}
+			switch {
+			case last != "" && prevLast != "":
+				//  *_GOOS_GOARCH
+				if knownOS[prevLast] && prevLast != c.goos {
+					continue
+				}
+
+				if knownArch[last] && last != c.goarch {
+					continue
+				}
+			case last != "":
+				// *_GOOS or *_GOARCH
+				if knownOS[prevLast] && prevLast != c.goos {
+					continue
+				}
+
+				if knownArch[last] && last != c.goarch {
+					continue
+				}
+			}
+		}
+
+		matchedFSPaths[w] = v
+		w++
+	}
+	return matchedFSPaths[:w], nil
 }
 
 // ConfigBuildTags configures build tags.
@@ -188,7 +249,10 @@ func ConfigEnviron(env []string) ConfigOption {
 	}
 }
 
-// ConfigFS configures a file system.
+// ConfigFS configures a file system used for opening Go source files. If not
+// explicitly configured, a default os.DirFS("/") is used on Unix-like
+// operating systems. On Windows it will be rooted on the volume where
+// runtime.GOROOT() is.
 func ConfigFS(fs fs.FS) ConfigOption {
 	return func(cfg *Config) error {
 		if cfg.configured {
@@ -196,7 +260,6 @@ func ConfigFS(fs fs.FS) ConfigOption {
 		}
 
 		cfg.fs = fs
-		cfg.isDefaultFS = false
 		return nil
 	}
 }
@@ -227,32 +290,41 @@ func ConfigCache(c Cache) ConfigOption {
 
 // Package represents a Go package.
 type Package struct {
-	AST          map[string]*AST  // AST maps fsPaths of individual files to their respective ASTs
-	ErrorGoFiles map[string]error // errors for particular files, if any
-	FSPath       string
-	GoFiles      []fs.FileInfo
-	ImportPath   string
-	Scope        *Scope // Package scope.
-	Version      string
-	cfg          *Config
+	AST            map[string]*AST // AST maps fsPaths of individual files to their respective ASTs
+	FSPath         string
+	GoFiles        []fs.FileInfo
+	ImportPath     string
+	InvalidGoFiles map[string]error // errors for particular files, if any
+	Scope          *Scope           // Package scope.
+	Version        string
+	cfg            *Config
 }
 
 // NewPackage returns a Package, possibly cached, for importPath@version or an
-// error, if any.
-func (cfg *Config) NewPackage(dir, importPath, version string) (*Package, error) {
+// error, if any. The fileFilter argument can be nil, in such case
+// cfg.DefaultFileFilter is used, which ignores Files with suffix _test.go
+// unless withTests is true.
+func (cfg *Config) NewPackage(dir, importPath, version string, fileFilter func(matchedFSPaths []string, withTests bool) (pkgFiles []string, err error), withTests bool) (*Package, error) {
 	fsPath, err := cfg.lookup(dir, importPath, version)
 	if err != nil {
 		return nil, fmt.Errorf("lookup %s: %v", importPath, err)
 	}
 
-	pat := fsPath + "/*.go"
-	matches, err := fs.Glob(cfg.fs, pat)
+	pat := filepath.Join(fsPath, "*.go")
+	matches, err := cfg.glob(pat)
 	if err != nil {
 		return nil, fmt.Errorf("glob %s: %v", pat, err)
 	}
 
 	if len(matches) == 0 {
 		return nil, fmt.Errorf("no Go files in %s", fsPath)
+	}
+
+	if fileFilter == nil {
+		fileFilter = cfg.DefaultFileFilter
+	}
+	if matches, err = fileFilter(matches, withTests); err != nil {
+		return nil, fmt.Errorf("matching Go files in %s: %v", fsPath, err)
 	}
 
 	r := &Package{
@@ -264,47 +336,66 @@ func (cfg *Config) NewPackage(dir, importPath, version string) (*Package, error)
 		cfg:        cfg,
 	}
 	sort.Strings(matches)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	defer func() { wg.Wait() }()
+
 	for _, path := range matches {
-		f, err := cfg.fs.Open(path)
+		f, err := cfg.open(path)
 		if err != nil {
-			return nil, fmt.Errorf("open package file %q: %v", path, err)
+			return r, fmt.Errorf("opening file %q: %v", path, err)
 		}
 
-		//TODO parallel
-		if err := func() error {
-			defer f.Close()
+		var fi fs.FileInfo
+		if fi, err = f.Stat(); err != nil {
+			return r, fmt.Errorf("stat %s: %v", path, err)
+		}
 
-			fi, err := f.Stat()
-			if err != nil {
-				return fmt.Errorf("stat %s: %v", path, err)
-			}
+		if !fi.Mode().IsRegular() {
+			continue
+		}
 
-			if !fi.Mode().IsRegular() {
-				return nil
-			}
+		r.GoFiles = append(r.GoFiles, fi)
 
-			b, err := io.ReadAll(f)
-			if err != nil {
-				return fmt.Errorf("reading %s: %v", path, err)
-			}
+		wg.Add(1)
+		path := path
+		cfg.parallel.exec(func() {
+			var err error
 
-			//TODO must share errList
-			p := newParser(r.Scope, path, b, false)
-			ast, err := p.parse()
-			if err != nil {
-				if r.ErrorGoFiles == nil {
-					r.ErrorGoFiles = map[string]error{}
+			defer func() {
+				f.Close()
+				if err != nil {
+					mu.Lock()
+
+					defer mu.Unlock()
+
+					if r.InvalidGoFiles == nil {
+						r.InvalidGoFiles = map[string]error{}
+					}
+					r.InvalidGoFiles[path] = err
 				}
-				r.ErrorGoFiles[path] = err
-				return nil
+				wg.Done()
+			}()
+
+			var b []byte
+			if b, err = io.ReadAll(f); err != nil {
+				err = fmt.Errorf("reading %s: %v", path, err)
+				return
 			}
+
+			p := newParser(newScope(nil, scPackage), path, b, false)
+			var ast *AST
+			if ast, err = p.parse(); err != nil {
+				return
+			}
+
+			mu.Lock()
+
+			defer mu.Unlock()
 
 			r.AST[path] = ast
-			r.GoFiles = append(r.GoFiles, fi)
-			return nil
-		}(); err != nil {
-			return nil, err
-		}
+		})
 	}
 	return r, nil
 }
