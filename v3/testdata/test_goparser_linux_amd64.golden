@@ -8710,6 +8710,7 @@
 /usr/local/go/test/writebarrier.go
 /usr/local/go/test/zerodivide.go
 all_test.go
+check.go
 etc.go
 gc.go
 internal/abi.go
@@ -8724,6 +8725,7 @@ internal/ebnf/testdata/fixebugs/eof1.go
 parser.go
 scanner.go
 scanner_test.go
+stringer.go
 syslist.go
 type.go
 value.go

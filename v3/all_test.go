@@ -842,41 +842,13 @@ func BenchmarkGoParser(b *testing.B) {
 	b.SetBytes(sum)
 }
 
-func TestNewPackage1(t *testing.T) {
-	cfg, err := NewConfig(
-		ConfigFS(os.DirFS(wd)),
-		ConfigLookup(func(dir, importPath, version string) (fsPath string, err error) {
-			return "", nil
-		}),
-	)
-	if err != nil {
+func TestNewConfig(t *testing.T) {
+	if _, err := NewConfig(); err != nil {
 		t.Fatal(err)
 	}
-
-	p, err := cfg.NewPackage("", "", "", nil, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var files, names []string
-	for file, ast := range p.AST {
-		files = append(files, file)
-		for name := range ast.packageScope.nodes {
-			if token.IsExported(name) {
-				names = append(names, name)
-			}
-		}
-	}
-	sort.Strings(files)
-	t.Log(files)
-	sort.Strings(names)
-	if len(names) > 10 {
-		names = append(names[:10], "...")
-	}
-	t.Log(names)
 }
 
-func TestNewPackage2(t *testing.T) {
+func TestNewPackage(t *testing.T) {
 	debug.FreeOSMemory()
 	cfg, err := NewConfig()
 	if err != nil {
@@ -885,9 +857,9 @@ func TestNewPackage2(t *testing.T) {
 
 	p := newTestParallel(0)
 	root := filepath.Join(runtime.GOROOT(), "src")
-	t.Run("GOROOT", func(t *testing.T) { testNewPackage2(cfg, p, t, root) })
+	t.Run("GOROOT", func(t *testing.T) { testNewPackage(cfg, p, t, root) })
 	if root = *oSrc; root != defaultSrc {
-		t.Run("src", func(t *testing.T) { testNewPackage2(cfg, p, t, root) })
+		t.Run("src", func(t *testing.T) { testNewPackage(cfg, p, t, root) })
 	}
 	if err := p.wait(); err != nil {
 		t.Error(err)
@@ -895,7 +867,7 @@ func TestNewPackage2(t *testing.T) {
 	t.Logf("TOTAL packages %v, files %v, skip %v, ok %v, fail %v", h(p.packages), h(p.files), h(p.skipped), h(p.ok), h(p.fails))
 }
 
-func testNewPackage2(cfg *Config, p *testParallel, t *testing.T, root string) {
+func testNewPackage(cfg *Config, p *testParallel, t *testing.T, root string) {
 	if err := filepath.Walk(root, func(path0 string, info fs.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -924,7 +896,7 @@ func testNewPackage2(cfg *Config, p *testParallel, t *testing.T, root string) {
 			if *oTrc {
 				fmt.Fprintln(os.Stderr, importPath)
 			}
-			pkg, err := cfg.NewPackage("", importPath, "", nil, true)
+			pkg, err := cfg.NewPackage("", importPath, "", nil, true, false)
 			if err != nil {
 				p.addFail()
 				return err

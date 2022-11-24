@@ -2869,7 +2869,6 @@
 /usr/local/go/src/go/doc/synopsis_test.go
 /usr/local/go/src/go/doc/testdata/a0.go
 /usr/local/go/src/go/doc/testdata/a1.go
-/usr/local/go/src/go/doc/testdata/b.go
 /usr/local/go/src/go/doc/testdata/benchmark.go
 /usr/local/go/src/go/doc/testdata/blank.go
 /usr/local/go/src/go/doc/testdata/bugpara.go
@@ -6095,7 +6094,6 @@
 /usr/local/go/test/fixedbugs/bug026.go
 /usr/local/go/test/fixedbugs/bug027.go
 /usr/local/go/test/fixedbugs/bug028.go
-/usr/local/go/test/fixedbugs/bug030.go
 /usr/local/go/test/fixedbugs/bug031.go
 /usr/local/go/test/fixedbugs/bug035.go
 /usr/local/go/test/fixedbugs/bug037.go
@@ -6973,7 +6971,6 @@
 /usr/local/go/test/fixedbugs/issue20298.go
 /usr/local/go/test/fixedbugs/issue20333.go
 /usr/local/go/test/fixedbugs/issue20335.go
-/usr/local/go/test/fixedbugs/issue20415.go
 /usr/local/go/test/fixedbugs/issue20529.go
 /usr/local/go/test/fixedbugs/issue20530.go
 /usr/local/go/test/fixedbugs/issue20602.go
@@ -7559,7 +7556,6 @@
 /usr/local/go/test/fixedbugs/issue4510.dir/f2.go
 /usr/local/go/test/fixedbugs/issue4510.go
 /usr/local/go/test/fixedbugs/issue45175.go
-/usr/local/go/test/fixedbugs/issue4517a.go
 /usr/local/go/test/fixedbugs/issue4517b.go
 /usr/local/go/test/fixedbugs/issue4517d.go
 /usr/local/go/test/fixedbugs/issue4518.go
@@ -8744,6 +8740,7 @@
 /usr/local/go/test/writebarrier.go
 /usr/local/go/test/zerodivide.go
 all_test.go
+check.go
 etc.go
 gc.go
 internal/abi.go
@@ -8758,6 +8755,7 @@ internal/ebnf/testdata/fixebugs/eof1.go
 parser.go
 scanner.go
 scanner_test.go
+stringer.go
 syslist.go
 type.go
 value.go
