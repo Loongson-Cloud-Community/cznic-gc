@@ -49,6 +49,36 @@
 // BenchmarkParser-12      	       1	4866971733 ns/op	  14.42 MB/s	1677861368 B/op	21439664 allocs/op	// -ReceiverTypeNode
 // BenchmarkParser-12      	       1	6682847001 ns/op	  10.50 MB/s	1848930520 B/op	21439761 allocs/op	// add typer
 // BenchmarkParser-12      	       1	6585648104 ns/op	  10.66 MB/s	1849394792 B/op	21444157 allocs/op	// adjust ConstDeclNode
+// BenchmarkParser-12      	       1	9744676756 ns/op	   7.20 MB/s	1849370952 B/op	21444089 allocs/op
+// BenchmarkParser-12      	       1	9593147014 ns/op	   7.31 MB/s	1852519272 B/op	21444119 allocs/op	// visibility
+// BenchmarkParser-12      	       1	9871620821 ns/op	   7.11 MB/s	1843749584 B/op	21444042 allocs/op	// fix ArgumentsNode
+// BenchmarkParser-12      	       1	9474956583 ns/op	   7.41 MB/s	1836251360 B/op	21604044 allocs/op	// ConstSpecList
+// BenchmarkParser-12      	       1	9846149466 ns/op	   7.13 MB/s	1835826392 B/op	21588963 allocs/op	// CommClauseNode list
+// BenchmarkParser-12      	       1	9830498205 ns/op	   7.14 MB/s	1834846392 B/op	21614237 allocs/op	// ExpressionList
+// BenchmarkParser-12      	       1	4562658881 ns/op	  15.38 MB/s	1885334104 B/op	21799388 allocs/op	// IdentifierList
+// BenchmarkParser-12      	       1	6432674776 ns/op	  10.91 MB/s	1872831768 B/op	21598935 allocs/op	// adjust shor var redecl handling
+// BenchmarkParser-12      	       1	6394495797 ns/op	  10.97 MB/s	1872805216 B/op	21598935 allocs/op	// adjust ImportDeclNode
+// BenchmarkParser-12      	       1	6506595475 ns/op	  10.78 MB/s	1872157240 B/op	21605660 allocs/op	// ImportSpecList
+// BenchmarkParser-12      	       1	6485190595 ns/op	  10.82 MB/s	1871691728 B/op	21595703 allocs/op	// adjust InterfaceTypeNode
+// BenchmarkParser-12      	       1	5616776647 ns/op	  12.49 MB/s	1871761856 B/op	21596570 allocs/op	// InterfaceElemList
+// BenchmarkParser-12      	       1	4736926994 ns/op	  14.81 MB/s	1837779328 B/op	22075692 allocs/op	// KeyedElementList
+// BenchmarkParser-12      	       1	4719617701 ns/op	  14.87 MB/s	1835145200 B/op	22082920 allocs/op	// ParameterDeclList
+// BenchmarkParser-12      	       1	4448237755 ns/op	  15.78 MB/s	1835231776 B/op	22083026 allocs/op	// CommClauseList
+// BenchmarkParser-12      	       1	4640239458 ns/op	  15.12 MB/s	1834966136 B/op	22082944 allocs/op	// ImportDeclList
+// BenchmarkParser-12      	       1	4668838158 ns/op	  15.03 MB/s	1830745864 B/op	22160620 allocs/op	// TopLevelDeclList
+// BenchmarkParser-12      	       1	4445674878 ns/op	  15.78 MB/s	1809896096 B/op	22094000 allocs/op	// StatementList
+// BenchmarkParser-12      	       1	4683809001 ns/op	  14.98 MB/s	1809520808 B/op	22087573 allocs/op	// adj. StructTypeNode
+// BenchmarkParser-12      	       1	4406120706 ns/op	  15.93 MB/s	1808084864 B/op	22105650 allocs/op	// FieldDeclList
+// BenchmarkParser-12      	       1	6113834145 ns/op	  11.48 MB/s	1808035000 B/op	22106387 allocs/op	// FieldDeclList.2
+// BenchmarkParser-12      	       1	5792278415 ns/op	  12.11 MB/s	1808051800 B/op	22107236 allocs/op	// TypeElemNode
+// BenchmarkParser-12      	       1	4744119565 ns/op	  14.79 MB/s	1808073944 B/op	22107349 allocs/op	// TypeList
+// BenchmarkParser-12      	       1	4599960203 ns/op	  15.26 MB/s	1808050320 B/op	22107418 allocs/op	// TypeParamDeclNode
+// BenchmarkParser-12      	       1	4745030452 ns/op	  14.79 MB/s	1808173144 B/op	22109202 allocs/op	// TypeCaseClauseList
+// BenchmarkParser-12      	       1	6269740746 ns/op	  11.19 MB/s	1808205168 B/op	22147248 allocs/op	// VarSpecList
+// BenchmarkParser-12      	       1	5920664520 ns/op	  11.85 MB/s	1919561152 B/op	22147381 allocs/op	// values
+// BenchmarkParser-12      	       1	6190667520 ns/op	  11.34 MB/s	1940108384 B/op	22597980 allocs/op	// expand const specs
+// BenchmarkParser-12      	       1	6153078623 ns/op	  11.40 MB/s	1945020592 B/op	22597824 allocs/op	// more type checking
+// BenchmarkParser-12      	       1	6376455765 ns/op	  11.00 MB/s	1964588968 B/op	22597895 allocs/op	// more type checking
 
 package gc // modernc.org/gc/v3
 
@@ -73,9 +103,25 @@ var (
 	panicBack bool
 )
 
-type scoped struct {
-	n       Node
+type visibiliter interface {
+	Node
+	Visible() int
+	setVisible(int32)
+}
+
+type visible struct {
 	visible int32 // first token index where n is visible
+}
+
+// Visible reports the first token index where n is visible (in scope). Applies
+// to local scopes only.
+func (n *visible) Visible() int { return int(n.visible) }
+
+func (n *visible) setVisible(i int32) { n.visible = i }
+
+type scoped struct {
+	n       visibiliter
+	declTok Token
 }
 
 const (
@@ -95,30 +141,31 @@ type Scope struct {
 
 func newScope(parent *Scope, kind int) *Scope { return &Scope{Parent: parent, kind: kind} }
 
-func (s *Scope) declare(nm Token, n Node, visible int32, p *parser, initOK bool) (r Node) {
+func (s *Scope) declare(nm Token, n visibiliter, visible int32, p *parser, initOK bool) (r scoped) {
 	snm := nm.Src()
 	switch snm {
 	case "_":
-		return nil
+		return r
 	case "init":
 		if s.kind == scPackage {
 			if !initOK && p.reportDeclarationErrors {
 				p.err(nm.Position(), "in the package block, the identifier init may only be used for init function declarations")
 			}
-			return nil
+			return r
 		}
 	}
 
 	if ex, ok := s.nodes[snm]; ok {
-		return ex.n
+		return ex
 	}
 
 	if s.nodes == nil {
 		s.nodes = map[string]scoped{}
 	}
 	// trc("%v: add %s %p", nm.Position(), snm, s)
-	s.nodes[snm] = scoped{n, visible}
-	return nil
+	n.setVisible(visible)
+	s.nodes[snm] = scoped{n, nm}
+	return r
 }
 
 type lexicalScoper struct{ s *Scope }
@@ -260,9 +307,9 @@ func (p *parser) err(pos token.Position, msg string, args ...interface{}) {
 	p.s.errs.err(pos, msg, args...)
 }
 
-func (p *parser) declare(s *Scope, nm Token, n Node, visible int32, initOK bool) {
-	if ex := s.declare(nm, n, visible, p, initOK); ex != nil && p.reportDeclarationErrors {
-		p.err(nm.Position(), "%s redeclared, previous declaration at %v: (%p)", nm.Src(), ex.Position(), s)
+func (p *parser) declare(s *Scope, nm Token, n visibiliter, visible int32, initOK bool) {
+	if ex := s.declare(nm, n, visible, p, initOK); ex.declTok.IsValid() && p.reportDeclarationErrors {
+		p.err(nm.Position(), "%s redeclared, previous declaration at %v: (%p)", nm.Src(), ex.declTok.Position(), s)
 	}
 }
 
@@ -355,6 +402,7 @@ func (p *parser) parse() (ast *AST, err error) {
 type Expression interface {
 	Node
 	Value
+	check(*ctx)
 	typ
 }
 
@@ -362,7 +410,8 @@ type BinaryExpression struct {
 	LHS Expression
 	Op  Token
 	RHS Expression
-	typ
+	typer
+	valuer
 }
 
 // Position implements Node.
@@ -419,10 +468,12 @@ func (p *parser) additiveExpression(preBlock bool) (r Expression) {
 //
 //	AliasDecl = identifier "=" Type .
 type AliasDeclNode struct {
-	lexicalScoper
 	IDENT    Token
 	ASSIGN   Token
 	TypeNode *TypeNode
+	lexicalScoper
+
+	visible
 }
 
 // Source implements Node.
@@ -473,14 +524,13 @@ func (p *parser) aliasDecl() (r *AliasDeclNode) {
 //
 //	Arguments = "(" [ ( ExpressionList | Type [ "," ExpressionList ] ) [ "..." ] [ "," ] ] ")" .
 type ArgumentsNode struct {
-	LPAREN          Token
-	ExpressionList  *ExpressionListNode
-	TypeNode        *TypeNode
-	COMMA           Token
-	ExpressionList2 *ExpressionListNode
-	ELLIPSIS        Token
-	COMMA2          Token
-	RPAREN          Token
+	LPAREN         Token
+	ExpressionList *ExpressionListNode
+	TypeNode       *TypeNode
+	COMMA          Token
+	ELLIPSIS       Token
+	COMMA2         Token
+	RPAREN         Token
 }
 
 // Source implements Node.
@@ -491,15 +541,14 @@ func (n *ArgumentsNode) Position() token.Position { return n.LPAREN.Position() }
 
 func (p *parser) arguments() *ArgumentsNode {
 	var (
-		ok              bool
-		lparenTok       Token
-		expressionList  *ExpressionListNode
-		typeNode        *TypeNode
-		commaTok        Token
-		expressionList2 *ExpressionListNode
-		ellipsisTok     Token
-		comma2Tok       Token
-		rparenTok       Token
+		ok             bool
+		lparenTok      Token
+		expressionList *ExpressionListNode
+		typeNode       *TypeNode
+		commaTok       Token
+		ellipsisTok    Token
+		comma2Tok      Token
+		rparenTok      Token
 	)
 	// ebnf.Sequence "(" [ ( ExpressionList | Type [ "," ExpressionList ] ) [ "..." ] [ "," ] ] ")" ctx [LPAREN]
 	{
@@ -555,7 +604,7 @@ func (p *parser) arguments() *ArgumentsNode {
 								// *ebnf.Token "," ctx [COMMA]
 								commaTok = p.expect(COMMA)
 								// *ebnf.Name ExpressionList ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-								if expressionList2 = p.expressionList(false); expressionList2 == nil {
+								if expressionList = p.expressionList(false); expressionList == nil {
 									p.back(ix)
 									goto _6
 								}
@@ -564,13 +613,13 @@ func (p *parser) arguments() *ArgumentsNode {
 						goto _7
 					_6:
 						commaTok = Token{}
-						expressionList2 = nil
+						expressionList = nil
 					_7:
 					}
 					break
 				_5:
 					commaTok = Token{}
-					expressionList2 = nil
+					expressionList = nil
 					typeNode = nil
 					p.back(ix)
 					goto _0
@@ -605,14 +654,13 @@ func (p *parser) arguments() *ArgumentsNode {
 		}
 	}
 	return &ArgumentsNode{
-		LPAREN:          lparenTok,
-		ExpressionList:  expressionList,
-		TypeNode:        typeNode,
-		COMMA:           commaTok,
-		ExpressionList2: expressionList2,
-		ELLIPSIS:        ellipsisTok,
-		COMMA2:          comma2Tok,
-		RPAREN:          rparenTok,
+		LPAREN:         lparenTok,
+		ExpressionList: expressionList,
+		TypeNode:       typeNode,
+		COMMA:          commaTok,
+		ELLIPSIS:       ellipsisTok,
+		COMMA2:         comma2Tok,
+		RPAREN:         rparenTok,
 	}
 }
 
@@ -755,13 +803,14 @@ func (p *parser) assignment(preBlock bool) *AssignmentNode {
 type BasicLitNode struct {
 	Token Token
 	typer
+	valuer
 }
 
 // Source implements Node.
 func (n *BasicLitNode) Source(full bool) string { return nodeSource(n, full) }
 
 // Position implements Node.
-func (n *BasicLitNode) Position() token.Position { panic("TODO") }
+func (n *BasicLitNode) Position() token.Position { return n.Token.Position() }
 
 func (p *parser) basicLit() Expression {
 	// ebnf.Alternative int_lit | float_lit | imaginary_lit | rune_lit | string_lit ctx [CHAR, FLOAT, IMAG, INT, STRING]
@@ -1125,6 +1174,7 @@ type CompositeLitNode struct {
 	LiteralType  *LiteralTypeNode
 	LiteralValue *LiteralValueNode
 	typer
+	valuer
 }
 
 // Source implements Node.
@@ -1190,17 +1240,29 @@ func (p *parser) condition(preBlock bool) *ConditionNode {
 	}
 }
 
+// ConstSpecListNode represents the production
+//
+//	ConstSpecListNode = { ConstSpec ";" } .
+type ConstSpecListNode struct {
+	ConstSpec *ConstSpecNode
+	SEMICOLON Token
+	List      *ConstSpecListNode
+}
+
+// Source implements Node.
+func (n *ConstSpecListNode) Source(full bool) string { return nodeSource(n, full) }
+
+// Position implements Node.
+func (n *ConstSpecListNode) Position() token.Position { return n.ConstSpec.Position() }
+
 // ConstDeclNode represents the production
 //
 //	ConstDecl = "const" ( ConstSpec | "(" { ConstSpec ";" } ")" ) .
 type ConstDeclNode struct {
-	CONST  Token
-	LPAREN Token
-	List   []struct {
-		ConstSpec *ConstSpecNode
-		SEMICOLON Token
-	}
-	RPAREN Token
+	CONST         Token
+	LPAREN        Token
+	ConstSpecList *ConstSpecListNode
+	RPAREN        Token
 }
 
 // Source implements Node.
@@ -1215,10 +1277,7 @@ func (p *parser) constDecl() *ConstDeclNode {
 		constTok  Token
 		constSpec *ConstSpecNode
 		lparenTok Token
-		list      []struct {
-			ConstSpec *ConstSpecNode
-			SEMICOLON Token
-		}
+		list      *ConstSpecListNode
 		rparenTok Token
 	)
 	// ebnf.Sequence "const" ( ConstSpec | "(" { ConstSpec ";" } [ ConstSpec ] ")" ) ctx [CONST]
@@ -1239,10 +1298,9 @@ func (p *parser) constDecl() *ConstDeclNode {
 			if constSpec = p.constSpec(); constSpec == nil {
 				goto _0
 			}
-			list = append(list, struct {
-				ConstSpec *ConstSpecNode
-				SEMICOLON Token
-			}{ConstSpec: constSpec})
+			list = &ConstSpecListNode{
+				ConstSpec: constSpec,
+			}
 			break
 		_0:
 			constSpec = nil
@@ -1255,6 +1313,7 @@ func (p *parser) constDecl() *ConstDeclNode {
 				// *ebnf.Token "(" ctx [LPAREN]
 				lparenTok = p.expect(LPAREN)
 				// *ebnf.Repetition { ConstSpec ";" } ctx []
+				var item *ConstSpecListNode
 			_4:
 				{
 					var constSpec *ConstSpecNode
@@ -1269,10 +1328,16 @@ func (p *parser) constDecl() *ConstDeclNode {
 							goto _5
 						}
 						if p.c() == RPAREN {
-							list = append(list, struct {
-								ConstSpec *ConstSpecNode
-								SEMICOLON Token
-							}{ConstSpec: constSpec})
+							next := &ConstSpecListNode{
+								ConstSpec: constSpec,
+							}
+							if item != nil {
+								item.List = next
+							}
+							item = next
+							if list == nil {
+								list = item
+							}
 							break
 						}
 
@@ -1281,10 +1346,17 @@ func (p *parser) constDecl() *ConstDeclNode {
 							p.back(ix)
 							goto _5
 						}
-						list = append(list, struct {
-							ConstSpec *ConstSpecNode
-							SEMICOLON Token
-						}{ConstSpec: constSpec, SEMICOLON: semicolonTok})
+						next := &ConstSpecListNode{
+							ConstSpec: constSpec,
+							SEMICOLON: semicolonTok,
+						}
+						if item != nil {
+							item.List = next
+						}
+						item = next
+						if list == nil {
+							list = item
+						}
 						goto _4
 					}
 				_5:
@@ -1306,10 +1378,10 @@ func (p *parser) constDecl() *ConstDeclNode {
 		}
 	}
 	return &ConstDeclNode{
-		CONST:  constTok,
-		LPAREN: lparenTok,
-		List:   list,
-		RPAREN: rparenTok,
+		CONST:         constTok,
+		LPAREN:        lparenTok,
+		ConstSpecList: list,
+		RPAREN:        rparenTok,
 	}
 }
 
@@ -1317,11 +1389,13 @@ func (p *parser) constDecl() *ConstDeclNode {
 //
 //	ConstSpec = IdentifierList [ [ Type ] "=" ExpressionList ] .
 type ConstSpecNode struct {
-	lexicalScoper
 	IdentifierList *IdentifierListNode
 	TypeNode       *TypeNode
 	ASSIGN         Token
 	ExpressionList *ExpressionListNode
+	lexicalScoper
+
+	visible
 }
 
 // Source implements Node.
@@ -1397,9 +1471,27 @@ func (p *parser) constSpec() (r *ConstSpecNode) {
 		ASSIGN:         assignTok,
 		ExpressionList: expressionList,
 	}
+	ids := r.IdentifierList.Len()
+	exprs := r.ExpressionList.Len()
+	if exprs != 0 && ids != exprs {
+		p.err(r.ASSIGN.Position(), "different number of identifiers and expressions: %v %v", ids, exprs)
+	}
+	check := ids
+	if exprs < ids {
+		check = exprs
+	}
 	visible := int32(p.ix)
-	for _, v := range identifierList.List {
-		p.declare(sc, v.IDENT, r, visible, false)
+	for n, e := r.IdentifierList, r.ExpressionList; check != 0 && n != nil; n = n.List {
+		check--
+		n2 := *n
+		n2.List = nil
+		e2 := *e
+		e2.List = nil
+		e = e.List
+		cs := *r
+		cs.IdentifierList = &n2
+		cs.ExpressionList = &e2
+		p.declare(sc, n.IDENT, &cs, visible, false)
 	}
 	return r
 }
@@ -1456,6 +1548,7 @@ type ConversionNode struct {
 	COMMA      Token
 	RPAREN     Token
 	typer
+	valuer
 }
 
 // Source implements Node.
@@ -1701,22 +1794,23 @@ func (p *parser) emptyStmt() *EmptyStmtNode {
 	return &EmptyStmtNode{}
 }
 
-// ExprCaseClauseNode represents the production
+// ExprCaseClauseListNode represents the production
 //
 //	ExprCaseClause = ExprSwitchCase ":" StatementList .
-type ExprCaseClauseNode struct {
+type ExprCaseClauseListNode struct {
 	ExprSwitchCase *ExprSwitchCaseNode
 	COLON          Token
 	StatementList  *StatementListNode
+	List           *ExprCaseClauseListNode
 }
 
 // Source implements Node.
-func (n *ExprCaseClauseNode) Source(full bool) string { return nodeSource(n, full) }
+func (n *ExprCaseClauseListNode) Source(full bool) string { return nodeSource(n, full) }
 
 // Position implements Node.
-func (n *ExprCaseClauseNode) Position() token.Position { return n.ExprSwitchCase.Position() }
+func (n *ExprCaseClauseListNode) Position() token.Position { return n.ExprSwitchCase.Position() }
 
-func (p *parser) exprCaseClause() *ExprCaseClauseNode {
+func (p *parser) exprCaseClause() *ExprCaseClauseListNode {
 	var (
 		ok             bool
 		exprSwitchCase *ExprSwitchCaseNode
@@ -1749,7 +1843,7 @@ func (p *parser) exprCaseClause() *ExprCaseClauseNode {
 			}
 		}
 	}
-	return &ExprCaseClauseNode{
+	return &ExprCaseClauseListNode{
 		ExprSwitchCase: exprSwitchCase,
 		COLON:          colonTok,
 		StatementList:  statementList,
@@ -1818,13 +1912,13 @@ func (p *parser) exprSwitchCase() *ExprSwitchCaseNode {
 //
 //	ExprSwitchStmt = "switch" [ Expression ] "{" { ExprCaseClause } "}" | "switch" SimpleStmt ";" [ Expression ] "{" { ExprCaseClause } "}" .
 type ExprSwitchStmtNode struct {
-	SWITCH     Token
-	Expression Expression
-	LBRACE     Token
-	List       []struct{ ExprCaseClause *ExprCaseClauseNode }
-	RBRACE     Token
-	SimpleStmt *SimpleStmtNode
-	SEMICOLON  Token
+	SWITCH             Token
+	Expression         Expression
+	LBRACE             Token
+	ExprCaseClauseList *ExprCaseClauseListNode
+	RBRACE             Token
+	SimpleStmt         *SimpleStmtNode
+	SEMICOLON          Token
 }
 
 // Source implements Node.
@@ -1839,7 +1933,7 @@ func (p *parser) exprSwitchStmt() *ExprSwitchStmtNode {
 		switchTok    Token
 		expression   Expression
 		lbraceTok    Token
-		list         []struct{ ExprCaseClause *ExprCaseClauseNode }
+		list         *ExprCaseClauseListNode
 		rbraceTok    Token
 		simpleStmt   *SimpleStmtNode
 		semicolonTok Token
@@ -1870,16 +1964,23 @@ func (p *parser) exprSwitchStmt() *ExprSwitchStmtNode {
 				goto _0
 			}
 			// *ebnf.Repetition { ExprCaseClause } ctx []
+			var item *ExprCaseClauseListNode
 		_3:
 			{
-				var exprCaseClause *ExprCaseClauseNode
+				var exprCaseClause *ExprCaseClauseListNode
 				switch p.c() {
 				case CASE, DEFAULT:
 					// *ebnf.Name ExprCaseClause ctx [CASE, DEFAULT]
 					if exprCaseClause = p.exprCaseClause(); exprCaseClause == nil {
 						goto _4
 					}
-					list = append(list, struct{ ExprCaseClause *ExprCaseClauseNode }{ExprCaseClause: exprCaseClause})
+					if item != nil {
+						item.List = exprCaseClause
+					}
+					item = exprCaseClause
+					if list == nil {
+						list = item
+					}
 					goto _3
 				}
 			_4:
@@ -1932,16 +2033,23 @@ func (p *parser) exprSwitchStmt() *ExprSwitchStmtNode {
 				goto _5
 			}
 			// *ebnf.Repetition { ExprCaseClause } ctx []
+			var item *ExprCaseClauseListNode
 		_8:
 			{
-				var exprCaseClause *ExprCaseClauseNode
+				var exprCaseClause *ExprCaseClauseListNode
 				switch p.c() {
 				case CASE, DEFAULT:
 					// *ebnf.Name ExprCaseClause ctx [CASE, DEFAULT]
 					if exprCaseClause = p.exprCaseClause(); exprCaseClause == nil {
 						goto _9
 					}
-					list = append(list, struct{ ExprCaseClause *ExprCaseClauseNode }{ExprCaseClause: exprCaseClause})
+					if item != nil {
+						item.List = exprCaseClause
+					}
+					item = exprCaseClause
+					if list == nil {
+						list = item
+					}
 					goto _8
 				}
 			_9:
@@ -1965,13 +2073,13 @@ func (p *parser) exprSwitchStmt() *ExprSwitchStmtNode {
 		return nil
 	}
 	return &ExprSwitchStmtNode{
-		SWITCH:     switchTok,
-		Expression: expression,
-		LBRACE:     lbraceTok,
-		List:       list,
-		RBRACE:     rbraceTok,
-		SimpleStmt: simpleStmt,
-		SEMICOLON:  semicolonTok,
+		SWITCH:             switchTok,
+		Expression:         expression,
+		LBRACE:             lbraceTok,
+		ExprCaseClauseList: list,
+		RBRACE:             rbraceTok,
+		SimpleStmt:         simpleStmt,
+		SEMICOLON:          semicolonTok,
 	}
 }
 
@@ -2020,26 +2128,35 @@ func (p *parser) expression(preBlock bool) (r Expression) {
 //
 //	ExpressionList = Expression { "," Expression } .
 type ExpressionListNode struct {
+	COMMA      Token
 	Expression Expression
-	List       []struct {
-		COMMA      Token
-		Expression Expression
+	List       *ExpressionListNode
+}
+
+// Len reports the number of items in n.
+func (n *ExpressionListNode) Len() (r int) {
+	for ; n != nil; n = n.List {
+		r++
 	}
+	return r
 }
 
 // Source implements Node.
 func (n *ExpressionListNode) Source(full bool) string { return nodeSource(n, full) }
 
 // Position implements Node.
-func (n *ExpressionListNode) Position() token.Position { return n.Expression.Position() }
+func (n *ExpressionListNode) Position() token.Position {
+	if n.COMMA.IsValid() {
+		return n.COMMA.Position()
+	}
+
+	return n.Expression.Position()
+}
 
 func (p *parser) expressionList(preBlock bool) *ExpressionListNode {
 	var (
-		expression Expression
-		list       []struct {
-			COMMA      Token
-			Expression Expression
-		}
+		expression           Expression
+		expressionList, last *ExpressionListNode
 	)
 	// ebnf.Sequence Expression { "," Expression } ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
 	{
@@ -2049,11 +2166,14 @@ func (p *parser) expressionList(preBlock bool) *ExpressionListNode {
 			p.back(ix)
 			return nil
 		}
+		expressionList = &ExpressionListNode{
+			Expression: expression,
+		}
+		last = expressionList
 		// *ebnf.Repetition { "," Expression } ctx []
 	_0:
 		{
 			var commaTok Token
-			var expression Expression
 			switch p.c() {
 			case COMMA:
 				// ebnf.Sequence "," Expression ctx [COMMA]
@@ -2070,19 +2190,18 @@ func (p *parser) expressionList(preBlock bool) *ExpressionListNode {
 					p.back(ix)
 					goto _1
 				}
-				list = append(list, struct {
-					COMMA      Token
-					Expression Expression
-				}{COMMA: commaTok, Expression: expression})
+				next := &ExpressionListNode{
+					COMMA:      commaTok,
+					Expression: expression,
+				}
+				last.List = next
+				last = next
 				goto _0
 			}
 		_1:
 		}
 	}
-	return &ExpressionListNode{
-		Expression: expression,
-		List:       list,
-	}
+	return expressionList
 }
 
 // FallthroughStmtNode represents the production
@@ -2432,12 +2551,14 @@ func (p *parser) functionBody() *FunctionBodyNode {
 //
 //	FunctionDecl = "func" FunctionName [ TypeParameters ] Signature [ FunctionBody ] .
 type FunctionDeclNode struct {
-	lexicalScoper
 	FUNC           Token
 	FunctionName   *FunctionNameNode
 	TypeParameters *TypeParametersNode
 	Signature      *SignatureNode
 	FunctionBody   *FunctionBodyNode
+	lexicalScoper
+
+	visible
 }
 
 // Source implements Node.
@@ -2524,6 +2645,7 @@ type FunctionLitNode struct {
 	Signature    *SignatureNode
 	FunctionBody *FunctionBodyNode
 	typer
+	valuer
 }
 
 // Source implements Node.
@@ -2721,32 +2843,45 @@ func (p *parser) gotoStmt() *GotoStmtNode {
 //
 //	IdentifierList = identifier { "," identifier } .
 type IdentifierListNode struct {
+	COMMA Token
 	IDENT Token
-	List  []struct {
-		COMMA Token
-		IDENT Token
+	List  *IdentifierListNode
+}
+
+// Len reports the number of items in n.
+func (n *IdentifierListNode) Len() (r int) {
+	for ; n != nil; n = n.List {
+		r++
 	}
+	return r
 }
 
 // Source implements Node.
 func (n *IdentifierListNode) Source(full bool) string { return nodeSource(n, full) }
 
 // Position implements Node.
-func (n *IdentifierListNode) Position() token.Position { return n.IDENT.Position() }
+func (n *IdentifierListNode) Position() token.Position {
+	if n.COMMA.IsValid() {
+		return n.COMMA.Position()
+	}
+
+	return n.IDENT.Position()
+}
 
 func (p *parser) identifierList() *IdentifierListNode {
 	var (
-		identTok Token
-		list     []struct {
-			COMMA Token
-			IDENT Token
-		}
+		identTok   Token
+		list, last *IdentifierListNode
 	)
 	// ebnf.Sequence identifier { "," identifier } ctx [IDENT]
 	{
 		// *ebnf.Name identifier ctx [IDENT]
 		identTok = p.expect(IDENT)
 		// *ebnf.Repetition { "," identifier } ctx []
+		list = &IdentifierListNode{
+			IDENT: identTok,
+		}
+		last = list
 	_0:
 		{
 			var commaTok Token
@@ -2761,19 +2896,18 @@ func (p *parser) identifierList() *IdentifierListNode {
 				commaTok = p.expect(COMMA)
 				// *ebnf.Name identifier ctx [IDENT]
 				identTok = p.expect(IDENT)
-				list = append(list, struct {
-					COMMA Token
-					IDENT Token
-				}{COMMA: commaTok, IDENT: identTok})
+				next := &IdentifierListNode{
+					COMMA: commaTok,
+					IDENT: identTok,
+				}
+				last.List = next
+				last = next
 				goto _0
 			}
 		_1:
 		}
 	}
-	return &IdentifierListNode{
-		IDENT: identTok,
-		List:  list,
-	}
+	return list
 }
 
 // IfStmtNode represents the production
@@ -3013,17 +3147,29 @@ func (p *parser) ifStmt() *IfStmtNode {
 	}
 }
 
+// ImportSpecListNode represents the production
+//
+//	ImportSpecListNode = { ImportSpec ";" } .
+type ImportSpecListNode struct {
+	ImportSpec *ImportSpecNode
+	SEMICOLON  Token
+	List       *ImportSpecListNode
+}
+
+// Source implements Node.
+func (n *ImportSpecListNode) Source(full bool) string { return nodeSource(n, full) }
+
+// Position implements Node.
+func (n *ImportSpecListNode) Position() token.Position { return n.ImportSpec.Position() }
+
 // ImportDeclNode represents the production
 //
 //	ImportDecl = "import" ( ImportSpec | "(" { ImportSpec ";" } ")" ) .
 type ImportDeclNode struct {
 	IMPORT         Token
 	LPAREN         Token
-	ImportSpecList []struct {
-		ImportSpec *ImportSpecNode
-		SEMICOLON  Token
-	}
-	RPAREN Token
+	ImportSpecList *ImportSpecListNode
+	RPAREN         Token
 }
 
 // Source implements Node.
@@ -3038,12 +3184,8 @@ func (p *parser) importDecl() *ImportDeclNode {
 		importTok  Token
 		importSpec *ImportSpecNode
 		lparenTok  Token
-		list       []struct {
-			ImportSpec *ImportSpecNode
-			SEMICOLON  Token
-		}
-		importSpec2 *ImportSpecNode
-		rparenTok   Token
+		list, last *ImportSpecListNode
+		rparenTok  Token
 	)
 	// ebnf.Sequence "import" ( ImportSpec | "(" { ImportSpec ";" } [ ImportSpec ] ")" ) ctx [IMPORT]
 	{
@@ -3063,10 +3205,9 @@ func (p *parser) importDecl() *ImportDeclNode {
 			if importSpec = p.importSpec(); importSpec == nil {
 				goto _0
 			}
-			list = append(list, struct {
-				ImportSpec *ImportSpecNode
-				SEMICOLON  Token
-			}{ImportSpec: importSpec})
+			list = &ImportSpecListNode{
+				ImportSpec: importSpec,
+			}
 			break
 		_0:
 			importSpec = nil
@@ -3094,33 +3235,33 @@ func (p *parser) importDecl() *ImportDeclNode {
 						}
 						// *ebnf.Token ";" ctx []
 						if semicolonTok, ok = p.accept(SEMICOLON); !ok {
-							p.back(ix)
+							next := &ImportSpecListNode{
+								ImportSpec: importSpec,
+							}
+							if last != nil {
+								last.List = next
+							}
+							if list == nil {
+								list = next
+							}
+							last = next
 							goto _5
 						}
-						list = append(list, struct {
-							ImportSpec *ImportSpecNode
-							SEMICOLON  Token
-						}{ImportSpec: importSpec, SEMICOLON: semicolonTok})
+						next := &ImportSpecListNode{
+							ImportSpec: importSpec,
+							SEMICOLON:  semicolonTok,
+						}
+						if last != nil {
+							last.List = next
+						}
+						if list == nil {
+							list = next
+						}
+						last = next
 						goto _4
 					}
 				_5:
 				}
-				// *ebnf.Option [ ImportSpec ] ctx []
-				switch p.c() {
-				case IDENT, PERIOD, STRING:
-					// *ebnf.Name ImportSpec ctx [IDENT, PERIOD, STRING]
-					if importSpec2 = p.importSpec(); importSpec2 == nil {
-						goto _6
-					}
-					list = append(list, struct {
-						ImportSpec *ImportSpecNode
-						SEMICOLON  Token
-					}{ImportSpec: importSpec2})
-				}
-				goto _7
-			_6:
-				importSpec2 = nil
-			_7:
 				// *ebnf.Token ")" ctx []
 				if rparenTok, ok = p.accept(RPAREN); !ok {
 					p.back(ix)
@@ -3129,7 +3270,6 @@ func (p *parser) importDecl() *ImportDeclNode {
 			}
 			break
 		_2:
-			importSpec2 = nil
 			lparenTok = Token{}
 			rparenTok = Token{}
 			p.back(ix)
@@ -3321,7 +3461,7 @@ func (p *parser) initStmt() *InitStmtNode {
 //	InterfaceElem = MethodElem | TypeElem .
 type InterfaceElemNode struct {
 	MethodElem *MethodElemNode
-	TypeElem   *TypeElemNode
+	TypeElem   *TypeElemListNode
 }
 
 // Source implements Node.
@@ -3333,7 +3473,7 @@ func (n *InterfaceElemNode) Position() token.Position { panic("TODO") }
 func (p *parser) interfaceElem() *InterfaceElemNode {
 	var (
 		methodElem *MethodElemNode
-		typeElem   *TypeElemNode
+		typeElem   *TypeElemListNode
 	)
 	// ebnf.Alternative MethodElem | TypeElem ctx [ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT, TILDE]
 	switch p.c() {
@@ -3371,18 +3511,29 @@ func (p *parser) interfaceElem() *InterfaceElemNode {
 	}
 }
 
+// InterfaceElemListNode represents the production
+//
+//	InterfaceElemListNode = { InterfaceElem ";" } .
+type InterfaceElemListNode struct {
+	InterfaceElem *InterfaceElemNode
+	SEMICOLON     Token
+	List          *InterfaceElemListNode
+}
+
+// Source implements Node.
+func (n *InterfaceElemListNode) Source(full bool) string { return nodeSource(n, full) }
+
+// Position implements Node.
+func (n *InterfaceElemListNode) Position() token.Position { return n.InterfaceElem.Position() }
+
 // InterfaceTypeNode represents the production
 //
-//	InterfaceType = "interface" "{" { InterfaceElem ";" } [ InterfaceElem ] "}" .
+//	InterfaceType = "interface" "{" { InterfaceElem ";" } "}" .
 type InterfaceTypeNode struct {
-	INTERFACE Token
-	LBRACE    Token
-	List      []struct {
-		InterfaceElem *InterfaceElemNode
-		SEMICOLON     Token
-	}
-	InterfaceElem *InterfaceElemNode
-	RBRACE        Token
+	INTERFACE         Token
+	LBRACE            Token
+	InterfaceElemList *InterfaceElemListNode
+	RBRACE            Token
 }
 
 // Source implements Node.
@@ -3396,12 +3547,8 @@ func (p *parser) interfaceType() *InterfaceTypeNode {
 		ok           bool
 		interfaceTok Token
 		lbraceTok    Token
-		list         []struct {
-			InterfaceElem *InterfaceElemNode
-			SEMICOLON     Token
-		}
-		interfaceElem *InterfaceElemNode
-		rbraceTok     Token
+		list, last   *InterfaceElemListNode
+		rbraceTok    Token
 	)
 	// ebnf.Sequence "interface" "{" { InterfaceElem ";" } [ InterfaceElem ] "}" ctx [INTERFACE]
 	{
@@ -3429,29 +3576,33 @@ func (p *parser) interfaceType() *InterfaceTypeNode {
 				}
 				// *ebnf.Token ";" ctx []
 				if semicolonTok, ok = p.accept(SEMICOLON); !ok {
-					p.back(ix)
+					next := &InterfaceElemListNode{
+						InterfaceElem: interfaceElem,
+					}
+					if last != nil {
+						last.List = next
+					}
+					if list == nil {
+						list = next
+					}
+					last = next
 					goto _1
 				}
-				list = append(list, struct {
-					InterfaceElem *InterfaceElemNode
-					SEMICOLON     Token
-				}{InterfaceElem: interfaceElem, SEMICOLON: semicolonTok})
+				next := &InterfaceElemListNode{
+					InterfaceElem: interfaceElem,
+					SEMICOLON:     semicolonTok,
+				}
+				if last != nil {
+					last.List = next
+				}
+				if list == nil {
+					list = next
+				}
+				last = next
 				goto _0
 			}
 		_1:
 		}
-		// *ebnf.Option [ InterfaceElem ] ctx []
-		switch p.c() {
-		case ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT, TILDE:
-			// *ebnf.Name InterfaceElem ctx [ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT, TILDE]
-			if interfaceElem = p.interfaceElem(); interfaceElem == nil {
-				goto _2
-			}
-		}
-		goto _3
-	_2:
-		interfaceElem = nil
-	_3:
 		// *ebnf.Token "}" ctx []
 		if rbraceTok, ok = p.accept(RBRACE); !ok {
 			p.back(ix)
@@ -3459,11 +3610,10 @@ func (p *parser) interfaceType() *InterfaceTypeNode {
 		}
 	}
 	return &InterfaceTypeNode{
-		INTERFACE:     interfaceTok,
-		LBRACE:        lbraceTok,
-		List:          list,
-		InterfaceElem: interfaceElem,
-		RBRACE:        rbraceTok,
+		INTERFACE:         interfaceTok,
+		LBRACE:            lbraceTok,
+		InterfaceElemList: list,
+		RBRACE:            rbraceTok,
 	}
 }
 
@@ -3750,16 +3900,28 @@ func (p *parser) literalType() *LiteralTypeNode {
 	}
 }
 
+// KeyedElementListNode represents the production
+//
+//	KeyedElementListNode = { KeyedElement "," } .
+type KeyedElementListNode struct {
+	KeyedElement *KeyedElementNode
+	COMMA        Token
+	List         *KeyedElementListNode
+}
+
+// Source implements Node.
+func (n *KeyedElementListNode) Source(full bool) string { return nodeSource(n, full) }
+
+// Position implements Node.
+func (n *KeyedElementListNode) Position() token.Position { return n.KeyedElement.Position() }
+
 // LiteralValueNode represents the production
 //
 //	LiteralValue = "{" { KeyedElement "," } "}" .
 type LiteralValueNode struct {
-	LBRACE Token
-	List   []struct {
-		KeyedElement *KeyedElementNode
-		COMMA        Token
-	}
-	RBRACE Token
+	LBRACE           Token
+	KeyedElementList *KeyedElementListNode
+	RBRACE           Token
 }
 
 // Source implements Node.
@@ -3770,12 +3932,9 @@ func (n *LiteralValueNode) Position() token.Position { return n.LBRACE.Position(
 
 func (p *parser) literalValue() *LiteralValueNode {
 	var (
-		ok        bool
-		lbraceTok Token
-		list      []struct {
-			KeyedElement *KeyedElementNode
-			COMMA        Token
-		}
+		ok           bool
+		lbraceTok    Token
+		list, last   *KeyedElementListNode
 		keyedElement *KeyedElementNode
 		rbraceTok    Token
 	)
@@ -3796,16 +3955,29 @@ func (p *parser) literalValue() *LiteralValueNode {
 				switch p.c() {
 				case COMMA:
 					// *ebnf.Token "," ctx [COMMA]
-					list = append(list, struct {
-						KeyedElement *KeyedElementNode
-						COMMA        Token
-					}{keyedElement, p.consume()})
+					next := &KeyedElementListNode{
+						KeyedElement: keyedElement,
+						COMMA:        p.consume(),
+					}
+					if last != nil {
+						last.List = next
+					}
+					if list == nil {
+						list = next
+					}
+					last = next
 					continue
 				case RBRACE:
-					list = append(list, struct {
-						KeyedElement *KeyedElementNode
-						COMMA        Token
-					}{KeyedElement: keyedElement})
+					next := &KeyedElementListNode{
+						KeyedElement: keyedElement,
+					}
+					if last != nil {
+						last.List = next
+					}
+					if list == nil {
+						list = next
+					}
+					last = next
 				}
 			}
 		}
@@ -3818,9 +3990,9 @@ _1:
 		return nil
 	}
 	return &LiteralValueNode{
-		LBRACE: lbraceTok,
-		List:   list,
-		RBRACE: rbraceTok,
+		LBRACE:           lbraceTok,
+		KeyedElementList: list,
+		RBRACE:           rbraceTok,
 	}
 }
 
@@ -4074,6 +4246,7 @@ type MethodExprNode struct {
 	PERIOD       Token
 	MethodName   *MethodNameNode
 	typer
+	valuer
 }
 
 // Source implements Node.
@@ -4195,6 +4368,7 @@ type OperandNode struct {
 	TypeArgs     *TypeArgsNode
 	LiteralValue *LiteralValueNode
 	typer
+	valuer
 }
 
 // Source implements Node.
@@ -4208,6 +4382,7 @@ type ParenthesizedExpression struct {
 	Expression Expression
 	RPAREN     Token
 	typer
+	valuer
 }
 
 // Source implements Node.
@@ -4322,6 +4497,7 @@ type OperandNameNode struct {
 	QualifiedIdent *QualifiedIdentNode
 	IDENT          Token
 	typer
+	valuer
 }
 
 // Source implements Node.
@@ -4354,7 +4530,6 @@ func (p *parser) operandName() *OperandNameNode {
 		// *ebnf.Name identifier ctx [IDENT]
 		identTok = p.expect(IDENT)
 		break
-		return nil
 	default:
 		return nil
 	}
@@ -4547,16 +4722,28 @@ func (p *parser) parameterDecl() *ParameterDeclNode {
 	}
 }
 
+// ParameterDeclListNode represents the production
+//
+//	ParameterDeclListNode = { ParameterDecl  "," } .
+type ParameterDeclListNode struct {
+	ParameterDecl *ParameterDeclNode
+	COMMA         Token
+	List          *ParameterDeclListNode
+}
+
+// Source implements Node.
+func (n *ParameterDeclListNode) Source(full bool) string { return nodeSource(n, full) }
+
+// Position implements Node.
+func (n *ParameterDeclListNode) Position() token.Position { return n.ParameterDecl.Position() }
+
 // ParametersNode represents the production
 //
 //	Parameters = "(" { ParameterDecl  "," } ")" .
 type ParametersNode struct {
-	LPAREN Token
-	List   []struct {
-		ParameterDecl *ParameterDeclNode
-		COMMA         Token
-	}
-	RPAREN Token
+	LPAREN            Token
+	ParameterDeclList *ParameterDeclListNode
+	RPAREN            Token
 }
 
 // Source implements Node.
@@ -4570,11 +4757,8 @@ func (p *parser) parameters() *ParametersNode {
 		ok            bool
 		lparenTok     Token
 		parameterDecl *ParameterDeclNode
-		list          []struct {
-			ParameterDecl *ParameterDeclNode
-			COMMA         Token
-		}
-		rparenTok Token
+		list, last    *ParameterDeclListNode
+		rparenTok     Token
 	)
 	ix := p.ix
 	// *ebnf.Token "(" ctx [LPAREN]
@@ -4594,16 +4778,29 @@ func (p *parser) parameters() *ParametersNode {
 				switch p.c() {
 				case COMMA:
 					// *ebnf.Token "," ctx [COMMA]
-					list = append(list, struct {
-						ParameterDecl *ParameterDeclNode
-						COMMA         Token
-					}{parameterDecl, p.consume()})
+					next := &ParameterDeclListNode{
+						ParameterDecl: parameterDecl,
+						COMMA:         p.consume(),
+					}
+					if last != nil {
+						last.List = next
+					}
+					if list == nil {
+						list = next
+					}
+					last = next
 					continue
 				case RPAREN:
-					list = append(list, struct {
-						ParameterDecl *ParameterDeclNode
-						COMMA         Token
-					}{ParameterDecl: parameterDecl})
+					next := &ParameterDeclListNode{
+						ParameterDecl: parameterDecl,
+					}
+					if last != nil {
+						last.List = next
+					}
+					if list == nil {
+						list = next
+					}
+					last = next
 				}
 			}
 		}
@@ -4616,9 +4813,9 @@ _1:
 		return nil
 	}
 	return &ParametersNode{
-		LPAREN: lparenTok,
-		List:   list,
-		RPAREN: rparenTok,
+		LPAREN:            lparenTok,
+		ParameterDeclList: list,
+		RPAREN:            rparenTok,
 	}
 }
 
@@ -4693,9 +4890,10 @@ func (p *parser) postStmt() *PostStmtNode {
 //
 //	PrimaryExpr = ( Operand | Conversion | MethodExpr ) { Selector | Index | Slice | TypeAssertion | Arguments } .
 type PrimaryExprNode struct {
-	Operand Expression
-	List    []Node
+	Operand     Expression
+	PostfixList []Node
 	typer
+	valuer
 }
 
 // Source implements Node.
@@ -4847,8 +5045,8 @@ func (p *parser) primaryExpr(preBlock bool) Expression {
 	}
 
 	return &PrimaryExprNode{
-		Operand: item0,
-		List:    list,
+		Operand:     item0,
+		PostfixList: list,
 	}
 }
 
@@ -5389,14 +5587,28 @@ func (p *parser) returnStmt() *ReturnStmtNode {
 	}
 }
 
+// CommClauseListNode represents the production
+//
+//	CommClauseListNode = { CommClause } .
+type CommClauseListNode struct {
+	CommClause *CommClauseNode
+	List       *CommClauseListNode
+}
+
+// Source implements Node.
+func (n *CommClauseListNode) Source(full bool) string { return nodeSource(n, full) }
+
+// Position implements Node.
+func (n *CommClauseListNode) Position() token.Position { return n.CommClause.Position() }
+
 // SelectStmtNode represents the production
 //
 //	SelectStmt = "select" "{" { CommClause } "}" .
 type SelectStmtNode struct {
-	SELECT Token
-	LBRACE Token
-	List   []struct{ CommClause *CommClauseNode }
-	RBRACE Token
+	SELECT         Token
+	LBRACE         Token
+	CommClauseList *CommClauseListNode
+	RBRACE         Token
 }
 
 // Source implements Node.
@@ -5407,11 +5619,11 @@ func (n *SelectStmtNode) Position() token.Position { return n.SELECT.Position() 
 
 func (p *parser) selectStmt() *SelectStmtNode {
 	var (
-		ok        bool
-		selectTok Token
-		lbraceTok Token
-		list      []struct{ CommClause *CommClauseNode }
-		rbraceTok Token
+		ok         bool
+		selectTok  Token
+		lbraceTok  Token
+		list, last *CommClauseListNode
+		rbraceTok  Token
 	)
 	// ebnf.Sequence "select" "{" { CommClause } "}" ctx [SELECT]
 	{
@@ -5433,7 +5645,16 @@ func (p *parser) selectStmt() *SelectStmtNode {
 				if commClause = p.commClause(); commClause == nil {
 					goto _1
 				}
-				list = append(list, struct{ CommClause *CommClauseNode }{CommClause: commClause})
+				next := &CommClauseListNode{
+					CommClause: commClause,
+				}
+				if last != nil {
+					last.List = next
+				}
+				if list == nil {
+					list = next
+				}
+				last = next
 				goto _0
 			}
 		_1:
@@ -5445,10 +5666,10 @@ func (p *parser) selectStmt() *SelectStmtNode {
 		}
 	}
 	return &SelectStmtNode{
-		SELECT: selectTok,
-		LBRACE: lbraceTok,
-		List:   list,
-		RBRACE: rbraceTok,
+		SELECT:         selectTok,
+		LBRACE:         lbraceTok,
+		CommClauseList: list,
+		RBRACE:         rbraceTok,
 	}
 }
 
@@ -5545,10 +5766,12 @@ func (p *parser) sendStmt() *SendStmtNode {
 //
 //	ShortVarDecl = IdentifierList ":=" ExpressionList .
 type ShortVarDeclNode struct {
-	lexicalScoper
 	IdentifierList *IdentifierListNode
 	DEFINE         Token
 	ExpressionList *ExpressionListNode
+	lexicalScoper
+
+	visible
 }
 
 // Source implements Node.
@@ -5587,44 +5810,44 @@ func (p *parser) shortVarDecl(lhs *ExpressionListNode, preBlock bool) (r *ShortV
 		ExpressionList: expressionList,
 	}
 	visible := int32(p.ix)
-	var redecl []struct {
-		Token
-		Node
-	}
-	if id := r.IdentifierList.IDENT; id.IsValid() {
+	hasNew := false
+	for n := r.IdentifierList; n != nil; n = n.List {
+		id := n.IDENT
 		ex := sc.declare(id, r, visible, p, false)
-		redecl = append(redecl, struct {
-			Token
-			Node
-		}{id, ex})
-	}
-	for _, v := range r.IdentifierList.List {
-		if id := v.IDENT; id.IsValid() {
-			ex := sc.declare(id, r, visible, p, false)
-			redecl = append(redecl, struct {
-				Token
-				Node
-			}{id, ex})
+		if !ex.declTok.IsValid() {
+			hasNew = true
 		}
 	}
-	for _, v := range redecl {
-		if v.Node == nil { // new
-			return
+	if !hasNew {
+		for n := r.IdentifierList; n != nil; n = n.List {
+			id := n.IDENT
+			nm := id.Src()
+			ex := sc.nodes[nm]
+			if ex.declTok.IsValid() {
+				p.err(id.Position(), "%s redeclared, previous declaration at %v: (%p)", nm, ex.declTok.Position(), sc)
+			}
 		}
-	}
-
-	for _, v := range redecl {
-		p.err(v.Token.Position(), "%s redeclared, previous declaration at %v: (%p)", v.Token.Src(), v.Node.Position(), sc)
 	}
 	return r
 }
 func (p *parser) exprList2identList(list *ExpressionListNode) (r *IdentifierListNode) {
-	r = &IdentifierListNode{IDENT: p.expr2ident(list.Expression)}
-	for _, v := range list.List {
-		r.List = append(r.List, struct {
-			COMMA Token
-			IDENT Token
-		}{COMMA: v.COMMA, IDENT: p.expr2ident(v.Expression)})
+	var last *IdentifierListNode
+	for n := list; n != nil; n = n.List {
+		next := &IdentifierListNode{
+			COMMA: n.COMMA,
+			IDENT: p.expr2ident(n.Expression),
+		}
+		if !next.IDENT.IsValid() {
+			continue
+		}
+
+		if r == nil {
+			r = next
+		}
+		if last != nil {
+			last.List = next
+		}
+		last = next
 	}
 	return r
 }
@@ -5646,7 +5869,7 @@ func (p *parser) expr2ident(e Expression) (r Token) {
 
 		return x.IDENT
 	case *PrimaryExprNode:
-		if len(x.List) != 0 && p.reportDeclarationErrors {
+		if len(x.PostfixList) != 0 && p.reportDeclarationErrors {
 			p.err(x.Position(), "expected identifier")
 			break
 		}
@@ -6056,20 +6279,44 @@ func (p *parser) sliceType() *SliceTypeNode {
 	}
 }
 
+// ImportDeclListNode represents the production
+//
+//	ImportDeclListNode = { ImportDecl ";" } .
+type ImportDeclListNode struct {
+	ImportDecl *ImportDeclNode
+	SEMICOLON  Token
+	List       *ImportDeclListNode
+}
+
+// Source implements Node.
+func (n *ImportDeclListNode) Source(full bool) string { return nodeSource(n, full) }
+
+// Position implements Node.
+func (n *ImportDeclListNode) Position() token.Position { return n.ImportDecl.Position() }
+
+// TopLevelDeclListNode represents the production
+//
+//	TopLevelDeclListNode = { TopLevelDecl ";" .
+type TopLevelDeclListNode struct {
+	TopLevelDecl Node
+	SEMICOLON    Token
+	List         *TopLevelDeclListNode
+}
+
+// Source implements Node.
+func (n *TopLevelDeclListNode) Source(full bool) string { return nodeSource(n, full) }
+
+// Position implements Node.
+func (n *TopLevelDeclListNode) Position() token.Position { return n.TopLevelDecl.Position() }
+
 // SourceFileNode represents the production
 //
 //	SourceFile = PackageClause ";" { ImportDecl ";" } { TopLevelDecl ";" } .
 type SourceFileNode struct {
-	PackageClause  *PackageClauseNode
-	SEMICOLON      Token
-	ImportDeclList []struct {
-		ImportDecl *ImportDeclNode
-		SEMICOLON  Token
-	}
-	TopLevelDeclList []struct {
-		TopLevelDecl Node
-		SEMICOLON    Token
-	}
+	PackageClause    *PackageClauseNode
+	SEMICOLON        Token
+	ImportDeclList   *ImportDeclListNode
+	TopLevelDeclList *TopLevelDeclListNode
 }
 
 // Source implements Node.
@@ -6083,14 +6330,8 @@ func (p *parser) sourceFile() *SourceFileNode {
 		ok            bool
 		packageClause *PackageClauseNode
 		semicolonTok  Token
-		list          []struct {
-			ImportDecl *ImportDeclNode
-			SEMICOLON  Token
-		}
-		list2 []struct {
-			TopLevelDecl Node
-			SEMICOLON    Token
-		}
+		list, last    *ImportDeclListNode
+		list2, last2  *TopLevelDeclListNode
 	)
 	// ebnf.Sequence PackageClause ";" { ImportDecl ";" } { TopLevelDecl ";" } ctx [PACKAGE]
 	{
@@ -6124,10 +6365,17 @@ func (p *parser) sourceFile() *SourceFileNode {
 					p.back(ix)
 					goto _1
 				}
-				list = append(list, struct {
-					ImportDecl *ImportDeclNode
-					SEMICOLON  Token
-				}{ImportDecl: importDecl, SEMICOLON: semicolonTok})
+				next := &ImportDeclListNode{
+					ImportDecl: importDecl,
+					SEMICOLON:  semicolonTok,
+				}
+				if last != nil {
+					last.List = next
+				}
+				if list == nil {
+					list = next
+				}
+				last = next
 				goto _0
 			}
 		_1:
@@ -6151,10 +6399,17 @@ func (p *parser) sourceFile() *SourceFileNode {
 					p.back(ix)
 					goto _3
 				}
-				list2 = append(list2, struct {
-					TopLevelDecl Node
-					SEMICOLON    Token
-				}{TopLevelDecl: topLevelDecl, SEMICOLON: semicolonTok})
+				next := &TopLevelDeclListNode{
+					TopLevelDecl: topLevelDecl,
+					SEMICOLON:    semicolonTok,
+				}
+				if last2 != nil {
+					last2.List = next
+				}
+				if list2 == nil {
+					list2 = next
+				}
+				last2 = next
 				goto _2
 			}
 		_3:
@@ -6294,10 +6549,9 @@ func (p *parser) statement() Node {
 //
 //	StatementList = { Statement ";" } .
 type StatementListNode struct {
-	List []struct {
-		Statement Node
-		SEMICOLON Token
-	}
+	Statement Node
+	SEMICOLON Token
+	List      *StatementListNode
 }
 
 // Source implements Node.
@@ -6308,11 +6562,8 @@ func (n *StatementListNode) Position() token.Position { panic("TODO") }
 
 func (p *parser) statementList() *StatementListNode {
 	var (
-		statement Node
-		list      []struct {
-			Statement Node
-			SEMICOLON Token
-		}
+		statement  Node
+		list, last *StatementListNode
 	)
 	for {
 		ix := p.ix
@@ -6323,50 +6574,73 @@ func (p *parser) statementList() *StatementListNode {
 				goto _1
 			}
 		case SEMICOLON:
-			list = append(list, struct {
-				Statement Node
-				SEMICOLON Token
-			}{SEMICOLON: p.consume()})
+			next := &StatementListNode{
+				SEMICOLON: p.consume(),
+			}
+			if last != nil {
+				last.List = next
+			}
+			if list == nil {
+				list = next
+			}
+			last = next
 			continue
 		default:
 			goto _1
 		}
 
 		if p.c() != SEMICOLON {
-			list = append(list, struct {
-				Statement Node
-				SEMICOLON Token
-			}{Statement: statement})
+			next := &StatementListNode{
+				Statement: statement,
+			}
+			if last != nil {
+				last.List = next
+			}
+			if list == nil {
+				list = next
+			}
+			last = next
 			goto _1
 		}
-		list = append(list, struct {
-			Statement Node
-			SEMICOLON Token
-		}{Statement: statement, SEMICOLON: p.consume()})
-
+		next := &StatementListNode{
+			Statement: statement,
+			SEMICOLON: p.consume(),
+		}
+		if last != nil {
+			last.List = next
+		}
+		if list == nil {
+			list = next
+		}
+		last = next
 	}
 _1:
-	if len(list) == 0 {
-		return nil
-	}
-
-	return &StatementListNode{
-		List: list,
-	}
+	return list
 }
+
+// FieldDeclListNode represents the production
+//
+//	FieldDeclListNode = { FieldDecl ";" } .
+type FieldDeclListNode struct {
+	FieldDecl *FieldDeclNode
+	SEMICOLON Token
+	List      *FieldDeclListNode
+}
+
+// Source implements Node.
+func (n *FieldDeclListNode) Source(full bool) string { return nodeSource(n, full) }
+
+// Position implements Node.
+func (n *FieldDeclListNode) Position() token.Position { return n.FieldDecl.Position() }
 
 // StructTypeNode represents the production
 //
-//	StructType = "struct" "{" { FieldDecl ";" } [ FieldDecl ] "}" .
+//	StructType = "struct" "{" { FieldDecl ";" } "}" .
 type StructTypeNode struct {
-	STRUCT Token
-	LBRACE Token
-	List   []struct {
-		FieldDecl *FieldDeclNode
-		SEMICOLON Token
-	}
-	FieldDecl *FieldDeclNode
-	RBRACE    Token
+	STRUCT        Token
+	LBRACE        Token
+	FieldDeclList *FieldDeclListNode
+	RBRACE        Token
 }
 
 // Source implements Node.
@@ -6377,15 +6651,11 @@ func (n *StructTypeNode) Position() token.Position { return n.STRUCT.Position() 
 
 func (p *parser) structType() *StructTypeNode {
 	var (
-		ok        bool
-		structTok Token
-		lbraceTok Token
-		list      []struct {
-			FieldDecl *FieldDeclNode
-			SEMICOLON Token
-		}
-		fieldDecl *FieldDeclNode
-		rbraceTok Token
+		ok         bool
+		structTok  Token
+		lbraceTok  Token
+		list, last *FieldDeclListNode
+		rbraceTok  Token
 	)
 	// ebnf.Sequence "struct" "{" { FieldDecl ";" } [ FieldDecl ] "}" ctx [STRUCT]
 	{
@@ -6411,31 +6681,39 @@ func (p *parser) structType() *StructTypeNode {
 					p.back(ix)
 					goto _1
 				}
+				if p.c() == RBRACE {
+					next := &FieldDeclListNode{
+						FieldDecl: fieldDecl,
+					}
+					if last != nil {
+						last.List = next
+					}
+					if list == nil {
+						list = next
+					}
+					last = next
+					goto _1
+				}
 				// *ebnf.Token ";" ctx []
 				if semicolonTok, ok = p.accept(SEMICOLON); !ok {
 					p.back(ix)
 					goto _1
 				}
-				list = append(list, struct {
-					FieldDecl *FieldDeclNode
-					SEMICOLON Token
-				}{FieldDecl: fieldDecl, SEMICOLON: semicolonTok})
+				next := &FieldDeclListNode{
+					FieldDecl: fieldDecl,
+					SEMICOLON: semicolonTok,
+				}
+				if last != nil {
+					last.List = next
+				}
+				if list == nil {
+					list = next
+				}
+				last = next
 				goto _0
 			}
 		_1:
 		}
-		// *ebnf.Option [ FieldDecl ] ctx []
-		switch p.c() {
-		case IDENT, MUL:
-			// *ebnf.Name FieldDecl ctx [IDENT, MUL]
-			if fieldDecl = p.fieldDecl(); fieldDecl == nil {
-				goto _2
-			}
-		}
-		goto _3
-	_2:
-		fieldDecl = nil
-	_3:
 		// *ebnf.Token "}" ctx []
 		if rbraceTok, ok = p.accept(RBRACE); !ok {
 			p.back(ix)
@@ -6443,11 +6721,10 @@ func (p *parser) structType() *StructTypeNode {
 		}
 	}
 	return &StructTypeNode{
-		STRUCT:    structTok,
-		LBRACE:    lbraceTok,
-		List:      list,
-		FieldDecl: fieldDecl,
-		RBRACE:    rbraceTok,
+		STRUCT:        structTok,
+		LBRACE:        lbraceTok,
+		FieldDeclList: list,
+		RBRACE:        rbraceTok,
 	}
 }
 
@@ -6554,13 +6831,28 @@ type TypeNode struct {
 	LPAREN   Token
 	TypeNode *TypeNode
 	RPAREN   Token
+	typer
 }
 
 // Source implements Node.
 func (n *TypeNode) Source(full bool) string { return nodeSource(n, full) }
 
 // Position implements Node.
-func (n *TypeNode) Position() token.Position { panic("TODO") }
+func (n *TypeNode) Position() (r token.Position) {
+	if n.TypeName != nil {
+		return n.TypeName.Position()
+	}
+
+	if n.TypeLit != nil {
+		return n.TypeLit.Position()
+	}
+
+	if n.LPAREN.IsValid() {
+		return n.LPAREN.Position()
+	}
+
+	return r
+}
 
 func (p *parser) type1() *TypeNode {
 	var (
@@ -6828,7 +7120,7 @@ func (p *parser) typeCaseClause() *TypeCaseClauseNode {
 //
 //	TypeConstraint = TypeElem .
 type TypeConstraintNode struct {
-	TypeElem *TypeElemNode
+	TypeElem *TypeElemListNode
 }
 
 // Source implements Node.
@@ -6839,7 +7131,7 @@ func (n *TypeConstraintNode) Position() token.Position { return n.TypeElem.Posit
 
 func (p *parser) typeConstraint() *TypeConstraintNode {
 	var (
-		typeElem *TypeElemNode
+		typeElem *TypeElemListNode
 	)
 	// *ebnf.Name TypeElem ctx [ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT, TILDE]
 	if typeElem = p.typeElem(); typeElem == nil {
@@ -6850,17 +7142,29 @@ func (p *parser) typeConstraint() *TypeConstraintNode {
 	}
 }
 
+// TypeSpecListNode represents the production
+//
+//	TypeSpecListNode = "type" ( TypeSpec | "(" { TypeSpec ";" } ")" ) .
+type TypeSpecListNode struct {
+	TypeSpec  Node
+	SEMICOLON Token
+	List      *TypeSpecListNode
+}
+
+// Source implements Node.
+func (n *TypeSpecListNode) Source(full bool) string { return nodeSource(n, full) }
+
+// Position implements Node.
+func (n *TypeSpecListNode) Position() token.Position { return n.TypeSpec.Position() }
+
 // TypeDeclNode represents the production
 //
 //	TypeDecl = "type" ( TypeSpec | "(" { TypeSpec ";" } ")" ) .
 type TypeDeclNode struct {
 	TYPE         Token
 	LPAREN       Token
-	TypeSpecList []struct {
-		TypeSpec  Node
-		SEMICOLON Token
-	}
-	RPAREN Token
+	TypeSpecList *TypeSpecListNode
+	RPAREN       Token
 }
 
 // Source implements Node.
@@ -6871,15 +7175,12 @@ func (n *TypeDeclNode) Position() token.Position { return n.TYPE.Position() }
 
 func (p *parser) typeDecl() *TypeDeclNode {
 	var (
-		ok        bool
-		typeTok   Token
-		typeSpec  Node
-		lparenTok Token
-		list      []struct {
-			TypeSpec  Node
-			SEMICOLON Token
-		}
-		rparenTok Token
+		ok         bool
+		typeTok    Token
+		typeSpec   Node
+		lparenTok  Token
+		list, last *TypeSpecListNode
+		rparenTok  Token
 	)
 	// ebnf.Sequence "type" ( TypeSpec | "(" { TypeSpec ";" } ")" ) ctx [TYPE]
 	{
@@ -6899,10 +7200,9 @@ func (p *parser) typeDecl() *TypeDeclNode {
 			if typeSpec = p.typeSpec(); typeSpec == nil {
 				goto _0
 			}
-			list = append(list, struct {
-				TypeSpec  Node
-				SEMICOLON Token
-			}{TypeSpec: typeSpec})
+			list = &TypeSpecListNode{
+				TypeSpec: typeSpec,
+			}
 			break
 		_0:
 			typeSpec = nil
@@ -6933,10 +7233,17 @@ func (p *parser) typeDecl() *TypeDeclNode {
 							p.back(ix)
 							goto _5
 						}
-						list = append(list, struct {
-							TypeSpec  Node
-							SEMICOLON Token
-						}{TypeSpec: typeSpec, SEMICOLON: semicolonTok})
+						next := &TypeSpecListNode{
+							TypeSpec:  typeSpec,
+							SEMICOLON: semicolonTok,
+						}
+						if last != nil {
+							last.List = next
+						}
+						if list == nil {
+							list = next
+						}
+						last = next
 						goto _4
 					}
 				_5:
@@ -6970,10 +7277,13 @@ func (p *parser) typeDecl() *TypeDeclNode {
 //
 //	TypeDef = identifier [ TypeParameters ] Type .
 type TypeDefNode struct {
-	lexicalScoper
 	IDENT          Token
 	TypeParameters *TypeParametersNode
 	TypeNode       *TypeNode
+	lexicalScoper
+
+	visible
+
 	typer
 }
 
@@ -7028,30 +7338,31 @@ func (p *parser) typeDef() (r *TypeDefNode) {
 	return r
 }
 
-// TypeElemNode represents the production
+// TypeElemListNode represents the production
 //
 //	TypeElem = TypeTerm { "|" TypeTerm } .
-type TypeElemNode struct {
+type TypeElemListNode struct {
+	OR       Token
 	TypeTerm *TypeTermNode
-	List     []struct {
-		OR       Token
-		TypeTerm *TypeTermNode
-	}
+	List     *TypeElemListNode
 }
 
 // Source implements Node.
-func (n *TypeElemNode) Source(full bool) string { return nodeSource(n, full) }
+func (n *TypeElemListNode) Source(full bool) string { return nodeSource(n, full) }
 
 // Position implements Node.
-func (n *TypeElemNode) Position() token.Position { return n.TypeTerm.Position() }
+func (n *TypeElemListNode) Position() token.Position {
+	if n.OR.IsValid() {
+		return n.OR.Position()
+	}
 
-func (p *parser) typeElem() *TypeElemNode {
+	return n.TypeTerm.Position()
+}
+
+func (p *parser) typeElem() *TypeElemListNode {
 	var (
-		typeTerm *TypeTermNode
-		list     []struct {
-			OR       Token
-			TypeTerm *TypeTermNode
-		}
+		typeTerm   *TypeTermNode
+		list, last *TypeElemListNode
 	)
 	// ebnf.Sequence TypeTerm { "|" TypeTerm } ctx [ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT, TILDE]
 	{
@@ -7061,6 +7372,10 @@ func (p *parser) typeElem() *TypeElemNode {
 			p.back(ix)
 			return nil
 		}
+		list = &TypeElemListNode{
+			TypeTerm: typeTerm,
+		}
+		last = list
 		// *ebnf.Repetition { "|" TypeTerm } ctx []
 	_0:
 		{
@@ -7082,45 +7397,45 @@ func (p *parser) typeElem() *TypeElemNode {
 					p.back(ix)
 					goto _1
 				}
-				list = append(list, struct {
-					OR       Token
-					TypeTerm *TypeTermNode
-				}{OR: orTok, TypeTerm: typeTerm})
+				next := &TypeElemListNode{
+					OR:       orTok,
+					TypeTerm: typeTerm,
+				}
+				last.List = next
+				last = next
 				goto _0
 			}
 		_1:
 		}
 	}
-	return &TypeElemNode{
-		TypeTerm: typeTerm,
-		List:     list,
-	}
+	return list
 }
 
 // TypeListNode represents the production
 //
 //	TypeList = Type { "," Type } .
 type TypeListNode struct {
+	COMMA    Token
 	TypeNode *TypeNode
-	List     []struct {
-		COMMA    Token
-		TypeNode *TypeNode
-	}
+	List     *TypeListNode
 }
 
 // Source implements Node.
 func (n *TypeListNode) Source(full bool) string { return nodeSource(n, full) }
 
 // Position implements Node.
-func (n *TypeListNode) Position() token.Position { return n.TypeNode.Position() }
+func (n *TypeListNode) Position() token.Position {
+	if n.COMMA.IsValid() {
+		return n.COMMA.Position()
+	}
+
+	return n.TypeNode.Position()
+}
 
 func (p *parser) typeList() *TypeListNode {
 	var (
-		typeNode *TypeNode
-		list     []struct {
-			COMMA    Token
-			TypeNode *TypeNode
-		}
+		typeNode   *TypeNode
+		list, last *TypeListNode
 	)
 	// ebnf.Sequence Type { "," Type } ctx [ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT]
 	{
@@ -7130,6 +7445,10 @@ func (p *parser) typeList() *TypeListNode {
 			p.back(ix)
 			return nil
 		}
+		list = &TypeListNode{
+			TypeNode: typeNode,
+		}
+		last = list
 		// *ebnf.Repetition { "," Type } ctx []
 	_0:
 		{
@@ -7151,19 +7470,18 @@ func (p *parser) typeList() *TypeListNode {
 					p.back(ix)
 					goto _1
 				}
-				list = append(list, struct {
-					COMMA    Token
-					TypeNode *TypeNode
-				}{COMMA: commaTok, TypeNode: typeNode})
+				next := &TypeListNode{
+					COMMA:    commaTok,
+					TypeNode: typeNode,
+				}
+				last.List = next
+				last = next
 				goto _0
 			}
 		_1:
 		}
 	}
-	return &TypeListNode{
-		TypeNode: typeNode,
-		List:     list,
-	}
+	return list
 }
 
 // TypeLitNode represents the production
@@ -7184,7 +7502,41 @@ type TypeLitNode struct {
 func (n *TypeLitNode) Source(full bool) string { return nodeSource(n, full) }
 
 // Position implements Node.
-func (n *TypeLitNode) Position() token.Position { panic("TODO") }
+func (n *TypeLitNode) Position() (r token.Position) {
+	if n.ArrayType != nil {
+		return n.ArrayType.Position()
+	}
+
+	if n.StructType != nil {
+		return n.StructType.Position()
+	}
+
+	if n.PointerType != nil {
+		return n.PointerType.Position()
+	}
+
+	if n.FunctionType != nil {
+		return n.FunctionType.Position()
+	}
+
+	if n.InterfaceType != nil {
+		return n.InterfaceType.Position()
+	}
+
+	if n.SliceType != nil {
+		return n.SliceType.Position()
+	}
+
+	if n.MapType != nil {
+		return n.MapType.Position()
+	}
+
+	if n.ChannelType != nil {
+		return n.ChannelType.Position()
+	}
+
+	return r
+}
 
 func (p *parser) typeLit() *TypeLitNode {
 	var (
@@ -7375,11 +7727,9 @@ func (p *parser) typeParamDecl() *TypeParamDeclNode {
 //
 //	TypeParamList = TypeParamDecl { "," TypeParamDecl } .
 type TypeParamListNode struct {
+	COMMA         Token
 	TypeParamDecl *TypeParamDeclNode
-	List          []struct {
-		COMMA         Token
-		TypeParamDecl *TypeParamDeclNode
-	}
+	List          *TypeParamListNode
 }
 
 // Source implements Node.
@@ -7391,10 +7741,7 @@ func (n *TypeParamListNode) Position() token.Position { return n.TypeParamDecl.P
 func (p *parser) typeParamList() *TypeParamListNode {
 	var (
 		typeParamDecl *TypeParamDeclNode
-		list          []struct {
-			COMMA         Token
-			TypeParamDecl *TypeParamDeclNode
-		}
+		list, last    *TypeParamListNode
 	)
 	// ebnf.Sequence TypeParamDecl { "," TypeParamDecl } ctx [IDENT]
 	{
@@ -7404,6 +7751,10 @@ func (p *parser) typeParamList() *TypeParamListNode {
 			p.back(ix)
 			return nil
 		}
+		list = &TypeParamListNode{
+			TypeParamDecl: typeParamDecl,
+		}
+		last = list
 		// *ebnf.Repetition { "," TypeParamDecl } ctx []
 	_0:
 		{
@@ -7425,19 +7776,18 @@ func (p *parser) typeParamList() *TypeParamListNode {
 					p.back(ix)
 					goto _1
 				}
-				list = append(list, struct {
-					COMMA         Token
-					TypeParamDecl *TypeParamDeclNode
-				}{COMMA: commaTok, TypeParamDecl: typeParamDecl})
+				next := &TypeParamListNode{
+					COMMA:         commaTok,
+					TypeParamDecl: typeParamDecl,
+				}
+				last.List = next
+				last = next
 				goto _0
 			}
 		_1:
 		}
 	}
-	return &TypeParamListNode{
-		TypeParamDecl: typeParamDecl,
-		List:          list,
-	}
+	return list
 }
 
 // TypeParametersNode represents the production
@@ -7677,17 +8027,31 @@ func (p *parser) typeSwitchGuard() *TypeSwitchGuardNode {
 	}
 }
 
+// TypeCaseClauseListNode represents the production
+//
+//	TypeCaseClauseListNode = { TypeCaseClause } .
+type TypeCaseClauseListNode struct {
+	TypeCaseClause *TypeCaseClauseNode
+	List           *TypeCaseClauseListNode
+}
+
+// Source implements Node.
+func (n *TypeCaseClauseListNode) Source(full bool) string { return nodeSource(n, full) }
+
+// Position implements Node.
+func (n *TypeCaseClauseListNode) Position() token.Position { return n.TypeCaseClause.Position() }
+
 // TypeSwitchStmtNode represents the production
 //
 //	TypeSwitchStmt = "switch" [ SimpleStmt ";" ] TypeSwitchGuard "{" { TypeCaseClause } "}" .
 type TypeSwitchStmtNode struct {
-	SWITCH          Token
-	SimpleStmt      *SimpleStmtNode
-	SEMICOLON       Token
-	TypeSwitchGuard *TypeSwitchGuardNode
-	LBRACE          Token
-	List            []struct{ TypeCaseClause *TypeCaseClauseNode }
-	RBRACE          Token
+	SWITCH             Token
+	SimpleStmt         *SimpleStmtNode
+	SEMICOLON          Token
+	TypeSwitchGuard    *TypeSwitchGuardNode
+	LBRACE             Token
+	TypeCaseClauseList *TypeCaseClauseListNode
+	RBRACE             Token
 }
 
 // Source implements Node.
@@ -7704,7 +8068,7 @@ func (p *parser) typeSwitchStmt() *TypeSwitchStmtNode {
 		semicolonTok    Token
 		typeSwitchGuard *TypeSwitchGuardNode
 		lbraceTok       Token
-		list            []struct{ TypeCaseClause *TypeCaseClauseNode }
+		list, last      *TypeCaseClauseListNode
 		rbraceTok       Token
 	)
 	// ebnf.Sequence "switch" [ SimpleStmt ";" ] TypeSwitchGuard "{" { TypeCaseClause } "}" ctx [SWITCH]
@@ -7767,7 +8131,16 @@ func (p *parser) typeSwitchStmt() *TypeSwitchStmtNode {
 				if typeCaseClause = p.typeCaseClause(); typeCaseClause == nil {
 					goto _3
 				}
-				list = append(list, struct{ TypeCaseClause *TypeCaseClauseNode }{TypeCaseClause: typeCaseClause})
+				next := &TypeCaseClauseListNode{
+					TypeCaseClause: typeCaseClause,
+				}
+				if last != nil {
+					last.List = next
+				}
+				if list == nil {
+					list = next
+				}
+				last = next
 				goto _2
 			}
 		_3:
@@ -7779,13 +8152,13 @@ func (p *parser) typeSwitchStmt() *TypeSwitchStmtNode {
 		}
 	}
 	return &TypeSwitchStmtNode{
-		SWITCH:          switchTok,
-		SimpleStmt:      simpleStmt,
-		SEMICOLON:       semicolonTok,
-		TypeSwitchGuard: typeSwitchGuard,
-		LBRACE:          lbraceTok,
-		List:            list,
-		RBRACE:          rbraceTok,
+		SWITCH:             switchTok,
+		SimpleStmt:         simpleStmt,
+		SEMICOLON:          semicolonTok,
+		TypeSwitchGuard:    typeSwitchGuard,
+		LBRACE:             lbraceTok,
+		TypeCaseClauseList: list,
+		RBRACE:             rbraceTok,
 	}
 }
 
@@ -7844,13 +8217,16 @@ type UnaryExprNode struct {
 	Op        Token
 	UnaryExpr Expression
 	typer
+	valuer
 }
 
 // Source implements Node.
 func (n *UnaryExprNode) Source(full bool) string { return nodeSource(n, full) }
 
 // Position implements Node.
-func (n *UnaryExprNode) Position() token.Position { panic("TODO") }
+func (n *UnaryExprNode) Position() token.Position {
+	return n.Op.Position()
+}
 
 func (p *parser) unaryExpr(preBlock bool) Expression {
 	var (
@@ -7970,18 +8346,29 @@ func (p *parser) underlyingType() *UnderlyingTypeNode {
 	}
 }
 
+// VarSpecListNode represents the production
+//
+//	VarSpecListNode = { VarSpec ";" } .
+type VarSpecListNode struct {
+	VarSpec   *VarSpecNode
+	SEMICOLON Token
+	List      *VarSpecListNode
+}
+
+// Source implements Node.
+func (n *VarSpecListNode) Source(full bool) string { return nodeSource(n, full) }
+
+// Position implements Node.
+func (n *VarSpecListNode) Position() token.Position { return n.VarSpec.Position() }
+
 // VarDeclNode represents the production
 //
 //	VarDecl = "var" ( VarSpec | "(" { VarSpec ";" } ")" ) .
 type VarDeclNode struct {
-	VAR     Token
-	VarSpec *VarSpecNode
-	LPAREN  Token
-	List    []struct {
-		VarSpec   *VarSpecNode
-		SEMICOLON Token
-	}
-	RPAREN Token
+	VAR         Token
+	LPAREN      Token
+	VarSpecList *VarSpecListNode
+	RPAREN      Token
 }
 
 // Source implements Node.
@@ -7992,15 +8379,12 @@ func (n *VarDeclNode) Position() token.Position { return n.VAR.Position() }
 
 func (p *parser) varDecl() *VarDeclNode {
 	var (
-		ok        bool
-		varTok    Token
-		varSpec   *VarSpecNode
-		lparenTok Token
-		list      []struct {
-			VarSpec   *VarSpecNode
-			SEMICOLON Token
-		}
-		rparenTok Token
+		ok         bool
+		varTok     Token
+		varSpec    *VarSpecNode
+		lparenTok  Token
+		list, last *VarSpecListNode
+		rparenTok  Token
 	)
 	// ebnf.Sequence "var" ( VarSpec | "(" { VarSpec ";" } ")" ) ctx [VAR]
 	{
@@ -8019,6 +8403,9 @@ func (p *parser) varDecl() *VarDeclNode {
 			// *ebnf.Name VarSpec ctx [IDENT]
 			if varSpec = p.varSpec(); varSpec == nil {
 				goto _0
+			}
+			list = &VarSpecListNode{
+				VarSpec: varSpec,
 			}
 			break
 		_0:
@@ -8050,10 +8437,17 @@ func (p *parser) varDecl() *VarDeclNode {
 							p.back(ix)
 							goto _5
 						}
-						list = append(list, struct {
-							VarSpec   *VarSpecNode
-							SEMICOLON Token
-						}{VarSpec: varSpec, SEMICOLON: semicolonTok})
+						next := &VarSpecListNode{
+							VarSpec:   varSpec,
+							SEMICOLON: semicolonTok,
+						}
+						if last != nil {
+							last.List = next
+						}
+						if list == nil {
+							list = next
+						}
+						last = next
 						goto _4
 					}
 				_5:
@@ -8076,11 +8470,10 @@ func (p *parser) varDecl() *VarDeclNode {
 		}
 	}
 	return &VarDeclNode{
-		VAR:     varTok,
-		VarSpec: varSpec,
-		LPAREN:  lparenTok,
-		List:    list,
-		RPAREN:  rparenTok,
+		VAR:         varTok,
+		LPAREN:      lparenTok,
+		VarSpecList: list,
+		RPAREN:      rparenTok,
 	}
 }
 
@@ -8088,13 +8481,15 @@ func (p *parser) varDecl() *VarDeclNode {
 //
 //	VarSpec = IdentifierList ( Type [ "=" ExpressionList ] | "=" ExpressionList ) .
 type VarSpecNode struct {
-	lexicalScoper
 	IdentifierList  *IdentifierListNode
 	TypeNode        *TypeNode
 	ASSIGN          Token
 	ExpressionList  *ExpressionListNode
 	ASSIGN2         Token
 	ExpressionList2 *ExpressionListNode
+	lexicalScoper
+
+	visible
 }
 
 // Source implements Node.
@@ -8204,9 +8599,8 @@ func (p *parser) varSpec() (r *VarSpecNode) {
 		ExpressionList2: expressionList2,
 	}
 	visible := int32(p.ix)
-	p.declare(sc, identifierList.IDENT, r, visible, false)
-	for _, v := range identifierList.List {
-		p.declare(sc, v.IDENT, r, visible, false)
+	for n := r.IdentifierList; n != nil; n = n.List {
+		p.declare(sc, n.IDENT, r, visible, false)
 	}
 	return r
 }

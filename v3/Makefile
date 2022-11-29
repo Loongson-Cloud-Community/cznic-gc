@@ -1,4 +1,4 @@
-.PHONY:	clean edit editor test test2 back report report2 parser2 benchmarks benchmarks2 mem memgo race
+.PHONY:	clean edit editor test test2 back report report2 parser2 benchmarks benchmarks2 mem memgo race nreport
 
 clean:
 	rm -f cpu.test mem.test *.out
@@ -45,6 +45,13 @@ back:
 	@git status
 	@grep TOTAL log-back || true
 	grep 'FAIL' log-back || true
+
+nreport:
+	go test -v -failfast -run TestParser -heap -nreport 2>&1 | tee log-nreport
+	@git diff testdata/ || true
+	@git status
+	@grep TOTAL log-report || true
+	grep 'FAIL' log-report || true
 
 report:
 	go test -v -failfast -run TestParser -report 2>&1 | tee log-report

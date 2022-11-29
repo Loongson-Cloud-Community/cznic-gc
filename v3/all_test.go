@@ -15,6 +15,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"runtime/debug"
@@ -39,6 +40,7 @@ const (
 var (
 	oBSrc              = flag.String("bsrc", runtime.GOROOT(), "")
 	oHeap              = flag.Bool("heap", false, "")
+	oNReport           = flag.Bool("nreport", false, "")
 	oRE                = flag.String("re", "", "")
 	oReport            = flag.Bool("report", false, "")
 	oSrc               = flag.String("src", defaultSrc, "")
@@ -550,6 +552,9 @@ func TestParser(t *testing.T) {
 	runtime.ReadMemStats(&ms)
 	if *oHeap && *oSrc == defaultSrc {
 		t.Logf("ast count %v, heap %s", h(len(p.asts)), h(ms.HeapAlloc-ms0.HeapAlloc))
+		if *oNReport {
+			t.Logf("AST breakdown\n%s", nodeReport(p.asts...))
+		}
 	}
 }
 
@@ -926,4 +931,78 @@ func testNewPackage(cfg *Config, p *testParallel, t *testing.T, root string) {
 	}); err != nil {
 		t.Error(err)
 	}
+}
+
+func nodelyzer(n ...interface{}) (r map[reflect.Type]int) {
+	r = map[reflect.Type]int{}
+	for _, v := range n {
+		nodelyzer0(r, v)
+	}
+	return r
+}
+
+var tokenType = reflect.TypeOf(Token{})
+
+func nodelyzer0(m map[reflect.Type]int, n interface{}) {
+	switch n.(type) {
+	case nil, Token:
+		// nop
+	default:
+		t := reflect.TypeOf(n)
+		v := reflect.ValueOf(n)
+		switch t.Kind() {
+		case reflect.Pointer:
+			if !v.IsZero() {
+				nodelyzer0(m, v.Elem().Interface())
+			}
+		case reflect.Struct:
+			m[t]++
+			for i := 0; i < t.NumField(); i++ {
+				if token.IsExported(t.Field(i).Name) {
+					nodelyzer0(m, v.Field(i).Interface())
+				}
+			}
+		case reflect.Slice:
+			for i := 0; i < v.Len(); i++ {
+				nodelyzer0(m, v.Index(i).Interface())
+			}
+		default:
+			panic(todo("", t.Kind()))
+		}
+	}
+}
+
+func nodeReport(n ...interface{}) string {
+	type line struct {
+		t   string
+		n   int
+		sz  int
+		sz1 int
+	}
+	var lines []line
+	for k, v := range nodelyzer(n...) {
+		lines = append(lines, line{k.String(), v, int(k.Size()) * v, int(k.Size())})
+	}
+	sort.Slice(lines, func(i, j int) bool {
+		a, b := lines[i], lines[j]
+		if a.sz < b.sz {
+			return true
+		}
+
+		if a.sz > b.sz {
+			return false
+		}
+
+		return a.t < b.t
+	})
+	var b strings.Builder
+	var tn, tsz, csz int
+	for _, v := range lines {
+		csz += v.sz
+		fmt.Fprintf(&b, "%40s x %10s = %13s á %3s %13s\n", v.t, h(v.n), h(v.sz), h(v.sz1), h(csz))
+		tn += v.n
+		tsz += v.sz
+	}
+	fmt.Fprintf(&b, "%40s x %10s = %13s á %3.0f\n", "<total>", h(tn), h(tsz), float64(tsz)/float64(tn))
+	return b.String()
 }

@@ -899,7 +899,6 @@
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/builtins1.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/chans.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/compliterals.go
-/usr/local/go/src/cmd/compile/internal/types2/testdata/check/const0.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/const1.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/conversions0.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/conversions1.go
@@ -1180,7 +1179,6 @@
 /usr/local/go/src/cmd/doc/testdata/nested/empty/empty.go
 /usr/local/go/src/cmd/doc/testdata/nested/ignore.go
 /usr/local/go/src/cmd/doc/testdata/nested/nested/real.go
-/usr/local/go/src/cmd/doc/testdata/pkg.go
 /usr/local/go/src/cmd/fix/buildtag.go
 /usr/local/go/src/cmd/fix/buildtag_test.go
 /usr/local/go/src/cmd/fix/cftype.go
@@ -2870,7 +2868,6 @@
 /usr/local/go/src/go/doc/testdata/a0.go
 /usr/local/go/src/go/doc/testdata/a1.go
 /usr/local/go/src/go/doc/testdata/benchmark.go
-/usr/local/go/src/go/doc/testdata/blank.go
 /usr/local/go/src/go/doc/testdata/bugpara.go
 /usr/local/go/src/go/doc/testdata/c.go
 /usr/local/go/src/go/doc/testdata/d1.go
@@ -3054,7 +3051,6 @@
 /usr/local/go/src/go/types/testdata/check/builtins1.go
 /usr/local/go/src/go/types/testdata/check/chans.go
 /usr/local/go/src/go/types/testdata/check/compliterals.go
-/usr/local/go/src/go/types/testdata/check/const0.go
 /usr/local/go/src/go/types/testdata/check/const1.go
 /usr/local/go/src/go/types/testdata/check/conversions0.go
 /usr/local/go/src/go/types/testdata/check/conversions1.go
@@ -6175,7 +6171,6 @@
 /usr/local/go/test/fixedbugs/bug120.go
 /usr/local/go/test/fixedbugs/bug122.go
 /usr/local/go/test/fixedbugs/bug123.go
-/usr/local/go/test/fixedbugs/bug126.go
 /usr/local/go/test/fixedbugs/bug127.go
 /usr/local/go/test/fixedbugs/bug128.go
 /usr/local/go/test/fixedbugs/bug129.go
@@ -7556,7 +7551,6 @@
 /usr/local/go/test/fixedbugs/issue4510.dir/f2.go
 /usr/local/go/test/fixedbugs/issue4510.go
 /usr/local/go/test/fixedbugs/issue45175.go
-/usr/local/go/test/fixedbugs/issue4517b.go
 /usr/local/go/test/fixedbugs/issue4517d.go
 /usr/local/go/test/fixedbugs/issue4518.go
 /usr/local/go/test/fixedbugs/issue45242.go

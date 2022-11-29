@@ -6,6 +6,7 @@ package gc // modernc.org/gc/v3
 
 var (
 	_ Type = (*InvalidType)(nil)
+	_ Type = (*TypeDefNode)(nil)
 	_ Type = PredefinedType(0)
 )
 
@@ -50,6 +51,8 @@ type typer struct {
 
 func newTyper(t Type) typer { return typer{typ: t} }
 
+func (t typer) setType(typ Type) { t.typ = t }
+
 // Type returns the type of a node or Invalid if the type is
 // unknown/undetermined.
 func (t typer) Type() Type {
@@ -69,6 +72,7 @@ func (t typer) Type() Type {
 
 type typ interface {
 	Type() Type
+	setType(Type)
 }
 
 // Type is the representation of a Go type.

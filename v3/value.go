@@ -4,4 +4,32 @@
 
 package gc // modernc.org/gc/v3
 
-type Value interface{}
+import (
+	"go/constant"
+)
+
+var (
+	falseVal = constant.MakeBool(false)
+	trueVal  = constant.MakeBool(true)
+	unknown  = constant.MakeUnknown()
+)
+
+type valuer struct{ val constant.Value }
+
+func newValuer(v constant.Value) valuer { return valuer{v} }
+
+// Value implements Expression
+func (v valuer) Value() constant.Value {
+	if v.val == nil {
+		return unknown
+	}
+
+	return v.val
+}
+
+func (v *valuer) setValue(val constant.Value) { v.val = val }
+
+type Value interface {
+	Value() constant.Value
+	setValue(constant.Value)
+}

@@ -54,12 +54,12 @@ func (n *AST) check(c *ctx) {
 }
 
 func (n *SourceFileNode) check(c *ctx) {
-	for _, v := range n.ImportDeclList {
-		v.ImportDecl.check(c)
+	for n := n.ImportDeclList; n != nil; n = n.List {
+		n.ImportDecl.check(c)
 	}
 	return //TODO-
-	for _, v := range n.TopLevelDeclList {
-		switch x := v.TopLevelDecl.(type) {
+	for n := n.TopLevelDeclList; n != nil; n = n.List {
+		switch x := n.TopLevelDecl.(type) {
 		case *TypeDeclNode:
 			x.check(c)
 		case *ConstDeclNode:
@@ -71,8 +71,8 @@ func (n *SourceFileNode) check(c *ctx) {
 }
 
 func (n *ImportDeclNode) check(c *ctx) {
-	for _, v := range n.ImportSpecList {
-		v.ImportSpec.check(c)
+	for n := n.ImportSpecList; n != nil; n = n.List {
+		n.ImportSpec.check(c)
 	}
 }
 
@@ -88,14 +88,20 @@ func (n *ImportSpecNode) check(c *ctx) {
 }
 
 func (n *TypeDeclNode) check(c *ctx) {
-	for _, v := range n.TypeSpecList {
-		switch x := v.TypeSpec.(type) {
+	for n := n.TypeSpecList; n != nil; n = n.List {
+		switch x := n.TypeSpec.(type) {
 		case *TypeDefNode:
+			x.check(c)
+		case *AliasDeclNode:
 			x.check(c)
 		default:
 			panic(todo("%T", x))
 		}
 	}
+}
+
+func (n *AliasDeclNode) check(c *ctx) {
+	n.TypeNode.check(c)
 }
 
 func (n *TypeDefNode) check(c *ctx) {
@@ -105,19 +111,102 @@ func (n *TypeDefNode) check(c *ctx) {
 
 	defer n.exit()
 
+	n.TypeNode.check(c)
+	n.setType(n)
+}
+
+func (n *TypeNode) check(c *ctx) {
 	if c.pkg.isBuiltin {
-		switch nm := n.IDENT.Src(); nm {
-		case "bool":
-			n.typ = PredefinedType(Bool)
+		if n.TypeName != nil && n.TypeName.IDENT.IsValid() && n.TypeArgs == nil {
+			switch nm := n.TypeName.IDENT.Src(); nm {
+			case "bool":
+				n.setType(PredefinedType(Bool))
+			case "uint8":
+				n.setType(PredefinedType(Uint8))
+			case "uint16":
+				n.setType(PredefinedType(Uint16))
+			case "uint32":
+				n.setType(PredefinedType(Uint32))
+			case "uint64":
+				n.setType(PredefinedType(Uint64))
+			case "int8":
+				n.setType(PredefinedType(Int8))
+			case "int16":
+				n.setType(PredefinedType(Int16))
+			case "int32":
+				n.setType(PredefinedType(Int32))
+			case "int64":
+				n.setType(PredefinedType(Int64))
+			case "float32":
+				n.setType(PredefinedType(Float32))
+			case "float64":
+				n.setType(PredefinedType(Float64))
+			case "complex64":
+				n.setType(PredefinedType(Complex64))
+			case "complex128":
+				n.setType(PredefinedType(Complex128))
+			case "string":
+				n.setType(PredefinedType(String))
+			case "int":
+				n.setType(PredefinedType(Int))
+			case "uint":
+				n.setType(PredefinedType(Uint))
+			case "uintptr":
+				n.setType(PredefinedType(Uintptr))
+			default:
+				panic(todo("", n.Position(), n.Source(false)))
+			}
+			return
+		}
+	}
+
+	panic(todo("", n.Position(), n.Source(false)))
+}
+
+func (n *ConstDeclNode) check(c *ctx) {
+	for n := n.ConstSpecList; n != nil; n = n.List {
+		n.check(c)
+	}
+}
+
+func (n *ConstSpecListNode) check(c *ctx) {
+	n.ConstSpec.check(c)
+}
+
+func (n *ConstSpecNode) check(c *ctx) {
+	id := n.IdentifierList.IDENT
+	e := n.ExpressionList.Expression
+	if !id.IsValid() || e == nil {
+		return
+	}
+
+	nm := id.Src()
+	if c.pkg.isBuiltin {
+		switch nm {
+		case "true":
+			e.setType(PredefinedType(Bool))
+			e.setValue(trueVal)
+		case "false":
+			e.setType(PredefinedType(Bool))
+			e.setValue(falseVal)
 		default:
-			panic(todo("", nm))
+			panic(todo("", n.Position(), n.Source(false), nm))
 		}
 		return
 	}
 
-	panic(todo("", n.Source(false)))
+	e.check(c)
+	panic(todo("", n.Position(), n.Source(false)))
 }
 
-func (n *ConstDeclNode) check(c *ctx) {
-	panic(todo(""))
-}
+func (n *BasicLitNode) check(c *ctx)            { panic(todo("", n.Position(), n.Source(false))) }
+func (n *BinaryExpression) check(c *ctx)        { panic(todo("", n.Position(), n.Source(false))) }
+func (n *CompositeLitNode) check(c *ctx)        { panic(todo("", n.Position(), n.Source(false))) }
+func (n *ConversionNode) check(c *ctx)          { panic(todo("", n.Position(), n.Source(false))) }
+func (n *FunctionLitNode) check(c *ctx)         { panic(todo("", n.Position(), n.Source(false))) }
+func (n *MethodExprNode) check(c *ctx)          { panic(todo("", n.Position(), n.Source(false))) }
+func (n *OperandNameNode) check(c *ctx)         { panic(todo("", n.Position(), n.Source(false))) }
+func (n *OperandNode) check(c *ctx)             { panic(todo("", n.Position(), n.Source(false))) }
+func (n *ParenthesizedExpression) check(c *ctx) { panic(todo("", n.Position(), n.Source(false))) }
+func (n *PrimaryExprNode) check(c *ctx)         { panic(todo("", n.Position(), n.Source(false))) }
+func (n *UnaryExprNode) check(c *ctx)           { panic(todo("", n.Position(), n.Source(false))) }
