@@ -908,7 +908,6 @@
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/cycles3.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/cycles4.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/cycles5.go
-/usr/local/go/src/cmd/compile/internal/types2/testdata/check/decls1.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/decls2/decls2a.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/decls2/decls2b.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/check/decls3.go
@@ -3060,7 +3059,6 @@
 /usr/local/go/src/go/types/testdata/check/cycles3.go
 /usr/local/go/src/go/types/testdata/check/cycles4.go
 /usr/local/go/src/go/types/testdata/check/cycles5.go
-/usr/local/go/src/go/types/testdata/check/decls1.go
 /usr/local/go/src/go/types/testdata/check/decls2/decls2a.go
 /usr/local/go/src/go/types/testdata/check/decls2/decls2b.go
 /usr/local/go/src/go/types/testdata/check/decls3.go
@@ -7217,7 +7215,6 @@
 /usr/local/go/test/fixedbugs/issue29943.go
 /usr/local/go/test/fixedbugs/issue30041.go
 /usr/local/go/test/fixedbugs/issue30061.go
-/usr/local/go/test/fixedbugs/issue30085.go
 /usr/local/go/test/fixedbugs/issue30087.go
 /usr/local/go/test/fixedbugs/issue30116.go
 /usr/local/go/test/fixedbugs/issue30116u.go

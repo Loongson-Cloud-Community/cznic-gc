@@ -496,7 +496,22 @@ var falseNegatives = []string{
 	"golang.org/x/tools/go/analysis/passes/unreachable/testdata/src/a/a.go",
 }
 
-func isKnownBadFile(fn string, pos token.Position) bool {
+func isKnownBadFile(fn string, pos token.Position, err error) bool {
+	return isKnownBadFile0(fn, pos) || isKnownBadFile1(fn, err)
+}
+
+func isKnownBadFile1(fn string, err error) bool {
+	if x, ok := err.(errList); ok {
+		for _, v := range x {
+			if isKnownBadFile0(fn, v.pos) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isKnownBadFile0(fn string, pos token.Position) bool {
 	fs := token.NewFileSet()
 	ast, err := goparser.ParseFile(fs, fn, nil, goparser.ParseComments|goparser.DeclarationErrors)
 	if err != nil {
@@ -617,7 +632,7 @@ func testParser(p *testParallel, t *testing.T, root string, gld *golden) {
 			pp.reportDeclarationErrors = true
 			ast, err := pp.parse()
 			if err != nil {
-				if isKnownBadFile(path, pp.errPosition()) {
+				if isKnownBadFile(path, pp.errPosition(), err) {
 					if *oTrcExpectedErrors {
 						t.Log(err)
 					}
@@ -725,7 +740,7 @@ func testGoParser(p *testParallel, t *testing.T, root string, gld *golden) {
 
 			ast, err := goparser.ParseFile(token.NewFileSet(), path, b, goparser.DeclarationErrors)
 			if err != nil {
-				if pos, ok := extractPos(err.Error()); !ok || isKnownBadFile(path, pos) {
+				if pos, ok := extractPos(err.Error()); !ok || isKnownBadFile0(path, pos) {
 					p.addSkipped()
 					return nil
 				}
@@ -778,14 +793,7 @@ func BenchmarkParser(b *testing.B) {
 				}
 
 				pp = newParser(newScope(nil, scPackage), path, b, *oReport)
-				if _, err := pp.parse(); err != nil {
-					if isKnownBadFile(path, pp.errPosition()) {
-						return nil
-					}
-
-					return errorf("%s", err)
-				}
-
+				pp.parse()
 				return nil
 			}(); err != nil {
 				b.Fatal(err)
@@ -828,7 +836,7 @@ func BenchmarkGoParser(b *testing.B) {
 				}
 
 				if _, err = goparser.ParseFile(token.NewFileSet(), path, b, goparser.DeclarationErrors); err != nil {
-					if pos, ok := extractPos(err.Error()); !ok || isKnownBadFile(path, pos) {
+					if pos, ok := extractPos(err.Error()); !ok || isKnownBadFile0(path, pos) {
 						return nil
 					}
 
@@ -912,7 +920,7 @@ func testNewPackage(cfg *Config, p *testParallel, t *testing.T, root string) {
 				switch x := err.(type) {
 				case errList:
 					pos := x[0].pos
-					if !isKnownBadFile("/"+pos.Filename, pos) {
+					if !isKnownBadFile0("/"+pos.Filename, pos) {
 						p.addFail()
 						return err
 					}

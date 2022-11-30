@@ -79,6 +79,8 @@
 // BenchmarkParser-12      	       1	6190667520 ns/op	  11.34 MB/s	1940108384 B/op	22597980 allocs/op	// expand const specs
 // BenchmarkParser-12      	       1	6153078623 ns/op	  11.40 MB/s	1945020592 B/op	22597824 allocs/op	// more type checking
 // BenchmarkParser-12      	       1	6376455765 ns/op	  11.00 MB/s	1964588968 B/op	22597895 allocs/op	// more type checking
+// BenchmarkParser-12      	       1	4507900048 ns/op	  15.57 MB/s	1963887224 B/op	22598004 allocs/op	// adj VarSpecNode
+// BenchmarkParser-12      	       1	4545854329 ns/op	  15.44 MB/s	1959473456 B/op	22491164 allocs/op	// VarSpec
 
 package gc // modernc.org/gc/v3
 
@@ -7648,7 +7650,13 @@ type TypeNameNode struct {
 func (n *TypeNameNode) Source(full bool) string { return nodeSource(n, full) }
 
 // Position implements Node.
-func (n *TypeNameNode) Position() token.Position { panic("TODO") }
+func (n *TypeNameNode) Position() token.Position {
+	if n.QualifiedIdent != nil {
+		return n.QualifiedIdent.Position()
+	}
+
+	return n.IDENT.Position()
+}
 
 func (p *parser) typeName() *TypeNameNode {
 	var (
@@ -8481,12 +8489,10 @@ func (p *parser) varDecl() *VarDeclNode {
 //
 //	VarSpec = IdentifierList ( Type [ "=" ExpressionList ] | "=" ExpressionList ) .
 type VarSpecNode struct {
-	IdentifierList  *IdentifierListNode
-	TypeNode        *TypeNode
-	ASSIGN          Token
-	ExpressionList  *ExpressionListNode
-	ASSIGN2         Token
-	ExpressionList2 *ExpressionListNode
+	IdentifierList *IdentifierListNode
+	TypeNode       *TypeNode
+	ASSIGN         Token
+	ExpressionList *ExpressionListNode
 	lexicalScoper
 
 	visible
@@ -8500,12 +8506,10 @@ func (n *VarSpecNode) Position() token.Position { return n.IdentifierList.Positi
 
 func (p *parser) varSpec() (r *VarSpecNode) {
 	var (
-		identifierList  *IdentifierListNode
-		typeNode        *TypeNode
-		assignTok       Token
-		expressionList  *ExpressionListNode
-		assign2Tok      Token
-		expressionList2 *ExpressionListNode
+		identifierList *IdentifierListNode
+		typeNode       *TypeNode
+		assignTok      Token
+		expressionList *ExpressionListNode
 	)
 	// ebnf.Sequence IdentifierList ( Type [ "=" ExpressionList ] | "=" ExpressionList ) ctx [IDENT]
 	{
@@ -8570,17 +8574,17 @@ func (p *parser) varSpec() (r *VarSpecNode) {
 				}
 				ix := p.ix
 				// *ebnf.Token "=" ctx [ASSIGN]
-				assign2Tok = p.expect(ASSIGN)
+				assignTok = p.expect(ASSIGN)
 				// *ebnf.Name ExpressionList ctx [ADD, AND, ARROW, CHAN, CHAR, FLOAT, FUNC, IDENT, IMAG, INT, INTERFACE, LBRACK, LPAREN, MAP, MUL, NOT, STRING, STRUCT, SUB, XOR]
-				if expressionList2 = p.expressionList(false); expressionList2 == nil {
+				if expressionList = p.expressionList(false); expressionList == nil {
 					p.back(ix)
 					goto _4
 				}
 			}
 			break
 		_4:
-			assign2Tok = Token{}
-			expressionList2 = nil
+			assignTok = Token{}
+			expressionList = nil
 			p.back(ix)
 			return nil
 		default:
@@ -8590,17 +8594,76 @@ func (p *parser) varSpec() (r *VarSpecNode) {
 	}
 	sc := p.sc
 	r = &VarSpecNode{
-		lexicalScoper:   newLexicalScoper(sc),
-		IdentifierList:  identifierList,
-		TypeNode:        typeNode,
-		ASSIGN:          assignTok,
-		ExpressionList:  expressionList,
-		ASSIGN2:         assign2Tok,
-		ExpressionList2: expressionList2,
+		lexicalScoper:  newLexicalScoper(sc),
+		IdentifierList: identifierList,
+		TypeNode:       typeNode,
+		ASSIGN:         assignTok,
+		ExpressionList: expressionList,
 	}
+	ids := r.IdentifierList.Len()
+	exprs := r.ExpressionList.Len()
 	visible := int32(p.ix)
-	for n := r.IdentifierList; n != nil; n = n.List {
-		p.declare(sc, n.IDENT, r, visible, false)
+	switch x := p.checkAssignment(ids, exprs); x {
+	case assignTuple:
+		for n := r.IdentifierList; n != nil; n = n.List {
+			p.declare(sc, n.IDENT, r, visible, false)
+		}
+	case assignBalanced:
+		if ids == 1 {
+			p.declare(sc, r.IdentifierList.IDENT, r, visible, false)
+			break
+		}
+
+		id := r.IdentifierList
+		e := r.ExpressionList
+		for n := r.IdentifierList; n != nil; n = n.List {
+			id2 := *id
+			id2.List = nil
+			id = id.List
+			e2 := *e
+			e2.List = nil
+			e = e.List
+			r2 := *r
+			r2.IdentifierList = &id2
+			r2.ExpressionList = &e2
+			p.declare(sc, id2.IDENT, &r2, visible, false)
+		}
+	case assignExtraRhs:
+		p.err(r.Position(), "extra init expr %d", ids+1)
+	case assignExtraLhs:
+		if exprs == 0 { // var a int; var a, b int; ...
+			for n := r.IdentifierList; n != nil; n = n.List {
+				p.declare(sc, n.IDENT, r, visible, false)
+			}
+			break
+		}
+
+		p.err(r.Position(), "assignment mismatch: %d variables but %d value", ids, exprs)
+	default:
+		panic(todo("", r.Position(), r.Source(false)))
 	}
 	return r
+}
+
+const (
+	assignZero = iota
+	assignTuple
+	assignBalanced
+	assignExtraRhs
+	assignExtraLhs
+)
+
+func (p *parser) checkAssignment(lhs, rhs int) int {
+	switch {
+	case lhs == rhs:
+		return assignBalanced
+	case lhs > 1 && rhs == 1:
+		return assignTuple
+	case lhs > rhs:
+		return assignExtraLhs
+	case lhs < rhs:
+		return assignExtraRhs
+	default:
+		panic(todo("", lhs, rhs))
+	}
 }

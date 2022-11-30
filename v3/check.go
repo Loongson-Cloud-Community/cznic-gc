@@ -64,8 +64,10 @@ func (n *SourceFileNode) check(c *ctx) {
 			x.check(c)
 		case *ConstDeclNode:
 			x.check(c)
+		case *VarDeclNode:
+			x.check(c)
 		default:
-			panic(todo("%T", x))
+			panic(todo("%v: %T %s", n.Position(), x, x.Source(false)))
 		}
 	}
 }
@@ -101,7 +103,11 @@ func (n *TypeDeclNode) check(c *ctx) {
 }
 
 func (n *AliasDeclNode) check(c *ctx) {
-	n.TypeNode.check(c)
+	var builtin string
+	if c.pkg.isBuiltin {
+		builtin = n.IDENT.Src()
+	}
+	n.TypeNode.check(c, builtin)
 }
 
 func (n *TypeDefNode) check(c *ctx) {
@@ -111,56 +117,61 @@ func (n *TypeDefNode) check(c *ctx) {
 
 	defer n.exit()
 
-	n.TypeNode.check(c)
+	var builtin string
+	if c.pkg.isBuiltin {
+		builtin = n.IDENT.Src()
+	}
+	n.TypeNode.check(c, builtin)
 	n.setType(n)
 }
 
-func (n *TypeNode) check(c *ctx) {
-	if c.pkg.isBuiltin {
-		if n.TypeName != nil && n.TypeName.IDENT.IsValid() && n.TypeArgs == nil {
-			switch nm := n.TypeName.IDENT.Src(); nm {
-			case "bool":
-				n.setType(PredefinedType(Bool))
-			case "uint8":
-				n.setType(PredefinedType(Uint8))
-			case "uint16":
-				n.setType(PredefinedType(Uint16))
-			case "uint32":
-				n.setType(PredefinedType(Uint32))
-			case "uint64":
-				n.setType(PredefinedType(Uint64))
-			case "int8":
-				n.setType(PredefinedType(Int8))
-			case "int16":
-				n.setType(PredefinedType(Int16))
-			case "int32":
-				n.setType(PredefinedType(Int32))
-			case "int64":
-				n.setType(PredefinedType(Int64))
-			case "float32":
-				n.setType(PredefinedType(Float32))
-			case "float64":
-				n.setType(PredefinedType(Float64))
-			case "complex64":
-				n.setType(PredefinedType(Complex64))
-			case "complex128":
-				n.setType(PredefinedType(Complex128))
-			case "string":
-				n.setType(PredefinedType(String))
-			case "int":
-				n.setType(PredefinedType(Int))
-			case "uint":
-				n.setType(PredefinedType(Uint))
-			case "uintptr":
-				n.setType(PredefinedType(Uintptr))
-			default:
-				panic(todo("", n.Position(), n.Source(false)))
-			}
-			return
-		}
+func (n *TypeNode) check(c *ctx, builtin string) {
+	if builtin == "" {
+		panic(todo("", n.Position(), n.Source(false)))
 	}
 
-	panic(todo("", n.Position(), n.Source(false)))
+	switch builtin {
+	case "bool":
+		n.setType(PredefinedType(Bool))
+	case "byte", "uint8":
+		n.setType(PredefinedType(Uint8))
+	case "uint16":
+		n.setType(PredefinedType(Uint16))
+	case "uint32":
+		n.setType(PredefinedType(Uint32))
+	case "uint64":
+		n.setType(PredefinedType(Uint64))
+	case "int8":
+		n.setType(PredefinedType(Int8))
+	case "int16":
+		n.setType(PredefinedType(Int16))
+	case "rune", "int32":
+		n.setType(PredefinedType(Int32))
+	case "int64":
+		n.setType(PredefinedType(Int64))
+	case "float32":
+		n.setType(PredefinedType(Float32))
+	case "float64":
+		n.setType(PredefinedType(Float64))
+	case "complex64":
+		n.setType(PredefinedType(Complex64))
+	case "complex128":
+		n.setType(PredefinedType(Complex128))
+	case "string":
+		n.setType(PredefinedType(String))
+	case "int":
+		n.setType(PredefinedType(Int))
+	case "uint":
+		n.setType(PredefinedType(Uint))
+	case "uintptr":
+		n.setType(PredefinedType(Uintptr))
+	case "any":
+		n.setType(any)
+	case "comparable":
+		n.setType(comparable)
+	default:
+		panic(todo("", n.Position(), n.Source(false), builtin))
+	}
 }
 
 func (n *ConstDeclNode) check(c *ctx) {
@@ -189,6 +200,8 @@ func (n *ConstSpecNode) check(c *ctx) {
 		case "false":
 			e.setType(PredefinedType(Bool))
 			e.setValue(falseVal)
+		case "iota":
+			e.setType(PredefinedType(UntypedInt))
 		default:
 			panic(todo("", n.Position(), n.Source(false), nm))
 		}
@@ -210,3 +223,17 @@ func (n *OperandNode) check(c *ctx)             { panic(todo("", n.Position(), n
 func (n *ParenthesizedExpression) check(c *ctx) { panic(todo("", n.Position(), n.Source(false))) }
 func (n *PrimaryExprNode) check(c *ctx)         { panic(todo("", n.Position(), n.Source(false))) }
 func (n *UnaryExprNode) check(c *ctx)           { panic(todo("", n.Position(), n.Source(false))) }
+
+func (n *VarDeclNode) check(c *ctx) {
+	for n := n.VarSpecList; n != nil; n = n.List {
+		n.check(c)
+	}
+}
+
+func (n *VarSpecListNode) check(c *ctx) {
+	n.VarSpec.check(c)
+}
+
+func (n *VarSpecNode) check(c *ctx) {
+	panic(todo("", n.Position(), n.Source(false)))
+}

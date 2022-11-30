@@ -5,6 +5,7 @@
 package gc // modernc.org/gc/v3
 
 var (
+	_ Type = (*InterfaceType)(nil)
 	_ Type = (*InvalidType)(nil)
 	_ Type = (*TypeDefNode)(nil)
 	_ Type = PredefinedType(0)
@@ -12,7 +13,9 @@ var (
 
 // Singleton instances of some compile-time only pseudo types.
 var (
-	Invalid Type = &InvalidType{}
+	Invalid    Type = &InvalidType{}
+	any             = &InterfaceType{}
+	comparable      = &InterfaceType{}
 )
 
 const (
@@ -51,11 +54,14 @@ type typer struct {
 
 func newTyper(t Type) typer { return typer{typ: t} }
 
-func (t typer) setType(typ Type) { t.typ = t }
+func (t *typer) setType(typ Type) { t.typ = t }
+
+// Kind implements Type.
+func (t *typer) Kind() Kind { return t.Type().Kind() }
 
 // Type returns the type of a node or Invalid if the type is
 // unknown/undetermined.
-func (t typer) Type() Type {
+func (t *typer) Type() Type {
 	if t.typ != nil {
 		return t.typ
 	}
@@ -83,7 +89,7 @@ type typ interface {
 //	TODO ...
 type Type interface {
 	// Kind returns the specific kind of a type.
-	//TODO Kind() Kind
+	Kind() Kind
 }
 
 // A Kind represents the specific kind of type that a Type represents. The zero
@@ -138,3 +144,11 @@ type PredefinedType Kind
 
 // Kind implements Type.
 func (t PredefinedType) Kind() Kind { return Kind(t) }
+
+// InterfaceType represents an interface type.
+type InterfaceType struct {
+	//TODO Elems []Node //TODO
+}
+
+// Kind implements Type.
+func (t *InterfaceType) Kind() Kind { return Interface }
