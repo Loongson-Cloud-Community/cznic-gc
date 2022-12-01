@@ -6089,10 +6089,7 @@
 /usr/local/go/test/fixedbugs/bug027.go
 /usr/local/go/test/fixedbugs/bug028.go
 /usr/local/go/test/fixedbugs/bug031.go
-/usr/local/go/test/fixedbugs/bug035.go
 /usr/local/go/test/fixedbugs/bug037.go
-/usr/local/go/test/fixedbugs/bug039.go
-/usr/local/go/test/fixedbugs/bug040.go
 /usr/local/go/test/fixedbugs/bug045.go
 /usr/local/go/test/fixedbugs/bug046.go
 /usr/local/go/test/fixedbugs/bug047.go
@@ -8011,15 +8008,12 @@
 /usr/local/go/test/floatcmp.go
 /usr/local/go/test/for.go
 /usr/local/go/test/func.go
-/usr/local/go/test/func1.go
 /usr/local/go/test/func2.go
-/usr/local/go/test/func3.go
 /usr/local/go/test/func4.go
 /usr/local/go/test/func5.go
 /usr/local/go/test/func6.go
 /usr/local/go/test/func7.go
 /usr/local/go/test/func8.go
-/usr/local/go/test/funcdup.go
 /usr/local/go/test/funcdup2.go
 /usr/local/go/test/fuse.go
 /usr/local/go/test/gc.go

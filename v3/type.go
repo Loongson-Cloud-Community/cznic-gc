@@ -7,6 +7,7 @@ package gc // modernc.org/gc/v3
 var (
 	_ Type = (*InterfaceType)(nil)
 	_ Type = (*InvalidType)(nil)
+	_ Type = (*TupleType)(nil)
 	_ Type = (*TypeDefNode)(nil)
 	_ Type = PredefinedType(0)
 )
@@ -27,7 +28,7 @@ const (
 type guard byte
 
 func (g *guard) enter(c *ctx, n Node) bool {
-	if n == nil {
+	if n == nil || g == nil {
 		return false
 	}
 
@@ -119,6 +120,7 @@ const (
 	Slice          // slice
 	String         // string
 	Struct         // struct
+	Tuple          // tuple
 	Uint           // uint
 	Uint16         // uint16
 	Uint32         // uint32
@@ -152,3 +154,11 @@ type InterfaceType struct {
 
 // Kind implements Type.
 func (t *InterfaceType) Kind() Kind { return Interface }
+
+// TupleType represents an ordered list of types.
+type TupleType struct {
+	Types []Type
+}
+
+// Kind implements Type.
+func (t *TupleType) Kind() Kind { return Tuple }

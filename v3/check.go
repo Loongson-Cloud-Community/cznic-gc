@@ -54,27 +54,29 @@ func (n *AST) check(c *ctx) {
 }
 
 func (n *SourceFileNode) check(c *ctx) {
-	for n := n.ImportDeclList; n != nil; n = n.List {
-		n.ImportDecl.check(c)
+	for l := n.ImportDeclList; l != nil; l = l.List {
+		l.ImportDecl.check(c)
 	}
 	return //TODO-
-	for n := n.TopLevelDeclList; n != nil; n = n.List {
-		switch x := n.TopLevelDecl.(type) {
+	for l := n.TopLevelDeclList; l != nil; l = l.List {
+		switch x := l.TopLevelDecl.(type) {
 		case *TypeDeclNode:
 			x.check(c)
 		case *ConstDeclNode:
 			x.check(c)
 		case *VarDeclNode:
 			x.check(c)
+		case *FunctionDeclNode:
+			x.check(c)
 		default:
-			panic(todo("%v: %T %s", n.Position(), x, x.Source(false)))
+			panic(todo("%v: %T %s", l.Position(), x, x.Source(false)))
 		}
 	}
 }
 
 func (n *ImportDeclNode) check(c *ctx) {
-	for n := n.ImportSpecList; n != nil; n = n.List {
-		n.ImportSpec.check(c)
+	for l := n.ImportSpecList; l != nil; l = l.List {
+		l.ImportSpec.check(c)
 	}
 }
 
@@ -90,8 +92,8 @@ func (n *ImportSpecNode) check(c *ctx) {
 }
 
 func (n *TypeDeclNode) check(c *ctx) {
-	for n := n.TypeSpecList; n != nil; n = n.List {
-		switch x := n.TypeSpec.(type) {
+	for l := n.TypeSpecList; l != nil; l = l.List {
+		switch x := l.TypeSpec.(type) {
 		case *TypeDefNode:
 			x.check(c)
 		case *AliasDeclNode:
@@ -107,7 +109,7 @@ func (n *AliasDeclNode) check(c *ctx) {
 	if c.pkg.isBuiltin {
 		builtin = n.IDENT.Src()
 	}
-	n.TypeNode.check(c, builtin)
+	n.TypeNode.check(c, builtin, n.LexicalScope())
 }
 
 func (n *TypeDefNode) check(c *ctx) {
@@ -121,13 +123,31 @@ func (n *TypeDefNode) check(c *ctx) {
 	if c.pkg.isBuiltin {
 		builtin = n.IDENT.Src()
 	}
-	n.TypeNode.check(c, builtin)
+	n.TypeNode.check(c, builtin, n.LexicalScope())
 	n.setType(n)
 }
 
-func (n *TypeNode) check(c *ctx, builtin string) {
+func (n *TypeNode) check(c *ctx, builtin string, sc *Scope) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
 	if builtin == "" {
-		panic(todo("", n.Position(), n.Source(false)))
+		switch x := n.TypeName.(type) {
+		case Token:
+			switch y := sc.lookup(x); z := y.n.(type) {
+			case *TypeDefNode:
+				z.check(c)
+				n.setType(z)
+			default:
+				panic(todo("%v: %T %s", n.Position(), z, n.Source(false)))
+			}
+		default:
+			panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+		}
+		return
 	}
 
 	switch builtin {
@@ -149,17 +169,17 @@ func (n *TypeNode) check(c *ctx, builtin string) {
 		n.setType(PredefinedType(Int32))
 	case "int64":
 		n.setType(PredefinedType(Int64))
-	case "float32":
+	case "float32", "FloatType":
 		n.setType(PredefinedType(Float32))
 	case "float64":
 		n.setType(PredefinedType(Float64))
-	case "complex64":
+	case "complex64", "ComplexType":
 		n.setType(PredefinedType(Complex64))
 	case "complex128":
 		n.setType(PredefinedType(Complex128))
 	case "string":
 		n.setType(PredefinedType(String))
-	case "int":
+	case "int", "Type", "Type1", "IntegerType":
 		n.setType(PredefinedType(Int))
 	case "uint":
 		n.setType(PredefinedType(Uint))
@@ -175,8 +195,8 @@ func (n *TypeNode) check(c *ctx, builtin string) {
 }
 
 func (n *ConstDeclNode) check(c *ctx) {
-	for n := n.ConstSpecList; n != nil; n = n.List {
-		n.check(c)
+	for l := n.ConstSpecList; l != nil; l = l.List {
+		l.check(c)
 	}
 }
 
@@ -225,8 +245,8 @@ func (n *PrimaryExprNode) check(c *ctx)         { panic(todo("", n.Position(), n
 func (n *UnaryExprNode) check(c *ctx)           { panic(todo("", n.Position(), n.Source(false))) }
 
 func (n *VarDeclNode) check(c *ctx) {
-	for n := n.VarSpecList; n != nil; n = n.List {
-		n.check(c)
+	for l := n.VarSpecList; l != nil; l = l.List {
+		l.check(c)
 	}
 }
 
@@ -235,5 +255,72 @@ func (n *VarSpecListNode) check(c *ctx) {
 }
 
 func (n *VarSpecNode) check(c *ctx) {
+	n.TypeNode.check(c, "", n.LexicalScope())
+	ids := n.IdentifierList.Len()
+	exprs := n.ExpressionList.Len()
+	sc := n.LexicalScope()
+	switch x := checkBalance(ids, exprs); x {
+	case balanceExtraLhs:
+		if exprs == 0 {
+			for l := n.IdentifierList; l != nil; l = l.List {
+				n.check1(c, sc, l.IDENT)
+			}
+			return
+		}
+
+		panic(todo("", n.Position(), n.Source(false), ids, exprs, x))
+	default:
+		panic(todo("", n.Position(), n.Source(false), ids, exprs, x))
+	}
+}
+
+func (n *VarSpecNode) check1(c *ctx, sc *Scope, id Token) {
+	switch s := sc.lookup(id); x := s.n.(type) {
+	case *VarSpecNode:
+		ids := x.IdentifierList.Len()
+		exprs := x.ExpressionList.Len()
+		switch y := checkBalance(ids, exprs); y {
+		case balanceExtraLhs:
+			if exprs == 0 {
+				return
+			}
+
+			panic(todo("", x.Position(), x.Source(false), ids, exprs, y))
+		default:
+			panic(todo("", x.Position(), x.Source(false), ids, exprs, y))
+		}
+	default:
+		panic(todo("%v: %T %s %q", n.Position(), x, n.Source(false), id.Src()))
+	}
+}
+
+func (n *FunctionDeclNode) check(c *ctx) {
+	n.Signature.check(c)
+	panic(todo("", n.Position(), n.Source(false)))
+}
+
+func (n *SignatureNode) check(c *ctx) {
+	if !n.enter(c, n) {
+		return
+	}
+
+	defer n.exit()
+
+	n.Parameters.check(c)
+	//TODO n.Result.check(c)
+	panic(todo("", n.Position(), n.Source(false)))
+}
+
+func (n *ParametersNode) check(c *ctx) {
+	for l := n.ParameterDeclList; l != nil; l = l.List {
+		l.check(c)
+	}
+}
+
+func (n *ParameterDeclListNode) check(c *ctx) {
+	n.ParameterDecl.check(c)
+}
+
+func (n *ParameterDeclNode) check(c *ctx) {
 	panic(todo("", n.Position(), n.Source(false)))
 }

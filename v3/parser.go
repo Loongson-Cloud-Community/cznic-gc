@@ -81,6 +81,13 @@
 // BenchmarkParser-12      	       1	6376455765 ns/op	  11.00 MB/s	1964588968 B/op	22597895 allocs/op	// more type checking
 // BenchmarkParser-12      	       1	4507900048 ns/op	  15.57 MB/s	1963887224 B/op	22598004 allocs/op	// adj VarSpecNode
 // BenchmarkParser-12      	       1	4545854329 ns/op	  15.44 MB/s	1959473456 B/op	22491164 allocs/op	// VarSpec
+// BenchmarkParser-12      	       1	4621355633 ns/op	  15.18 MB/s	1955137200 B/op	22435441 allocs/op	// -TypeNameNode
+// BenchmarkParser-12      	       1	5947737679 ns/op	  11.80 MB/s	1956769328 B/op	22435328 allocs/op	// FunctionDeclNode, implement Type
+// BenchmarkParser-12      	       1	6329362027 ns/op	  11.09 MB/s	1957885208 B/op	22435143 allocs/op	// SignatureNode +typer
+// BenchmarkParser-12      	       1	8067405920 ns/op	   8.70 MB/s	1961603408 B/op	22718466 allocs/op
+// BenchmarkParser-12      	       1	9778505265 ns/op	   7.18 MB/s	1967123880 B/op	22901435 allocs/op
+// BenchmarkParser-12      	       1	9574397742 ns/op	   7.33 MB/s	1965950424 B/op	22863516 allocs/op
+// BenchmarkParser-12      	       1	10149457641 ns/op	   6.91 MB/s	1987014008 B/op	23010721 allocs/op	// declare parameters
 
 package gc // modernc.org/gc/v3
 
@@ -167,6 +174,25 @@ func (s *Scope) declare(nm Token, n visibiliter, visible int32, p *parser, initO
 	// trc("%v: add %s %p", nm.Position(), snm, s)
 	n.setVisible(visible)
 	s.nodes[snm] = scoped{n, nm}
+	return r
+}
+
+func (s *Scope) lookup(id Token) (r scoped) {
+	nm := id.Src()
+	ix := int(id.index)
+	for s != nil {
+		switch s.kind {
+		case scPackage, scUniverse:
+			ix = -1
+		}
+
+		sc, ok := s.nodes[nm]
+		if ok && ix < 0 || ix > sc.n.Visible() {
+			return sc
+		}
+
+		s = s.Parent
+	}
 	return r
 }
 
@@ -834,7 +860,7 @@ func (n *BlockNode) Source(full bool) string { return nodeSource(n, full) }
 // Position implements Node.
 func (n *BlockNode) Position() token.Position { return n.LBRACE.Position() }
 
-func (p *parser) block() *BlockNode {
+func (p *parser) block(r *ReceiverNode, s *SignatureNode) *BlockNode {
 	var (
 		ok            bool
 		lbraceTok     Token
@@ -850,6 +876,15 @@ func (p *parser) block() *BlockNode {
 		ix := p.ix
 		// *ebnf.Token "{" ctx [LBRACE]
 		lbraceTok = p.expect(LBRACE)
+		if r != nil {
+			r.Parameters.declare(p, p.sc)
+		}
+		if s != nil {
+			s.Parameters.declare(p, p.sc)
+			if s.Result != nil {
+				s.Result.Parameters.declare(p, p.sc)
+			}
+		}
 		// *ebnf.Name StatementList ctx []
 		switch p.c() {
 		case ADD, AND, ARROW, BREAK, CHAN, CHAR, CONST, CONTINUE, DEFER, FALLTHROUGH, FLOAT, FOR, FUNC, GO, GOTO, IDENT, IF, IMAG, INT, INTERFACE, LBRACE, LBRACK, LPAREN, MAP, MUL, NOT, RETURN, SELECT, SEMICOLON, STRING, STRUCT, SUB, SWITCH, TYPE, VAR, XOR /* ε */ :
@@ -1724,7 +1759,7 @@ func (p *parser) element() *ElementNode {
 //	EmbeddedField = [ "*" ] TypeName [ TypeArgs ] .
 type EmbeddedFieldNode struct {
 	MUL      Token
-	TypeName *TypeNameNode
+	TypeName Node
 	TypeArgs *TypeArgsNode
 }
 
@@ -1737,7 +1772,7 @@ func (n *EmbeddedFieldNode) Position() token.Position { panic("TODO") }
 func (p *parser) embeddedField() *EmbeddedFieldNode {
 	var (
 		mulTok   Token
-		typeName *TypeNameNode
+		typeName Node
 		typeArgs *TypeArgsNode
 	)
 	// ebnf.Sequence [ "*" ] TypeName [ TypeArgs ] ctx [IDENT, MUL]
@@ -2505,7 +2540,7 @@ func (p *parser) forStmt() *ForStmtNode {
 		// *ebnf.Name Block ctx []
 		switch p.c() {
 		case LBRACE:
-			if block = p.block(); block == nil {
+			if block = p.block(nil, nil); block == nil {
 				p.back(ix)
 				return nil
 			}
@@ -2536,12 +2571,12 @@ func (n *FunctionBodyNode) Source(full bool) string { return nodeSource(n, full)
 // Position implements Node.
 func (n *FunctionBodyNode) Position() token.Position { return n.Block.Position() }
 
-func (p *parser) functionBody() *FunctionBodyNode {
+func (p *parser) functionBody(r *ReceiverNode, s *SignatureNode) *FunctionBodyNode {
 	var (
 		block *BlockNode
 	)
 	// *ebnf.Name Block ctx [LBRACE]
-	if block = p.block(); block == nil {
+	if block = p.block(r, s); block == nil {
 		return nil
 	}
 	return &FunctionBodyNode{
@@ -2617,7 +2652,7 @@ func (p *parser) functionDecl() (r *FunctionDeclNode) {
 		switch p.c() {
 		case LBRACE:
 			// *ebnf.Name FunctionBody ctx [LBRACE]
-			if functionBody = p.functionBody(); functionBody == nil {
+			if functionBody = p.functionBody(nil, signature); functionBody == nil {
 				goto _2
 			}
 		}
@@ -2680,7 +2715,7 @@ func (p *parser) functionLit() *FunctionLitNode {
 		// *ebnf.Name FunctionBody ctx []
 		switch p.c() {
 		case LBRACE:
-			if functionBody = p.functionBody(); functionBody == nil {
+			if functionBody = p.functionBody(nil, signature); functionBody == nil {
 				p.back(ix)
 				return nil
 			}
@@ -2969,7 +3004,7 @@ func (p *parser) ifStmt() *IfStmtNode {
 			// *ebnf.Name Block ctx []
 			switch p.c() {
 			case LBRACE:
-				if block = p.block(); block == nil {
+				if block = p.block(nil, nil); block == nil {
 					p.back(ix)
 					goto _0
 				}
@@ -3005,7 +3040,7 @@ func (p *parser) ifStmt() *IfStmtNode {
 						goto _1
 					case LBRACE: // 1
 						// *ebnf.Name Block ctx [LBRACE]
-						if block2 = p.block(); block2 == nil {
+						if block2 = p.block(nil, nil); block2 == nil {
 							goto _5
 						}
 						break
@@ -3066,7 +3101,7 @@ func (p *parser) ifStmt() *IfStmtNode {
 			// *ebnf.Name Block ctx []
 			switch p.c() {
 			case LBRACE:
-				if block = p.block(); block == nil {
+				if block = p.block(nil, nil); block == nil {
 					p.back(ix)
 					goto _7
 				}
@@ -3102,7 +3137,7 @@ func (p *parser) ifStmt() *IfStmtNode {
 						goto _8
 					case LBRACE: // 1
 						// *ebnf.Name Block ctx [LBRACE]
-						if block2 = p.block(); block2 == nil {
+						if block2 = p.block(nil, nil); block2 == nil {
 							goto _12
 						}
 						break
@@ -4178,7 +4213,7 @@ func (p *parser) methodDecl() *MethodDeclNode {
 		switch p.c() {
 		case LBRACE:
 			// *ebnf.Name FunctionBody ctx [LBRACE]
-			if functionBody = p.functionBody(); functionBody == nil {
+			if functionBody = p.functionBody(receiver, signature); functionBody == nil {
 				goto _0
 			}
 		}
@@ -4606,18 +4641,30 @@ func (p *parser) packageName() *PackageNameNode {
 
 // ParameterDeclNode represents the production
 //
-//	ParameterDecl = identifier "..." Type | identifier Type | "..." Type | Type .
+//	ParameterDecl = [ IdentifierList ] [ "..." ] Type .
 type ParameterDeclNode struct {
-	IDENT    Token
-	ELLIPSIS Token
-	TypeNode *TypeNode
+	IdentifierList *IdentifierListNode
+	ELLIPSIS       Token
+	TypeNode       *TypeNode
+
+	visible
 }
 
 // Source implements Node.
 func (n *ParameterDeclNode) Source(full bool) string { return nodeSource(n, full) }
 
 // Position implements Node.
-func (n *ParameterDeclNode) Position() token.Position { panic("TODO") }
+func (n *ParameterDeclNode) Position() token.Position {
+	if n.IdentifierList != nil {
+		return n.IdentifierList.Position()
+	}
+
+	if n.ELLIPSIS.IsValid() {
+		return n.ELLIPSIS.Position()
+	}
+
+	return n.TypeNode.Position()
+}
 
 func (p *parser) parameterDecl() *ParameterDeclNode {
 	var (
@@ -4717,10 +4764,14 @@ func (p *parser) parameterDecl() *ParameterDeclNode {
 	default:
 		return nil
 	}
+	var idl *IdentifierListNode
+	if identTok.IsValid() {
+		idl = &IdentifierListNode{IDENT: identTok}
+	}
 	return &ParameterDeclNode{
-		IDENT:    identTok,
-		ELLIPSIS: ellipsisTok,
-		TypeNode: typeNode,
+		IdentifierList: idl,
+		ELLIPSIS:       ellipsisTok,
+		TypeNode:       typeNode,
 	}
 }
 
@@ -4754,11 +4805,12 @@ func (n *ParametersNode) Source(full bool) string { return nodeSource(n, full) }
 // Position implements Node.
 func (n *ParametersNode) Position() token.Position { return n.LPAREN.Position() }
 
-func (p *parser) parameters() *ParametersNode {
+func (p *parser) parameters() (r *ParametersNode) {
 	var (
 		ok            bool
 		lparenTok     Token
 		parameterDecl *ParameterDeclNode
+		list0         []*ParameterDeclListNode
 		list, last    *ParameterDeclListNode
 		rparenTok     Token
 	)
@@ -4784,6 +4836,7 @@ func (p *parser) parameters() *ParametersNode {
 						ParameterDecl: parameterDecl,
 						COMMA:         p.consume(),
 					}
+					list0 = append(list0, next)
 					if last != nil {
 						last.List = next
 					}
@@ -4796,6 +4849,7 @@ func (p *parser) parameters() *ParametersNode {
 					next := &ParameterDeclListNode{
 						ParameterDecl: parameterDecl,
 					}
+					list0 = append(list0, next)
 					if last != nil {
 						last.List = next
 					}
@@ -4814,10 +4868,77 @@ _1:
 		p.back(ix)
 		return nil
 	}
-	return &ParametersNode{
+	var ids []int
+	for i, v := range list0 {
+		if v.ParameterDecl.IdentifierList != nil {
+			ids = append(ids, i)
+		}
+	}
+	r = &ParametersNode{
 		LPAREN:            lparenTok,
 		ParameterDeclList: list,
 		RPAREN:            rparenTok,
+	}
+	if len(ids) != 0 && len(ids) != len(list0) {
+		//                                                    len(ids)
+		//                                                    | ids
+		//                                                    | |   len(list0)
+		// TODO gc.go:74:20 (rel, importPath, version string) 1 [2] 3
+		last = nil
+		for _, v := range list0 {
+			x := *v
+			x.List = nil
+		}
+		for firstX := 0; len(ids) != 0; {
+			lastX := ids[0]
+			ids = ids[1:]
+			grp := list0[lastX]
+			grp.List = nil
+			idl := grp.ParameterDecl.IdentifierList
+			for i := lastX - 1; i >= firstX; i-- {
+				item := list0[i]
+				decl := item.ParameterDecl
+				typ := decl.TypeNode
+				if typ.TypeArgs != nil {
+					panic(todo("%v: %s", decl.Position(), decl.Source(false)))
+				}
+
+				switch x := typ.TypeName.(type) {
+				case Token:
+					// { param , } vs { , ident }
+					idl.COMMA = item.COMMA
+					li := &IdentifierListNode{IDENT: x}
+					li.List = idl
+					idl = li
+				default:
+					p.err(typ.Position(), "syntax error: mixed named and unnamed parameters")
+				}
+			}
+			grp.ParameterDecl.IdentifierList = idl
+			firstX = lastX + 1
+			if last == nil {
+				r.ParameterDeclList = grp
+				last = grp
+				continue
+			}
+
+			last.List = grp
+			last = grp
+		}
+	}
+	return r
+}
+
+func (n *ParametersNode) declare(p *parser, s *Scope) {
+	if n == nil {
+		return
+	}
+
+	for l := n.ParameterDeclList; l != nil; l = l.List {
+		pd := l.ParameterDecl
+		for l := pd.IdentifierList; l != nil; l = l.List {
+			p.declare(s, l.IDENT, pd, 0, true)
+		}
 	}
 }
 
@@ -5832,6 +5953,7 @@ func (p *parser) shortVarDecl(lhs *ExpressionListNode, preBlock bool) (r *ShortV
 	}
 	return r
 }
+
 func (p *parser) exprList2identList(list *ExpressionListNode) (r *IdentifierListNode) {
 	var last *IdentifierListNode
 	for n := list; n != nil; n = n.List {
@@ -5891,6 +6013,7 @@ func (p *parser) expr2ident(e Expression) (r Token) {
 type SignatureNode struct {
 	Parameters *ParametersNode
 	Result     *ResultNode
+	typer
 }
 
 // Source implements Node.
@@ -6502,7 +6625,7 @@ func (p *parser) statement() Node {
 		return fallthroughStmt
 	case LBRACE: // 8
 		// *ebnf.Name Block ctx [LBRACE]
-		if block = p.block(); block == nil {
+		if block = p.block(nil, nil); block == nil {
 			return nil
 		}
 		return block
@@ -6827,7 +6950,7 @@ func (p *parser) topLevelDecl() (r Node) {
 //
 //	Type = TypeName [ TypeArgs ] | TypeLit | "(" Type ")" .
 type TypeNode struct {
-	TypeName *TypeNameNode
+	TypeName Node
 	TypeArgs *TypeArgsNode
 	TypeLit  *TypeLitNode
 	LPAREN   Token
@@ -6859,7 +6982,7 @@ func (n *TypeNode) Position() (r token.Position) {
 func (p *parser) type1() *TypeNode {
 	var (
 		ok        bool
-		typeName  *TypeNameNode
+		typeName  Node
 		typeArgs  *TypeArgsNode
 		typeLit   *TypeLitNode
 		lparenTok Token
@@ -7638,51 +7761,13 @@ func (p *parser) typeLit() *TypeLitNode {
 	}
 }
 
-// TypeNameNode represents the production
-//
-//	TypeName = QualifiedIdent | identifier .
-type TypeNameNode struct {
-	QualifiedIdent *QualifiedIdentNode
-	IDENT          Token
-}
-
-// Source implements Node.
-func (n *TypeNameNode) Source(full bool) string { return nodeSource(n, full) }
-
-// Position implements Node.
-func (n *TypeNameNode) Position() token.Position {
-	if n.QualifiedIdent != nil {
-		return n.QualifiedIdent.Position()
-	}
-
-	return n.IDENT.Position()
-}
-
-func (p *parser) typeName() *TypeNameNode {
-	var (
-		qualifiedIdent *QualifiedIdentNode
-		identTok       Token
-	)
+func (p *parser) typeName() Node {
 	// ebnf.Alternative QualifiedIdent | identifier ctx [IDENT]
-	switch p.c() {
-	case IDENT: // 0 1
-		// *ebnf.Name QualifiedIdent ctx [IDENT]
-		if qualifiedIdent = p.qualifiedIdent(); qualifiedIdent == nil {
-			goto _0
-		}
-		break
-	_0:
-		qualifiedIdent = nil
-		// *ebnf.Name identifier ctx [IDENT]
-		identTok = p.expect(IDENT)
-		break
-		return nil
+	switch {
+	case p.peek(1) == PERIOD && p.peek(2) == IDENT:
+		return p.qualifiedIdent()
 	default:
-		return nil
-	}
-	return &TypeNameNode{
-		QualifiedIdent: qualifiedIdent,
-		IDENT:          identTok,
+		return p.expect(IDENT)
 	}
 }
 
@@ -8603,12 +8688,12 @@ func (p *parser) varSpec() (r *VarSpecNode) {
 	ids := r.IdentifierList.Len()
 	exprs := r.ExpressionList.Len()
 	visible := int32(p.ix)
-	switch x := p.checkAssignment(ids, exprs); x {
-	case assignTuple:
+	switch x := checkBalance(ids, exprs); x {
+	case balanceTuple:
 		for n := r.IdentifierList; n != nil; n = n.List {
 			p.declare(sc, n.IDENT, r, visible, false)
 		}
-	case assignBalanced:
+	case balanceEqual:
 		if ids == 1 {
 			p.declare(sc, r.IdentifierList.IDENT, r, visible, false)
 			break
@@ -8628,9 +8713,9 @@ func (p *parser) varSpec() (r *VarSpecNode) {
 			r2.ExpressionList = &e2
 			p.declare(sc, id2.IDENT, &r2, visible, false)
 		}
-	case assignExtraRhs:
+	case balanceExtraRhs:
 		p.err(r.Position(), "extra init expr %d", ids+1)
-	case assignExtraLhs:
+	case balanceExtraLhs:
 		if exprs == 0 { // var a int; var a, b int; ...
 			for n := r.IdentifierList; n != nil; n = n.List {
 				p.declare(sc, n.IDENT, r, visible, false)
@@ -8646,23 +8731,23 @@ func (p *parser) varSpec() (r *VarSpecNode) {
 }
 
 const (
-	assignZero = iota
-	assignTuple
-	assignBalanced
-	assignExtraRhs
-	assignExtraLhs
+	balanceZero = iota
+	balanceTuple
+	balanceEqual
+	balanceExtraRhs
+	balanceExtraLhs
 )
 
-func (p *parser) checkAssignment(lhs, rhs int) int {
+func checkBalance(lhs, rhs int) int {
 	switch {
 	case lhs == rhs:
-		return assignBalanced
+		return balanceEqual
 	case lhs > 1 && rhs == 1:
-		return assignTuple
+		return balanceTuple
 	case lhs > rhs:
-		return assignExtraLhs
+		return balanceExtraLhs
 	case lhs < rhs:
-		return assignExtraRhs
+		return balanceExtraRhs
 	default:
 		panic(todo("", lhs, rhs))
 	}

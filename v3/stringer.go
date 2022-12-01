@@ -28,23 +28,24 @@ func _() {
 	_ = x[Slice-17]
 	_ = x[String-18]
 	_ = x[Struct-19]
-	_ = x[Uint-20]
-	_ = x[Uint16-21]
-	_ = x[Uint32-22]
-	_ = x[Uint64-23]
-	_ = x[Uint8-24]
-	_ = x[Uintptr-25]
-	_ = x[UntypedBool-26]
-	_ = x[UntypedComplex-27]
-	_ = x[UntypedFloat-28]
-	_ = x[UntypedInt-29]
-	_ = x[UntypedNil-30]
-	_ = x[UntypedString-31]
+	_ = x[Tuple-20]
+	_ = x[Uint-21]
+	_ = x[Uint16-22]
+	_ = x[Uint32-23]
+	_ = x[Uint64-24]
+	_ = x[Uint8-25]
+	_ = x[Uintptr-26]
+	_ = x[UntypedBool-27]
+	_ = x[UntypedComplex-28]
+	_ = x[UntypedFloat-29]
+	_ = x[UntypedInt-30]
+	_ = x[UntypedNil-31]
+	_ = x[UntypedString-32]
 }
 
-const _Kind_name = "<invalid type>arrayboolchancomplex128complex64float32float64functionintint16int32int64int8interfacemappointerslicestringstructuintuint16uint32uint64uint8uintptruntyped booluntyped complexuntyped floatuntyped intuntyped niluntyped string"
+const _Kind_name = "<invalid type>arrayboolchancomplex128complex64float32float64functionintint16int32int64int8interfacemappointerslicestringstructtupleuintuint16uint32uint64uint8uintptruntyped booluntyped complexuntyped floatuntyped intuntyped niluntyped string"
 
-var _Kind_index = [...]uint8{0, 14, 19, 23, 27, 37, 46, 53, 60, 68, 71, 76, 81, 86, 90, 99, 102, 109, 114, 120, 126, 130, 136, 142, 148, 153, 160, 172, 187, 200, 211, 222, 236}
+var _Kind_index = [...]uint8{0, 14, 19, 23, 27, 37, 46, 53, 60, 68, 71, 76, 81, 86, 90, 99, 102, 109, 114, 120, 126, 131, 135, 141, 147, 153, 158, 165, 177, 192, 205, 216, 227, 241}
 
 func (i Kind) String() string {
 	if i < 0 || i >= Kind(len(_Kind_index)-1) {
