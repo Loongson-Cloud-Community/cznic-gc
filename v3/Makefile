@@ -47,6 +47,8 @@ back:
 	grep 'FAIL' log-back || true
 
 nreport:
+	touch log-nreport
+	cp log-nreport log-nreport0
 	go test -v -failfast -run TestParser -heap -nreport 2>&1 | tee log-nreport
 	@git diff testdata/ || true
 	@git status

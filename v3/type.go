@@ -5,14 +5,17 @@
 package gc // modernc.org/gc/v3
 
 var (
+	_ Type = (*ChannelType)(nil)
 	_ Type = (*InterfaceType)(nil)
 	_ Type = (*InvalidType)(nil)
+	_ Type = (*MapType)(nil)
+	_ Type = (*SliceType)(nil)
 	_ Type = (*TupleType)(nil)
 	_ Type = (*TypeDefNode)(nil)
 	_ Type = PredefinedType(0)
 )
 
-// Singleton instances of some compile-time only pseudo types.
+// Singleton instances of some types.
 var (
 	Invalid    Type = &InvalidType{}
 	any             = &InterfaceType{}
@@ -55,7 +58,7 @@ type typer struct {
 
 func newTyper(t Type) typer { return typer{typ: t} }
 
-func (t *typer) setType(typ Type) { t.typ = t }
+func (t *typer) setType(typ Type) Type { t.typ = t; return t }
 
 // Kind implements Type.
 func (t *typer) Kind() Kind { return t.Type().Kind() }
@@ -77,9 +80,15 @@ func (t *typer) Type() Type {
 	}
 }
 
+type typeNode interface {
+	Node
+	typ
+}
+
 type typ interface {
 	Type() Type
-	setType(Type)
+	check(*ctx) Type
+	setType(Type) Type
 }
 
 // Type is the representation of a Go type.
@@ -149,7 +158,7 @@ func (t PredefinedType) Kind() Kind { return Kind(t) }
 
 // InterfaceType represents an interface type.
 type InterfaceType struct {
-	//TODO Elems []Node //TODO
+	Elems []Node //TODO
 }
 
 // Kind implements Type.
@@ -160,5 +169,43 @@ type TupleType struct {
 	Types []Type
 }
 
+func newTupleType(types []Type) *TupleType { return &TupleType{types} }
+
 // Kind implements Type.
 func (t *TupleType) Kind() Kind { return Tuple }
+
+// SliceType represents a slice type.
+type SliceType struct {
+	Elem Type
+}
+
+// Kind implements Type.
+func (t *SliceType) Kind() Kind { return Slice }
+
+// MapType represents a map type.
+type MapType struct {
+	Elem Type
+	Key  Type
+}
+
+// Kind implements Type.
+func (t *MapType) Kind() Kind { return Map }
+
+// ChanDir represents a channel direction.
+type ChanDir int
+
+// Values of type ChanDir.
+const (
+	SendRecv ChanDir = iota
+	SendOnly
+	RecvOnly
+)
+
+// ChannelType represents a channel type.
+type ChannelType struct {
+	Dir  ChanDir
+	Elem Type
+}
+
+// Kind implements Type.
+func (t *ChannelType) Kind() Kind { return Chan }

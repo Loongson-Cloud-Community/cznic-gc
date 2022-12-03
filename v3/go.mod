@@ -4,14 +4,17 @@ go 1.19
 
 require (
 	github.com/dustin/go-humanize v1.0.0
+	github.com/hashicorp/golang-lru/v2 v2.0.1
 	github.com/pmezard/go-difflib v1.0.0
 	golang.org/x/exp v0.0.0-20221026153819-32f3d567a233
+	golang.org/x/tools v0.3.0
 	modernc.org/mathutil v1.5.0
+	modernc.org/strutil v1.1.3
 	modernc.org/token v1.1.0
 )
 
 require (
-	github.com/hashicorp/golang-lru/v2 v2.0.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
-	modernc.org/strutil v1.1.3 // indirect
+	golang.org/x/mod v0.7.0 // indirect
+	golang.org/x/sys v0.2.0 // indirect
 )

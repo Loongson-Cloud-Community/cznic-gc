@@ -501,6 +501,8 @@ func h(v interface{}) string {
 		if x <= math.MaxInt64 {
 			return humanize.Comma(int64(x))
 		}
+
+		return "-" + humanize.Comma(-int64(x))
 	}
 	return fmt.Sprint(v)
 }

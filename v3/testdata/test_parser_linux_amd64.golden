@@ -951,7 +951,6 @@
 /usr/local/go/src/cmd/compile/internal/types2/testdata/examples/methods.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/examples/operations.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/examples/typesets.go
-/usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue20583.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue23203a.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue23203b.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue25838.go
@@ -979,7 +978,6 @@
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue40684.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue40789.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue41124.go
-/usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue42695.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue42758.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue42881.go
 /usr/local/go/src/cmd/compile/internal/types2/testdata/fixedbugs/issue43056.go
@@ -3103,7 +3101,6 @@
 /usr/local/go/src/go/types/testdata/examples/methods.go
 /usr/local/go/src/go/types/testdata/examples/operations.go
 /usr/local/go/src/go/types/testdata/examples/typesets.go
-/usr/local/go/src/go/types/testdata/fixedbugs/issue20583.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue23203a.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue23203b.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue25838.go
@@ -3131,7 +3128,6 @@
 /usr/local/go/src/go/types/testdata/fixedbugs/issue40684.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue40789.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue41124.go
-/usr/local/go/src/go/types/testdata/fixedbugs/issue42695.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue42758.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue42881.go
 /usr/local/go/src/go/types/testdata/fixedbugs/issue43056.go
@@ -6956,7 +6952,6 @@
 /usr/local/go/test/fixedbugs/issue20174.go
 /usr/local/go/test/fixedbugs/issue20185.go
 /usr/local/go/test/fixedbugs/issue20227.go
-/usr/local/go/test/fixedbugs/issue20232.go
 /usr/local/go/test/fixedbugs/issue20250.go
 /usr/local/go/test/fixedbugs/issue20298.go
 /usr/local/go/test/fixedbugs/issue20333.go

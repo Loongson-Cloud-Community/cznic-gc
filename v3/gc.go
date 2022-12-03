@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:generate stringer -output stringer.go -linecomment -type=Kind
+//go:generate stringer -output stringer.go -linecomment -type=Kind,guard,ScopeKind,ChanDir,TypeCheck
 
 package gc // modernc.org/gc/v3
 
@@ -25,6 +25,13 @@ import (
 
 type FileFilter func(cfg *Config, importPath string, matchedFSPaths []string, withTestFiles bool) (pkgFiles []string, err error)
 
+type TypeCheck int
+
+const (
+	TypeCheckNone TypeCheck = iota
+	TypeCheckAll
+)
+
 type cacheKey struct {
 	buildTagsKey string
 	cfg          *Config
@@ -34,12 +41,13 @@ type cacheKey struct {
 	gopathKey    string
 	goroot       string
 	importPath   string
+	typeCheck    TypeCheck
 
-	typeChecked   bool
 	withTestFiles bool
 }
 
 type Cache struct {
+	sync.Mutex
 	lru *lru.TwoQueueCache[cacheKey, *Package]
 }
 
@@ -50,6 +58,15 @@ func NewCache(size int) (*Cache, error) {
 	}
 
 	return &Cache{lru: c}, nil
+}
+
+func MustNewCache(size int) *Cache {
+	c, err := NewCache(size)
+	if err != nil {
+		panic(todo("", err))
+	}
+
+	return c
 }
 
 type ConfigOption func(*Config) error
@@ -117,7 +134,7 @@ func NewConfig(opts ...ConfigOption) (r *Config, err error) {
 	for i, v := range r.searchGoPaths {
 		r.searchGoPaths[i] = filepath.Join(v, "src")
 	}
-	if r.builtin, err = r.NewPackage("", "builtin", "", nil, false, false); err != nil {
+	if r.builtin, err = r.NewPackage("", "builtin", "", nil, false, TypeCheckAll); err != nil {
 		return nil, err
 	}
 
@@ -442,6 +459,13 @@ func ConfigCache(c *Cache) ConfigOption {
 	}
 }
 
+type importGuard struct {
+	m     map[string]struct{}
+	stack []string
+}
+
+func newImportGuard() *importGuard { return &importGuard{m: map[string]struct{}{}} }
+
 // Package represents a Go package. The instance must not be mutated.
 type Package struct {
 	AST            map[string]*AST // AST maps fsPaths of individual files to their respective ASTs
@@ -452,17 +476,28 @@ type Package struct {
 	Scope          *Scope           // Package scope.
 	Version        string
 	cfg            *Config
+	guard          *importGuard
 	mu             sync.Mutex
+	typeCheck      TypeCheck
 
 	isBuiltin bool
 	isChecked bool
 }
 
-// DefaultFileFilter is used, which ignores Files with suffix _test.go
 // NewPackage returns a Package, possibly cached, for importPath@version or an
 // error, if any. The fileFilter argument can be nil, in such case
-// unless withTestFiles is true.
-func (c *Config) NewPackage(dir, importPath, version string, fileFilter FileFilter, withTestFiles, typeCheck bool) (pkg *Package, err error) {
+// DefaultFileFilter is used, which ignores Files with suffix _test.go unless
+// withTestFiles is true.
+func (c *Config) NewPackage(dir, importPath, version string, fileFilter FileFilter, withTestFiles bool, typeCheck TypeCheck) (pkg *Package, err error) {
+	return c.newPackage(dir, importPath, version, fileFilter, withTestFiles, typeCheck, newImportGuard())
+}
+
+func (c *Config) newPackage(dir, importPath, version string, fileFilter FileFilter, withTestFiles bool, typeCheck TypeCheck, guard *importGuard) (pkg *Package, err error) {
+	if _, ok := guard.m[importPath]; ok {
+		return nil, fmt.Errorf("import cycle %v", guard.stack)
+	}
+
+	guard.stack = append(guard.stack, importPath)
 	fsPath, err := c.lookup(dir, importPath, version)
 	if err != nil {
 		return nil, fmt.Errorf("lookup %s: %v", importPath, err)
@@ -496,7 +531,7 @@ func (c *Config) NewPackage(dir, importPath, version string, fileFilter FileFilt
 			gopathKey:     c.gopathKey,
 			goroot:        c.goroot,
 			importPath:    importPath,
-			typeChecked:   typeCheck,
+			typeCheck:     typeCheck,
 			withTestFiles: withTestFiles,
 		}
 		if pkg = c.get(k); pkg != nil && pkg.matches(k, matches) {
@@ -514,10 +549,14 @@ func (c *Config) NewPackage(dir, importPath, version string, fileFilter FileFilt
 		AST:        map[string]*AST{},
 		FSPath:     fsPath,
 		ImportPath: importPath,
-		Scope:      newScope(nil, scPackage),
 		Version:    version,
 		cfg:        c,
+		guard:      guard,
+		typeCheck:  typeCheck,
 	}
+
+	defer func() { r.guard = nil }()
+
 	sort.Strings(matches)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -525,11 +564,11 @@ func (c *Config) NewPackage(dir, importPath, version string, fileFilter FileFilt
 	defer func() {
 		wg.Wait()
 		sort.Slice(r.GoFiles, func(i, j int) bool { return r.GoFiles[i].Name() < r.GoFiles[j].Name() })
-		if err != nil || len(r.InvalidGoFiles) != 0 || !typeCheck {
+		if err != nil || len(r.InvalidGoFiles) != 0 || typeCheck == TypeCheckNone {
 			return
 		}
 
-		err = pkg.check(newCtx(c))
+		//TODO err = pkg.check(newCtx(c))
 	}()
 
 	for _, path := range matches {
@@ -573,7 +612,7 @@ func (c *Config) NewPackage(dir, importPath, version string, fileFilter FileFilt
 					return
 				}
 
-				p := newParser(newScope(nil, scPackage), path, b, false)
+				p := newParser(newScope(nil, PackageScope), path, b, false)
 				if p.peek(0) == PACKAGE {
 					tok := Token{p.s.source, p.s.toks[p.ix].ch, int32(p.ix)}
 					if !c.checkConstraints(tok.Position(), tok.Sep()) {

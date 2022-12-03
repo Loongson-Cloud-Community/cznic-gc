@@ -28,6 +28,7 @@ import (
 	"unicode"
 
 	"github.com/pmezard/go-difflib/difflib"
+	"golang.org/x/tools/go/packages"
 	"modernc.org/mathutil"
 )
 
@@ -156,7 +157,7 @@ func (g *golden) close() {
 
 type testParallel struct {
 	a                  *analyzer
-	asts               []interface{}
+	objects            []interface{}
 	errors             []error
 	limit              chan struct{}
 	maxBacktrackOrigin string
@@ -202,14 +203,15 @@ func (p *testParallel) addFail()       { atomic.AddInt32(&p.fails, 1) }
 func (p *testParallel) addFile()       { atomic.AddInt32(&p.files, 1) }
 func (p *testParallel) addFileN(n int) { atomic.AddInt32(&p.files, int32(n)) }
 func (p *testParallel) addOk()         { atomic.AddInt32(&p.ok, 1) }
+func (p *testParallel) addOkN(n int)   { atomic.AddInt32(&p.ok, int32(n)) }
 func (p *testParallel) addSkipped()    { atomic.AddInt32(&p.skipped, 1) }
 func (p *testParallel) addToks(n int)  { atomic.AddInt32(&p.allToks, int32(n)) }
 
-func (p *testParallel) addAST(ast interface{}) {
+func (p *testParallel) addObject(obj interface{}) {
 	p.Lock()
 	defer p.Unlock()
 
-	p.asts = append(p.asts, ast)
+	p.objects = append(p.objects, obj)
 }
 
 func (p *testParallel) recordMaxDuration(path string, d time.Duration, toks int) {
@@ -566,9 +568,9 @@ func TestParser(t *testing.T) {
 	debug.FreeOSMemory()
 	runtime.ReadMemStats(&ms)
 	if *oHeap && *oSrc == defaultSrc {
-		t.Logf("ast count %v, heap %s", h(len(p.asts)), h(ms.HeapAlloc-ms0.HeapAlloc))
+		t.Logf("ast count %v, heap %s", h(len(p.objects)), h(ms.HeapAlloc-ms0.HeapAlloc))
 		if *oNReport {
-			t.Logf("AST breakdown\n%s", nodeReport(p.asts...))
+			t.Logf("AST breakdown\n%s", nodeReport(p.objects...))
 		}
 	}
 }
@@ -628,7 +630,7 @@ func testParser(p *testParallel, t *testing.T, root string, gld *golden) {
 				return errorf("%s: %v", path, err)
 			}
 
-			pp = newParser(newScope(nil, scPackage), path, b, *oReport)
+			pp = newParser(newScope(nil, PackageScope), path, b, *oReport)
 			pp.reportDeclarationErrors = true
 			ast, err := pp.parse()
 			if err != nil {
@@ -663,7 +665,7 @@ func testParser(p *testParallel, t *testing.T, root string, gld *golden) {
 			}
 
 			if *oHeap && *oSrc == defaultSrc {
-				p.addAST(ast)
+				p.addObject(ast)
 			}
 			p.addOk()
 			gld.w("%s\n", path)
@@ -694,7 +696,7 @@ func TestGoParser(t *testing.T) {
 	debug.FreeOSMemory()
 	runtime.ReadMemStats(&ms)
 	if *oHeap && *oSrc == defaultSrc {
-		t.Logf("ast count %v, heap %s", h(len(p.asts)), h(ms.HeapAlloc-ms0.HeapAlloc))
+		t.Logf("ast count %v, heap %s", h(len(p.objects)), h(ms.HeapAlloc-ms0.HeapAlloc))
 	}
 }
 
@@ -749,7 +751,7 @@ func testGoParser(p *testParallel, t *testing.T, root string, gld *golden) {
 			}
 
 			if *oHeap && *oSrc == defaultSrc {
-				p.addAST(ast)
+				p.addObject(ast)
 			}
 			p.addOk()
 			gld.w("%s\n", path)
@@ -792,7 +794,7 @@ func BenchmarkParser(b *testing.B) {
 					return errorf("%s: %v", path, err)
 				}
 
-				pp = newParser(newScope(nil, scPackage), path, b, *oReport)
+				pp = newParser(newScope(nil, PackageScope), path, b, *oReport)
 				pp.parse()
 				return nil
 			}(); err != nil {
@@ -856,31 +858,45 @@ func BenchmarkGoParser(b *testing.B) {
 }
 
 func TestNewConfig(t *testing.T) {
-	if _, err := NewConfig(); err != nil {
+	_, err := NewConfig()
+	if err != nil {
 		t.Fatal(err)
 	}
+
+	// _ = c
+	// for k, v := range c.builtin.Scope.nodes {
+	// 	trc("", k, v.declTok.Position())
+	// }
 }
 
 func TestNewPackage(t *testing.T) {
 	debug.FreeOSMemory()
-	cfg, err := NewConfig()
+	cfg, err := NewConfig(ConfigCache(MustNewCache(1e3)))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	p := newTestParallel(0)
 	root := filepath.Join(runtime.GOROOT(), "src")
-	t.Run("GOROOT", func(t *testing.T) { testNewPackage(cfg, p, t, root) })
+	var ms0, ms runtime.MemStats
+	debug.FreeOSMemory()
+	runtime.ReadMemStats(&ms0)
+	t.Run("GOROOT", func(t *testing.T) { testNewPackage(cfg, p, t, root, TypeCheckNone) })
 	if root = *oSrc; root != defaultSrc {
-		t.Run("src", func(t *testing.T) { testNewPackage(cfg, p, t, root) })
+		t.Run("src", func(t *testing.T) { testNewPackage(cfg, p, t, root, TypeCheckNone) })
 	}
 	if err := p.wait(); err != nil {
 		t.Error(err)
 	}
 	t.Logf("TOTAL packages %v, files %v, skip %v, ok %v, fail %v", h(p.packages), h(p.files), h(p.skipped), h(p.ok), h(p.fails))
+	debug.FreeOSMemory()
+	runtime.ReadMemStats(&ms)
+	if *oHeap && *oSrc == defaultSrc {
+		t.Logf("pkg count %v, heap %s", h(len(p.objects)), h(ms.HeapAlloc-ms0.HeapAlloc))
+	}
 }
 
-func testNewPackage(cfg *Config, p *testParallel, t *testing.T, root string) {
+func testNewPackage(cfg *Config, p *testParallel, t *testing.T, root string, typeCheck TypeCheck) {
 	if err := filepath.Walk(root, func(path0 string, info fs.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -909,7 +925,7 @@ func testNewPackage(cfg *Config, p *testParallel, t *testing.T, root string) {
 			if *oTrc {
 				fmt.Fprintln(os.Stderr, importPath)
 			}
-			pkg, err := cfg.NewPackage("", importPath, "", nil, true, false)
+			pkg, err := cfg.NewPackage("", importPath, "", nil, false, typeCheck)
 			if err != nil {
 				p.addFail()
 				return err
@@ -931,6 +947,9 @@ func testNewPackage(cfg *Config, p *testParallel, t *testing.T, root string) {
 				return nil
 			}
 
+			if *oHeap && *oSrc == defaultSrc {
+				p.addObject(pkg)
+			}
 			p.addFileN(len(pkg.GoFiles))
 			p.addOk()
 			return nil
@@ -1013,4 +1032,119 @@ func nodeReport(n ...interface{}) string {
 	}
 	fmt.Fprintf(&b, "%40s x %10s = %13s á %3.0f\n", "<total>", h(tn), h(tsz), float64(tsz)/float64(tn))
 	return b.String()
+}
+
+func TestGoNewPackage(t *testing.T) {
+	cfg := &packages.Config{Mode: packages.NeedFiles | packages.NeedSyntax}
+	p := newTestParallel(1)
+	root := filepath.Join(runtime.GOROOT(), "src")
+	var ms0, ms runtime.MemStats
+	debug.FreeOSMemory()
+	runtime.ReadMemStats(&ms0)
+	t.Run("GOROOT", func(t *testing.T) { testGoNewPackage(cfg, p, t, root) })
+	if root = *oSrc; root != defaultSrc {
+		t.Run("src", func(t *testing.T) { testGoNewPackage(cfg, p, t, root) })
+	}
+	if err := p.wait(); err != nil {
+		t.Error(err)
+	}
+	t.Logf("TOTAL packages %v, files %v, skip %v, ok %v, fail %v", h(p.packages), h(p.files), h(p.skipped), h(p.ok), h(p.fails))
+	debug.FreeOSMemory()
+	runtime.ReadMemStats(&ms)
+	if *oHeap && *oSrc == defaultSrc {
+		t.Logf("pkg count %v, heap %s", h(len(p.objects)), h(ms.HeapAlloc-ms0.HeapAlloc))
+	}
+}
+
+func testGoNewPackage(cfg *packages.Config, p *testParallel, t *testing.T, root string) {
+	var importPaths []string
+	if err := filepath.Walk(root, func(path0 string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() || strings.Contains(path0, "/testdata/") {
+			return nil
+		}
+
+		if re != nil && !re.MatchString(path0) {
+			return nil
+		}
+
+		matches, err := filepath.Glob(filepath.Join(path0, "*.go"))
+		if err != nil {
+			return err
+		}
+
+		if len(matches) == 0 {
+			return nil
+		}
+
+		p.addPackage()
+		importPath := filepath.ToSlash(path0[len(root)+1:])
+		importPaths = append(importPaths, importPath)
+		return nil
+	}); err != nil {
+		t.Error(err)
+	}
+	pkgs, err := packages.Load(cfg, importPaths...)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	p.addOkN(len(pkgs))
+	for _, v := range pkgs {
+		p.addFileN(len(v.GoFiles))
+		p.addObject(v)
+	}
+}
+
+func TestTypeCheck(t *testing.T) {
+	debug.FreeOSMemory()
+	cfg, err := NewConfig(ConfigCache(MustNewCache(1e3)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := newTestParallel(1)
+	root := filepath.Join(runtime.GOROOT(), "src")
+	var ms0, ms runtime.MemStats
+	debug.FreeOSMemory()
+	runtime.ReadMemStats(&ms0)
+	t.Run("GOROOT", func(t *testing.T) { testNewPackage(cfg, p, t, root, TypeCheckAll) })
+	if root = *oSrc; root != defaultSrc {
+		t.Run("src", func(t *testing.T) { testNewPackage(cfg, p, t, root, TypeCheckAll) })
+	}
+	if err := p.wait(); err != nil {
+		t.Error(err)
+	}
+	t.Logf("TOTAL packages %v, files %v, skip %v, ok %v, fail %v", h(p.packages), h(p.files), h(p.skipped), h(p.ok), h(p.fails))
+	debug.FreeOSMemory()
+	runtime.ReadMemStats(&ms)
+	if *oHeap && *oSrc == defaultSrc {
+		t.Logf("pkg count %v, heap %s", h(len(p.objects)), h(ms.HeapAlloc-ms0.HeapAlloc))
+	}
+}
+
+func TestGoTypeCheck(t *testing.T) {
+	cfg := &packages.Config{Mode: packages.NeedFiles | packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedTypesSizes}
+	p := newTestParallel(1)
+	root := filepath.Join(runtime.GOROOT(), "src")
+	var ms0, ms runtime.MemStats
+	debug.FreeOSMemory()
+	runtime.ReadMemStats(&ms0)
+	t.Run("GOROOT", func(t *testing.T) { testGoNewPackage(cfg, p, t, root) })
+	if root = *oSrc; root != defaultSrc {
+		t.Run("src", func(t *testing.T) { testGoNewPackage(cfg, p, t, root) })
+	}
+	if err := p.wait(); err != nil {
+		t.Error(err)
+	}
+	t.Logf("TOTAL packages %v, files %v, skip %v, ok %v, fail %v", h(p.packages), h(p.files), h(p.skipped), h(p.ok), h(p.fails))
+	debug.FreeOSMemory()
+	runtime.ReadMemStats(&ms)
+	if *oHeap && *oSrc == defaultSrc {
+		t.Logf("pkg count %v, heap %s", h(len(p.objects)), h(ms.HeapAlloc-ms0.HeapAlloc))
+	}
 }

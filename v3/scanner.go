@@ -75,6 +75,10 @@ func (t Token) Source(full bool) string {
 
 // Positions implements Node.
 func (t Token) Position() (r token.Position) {
+	if t.source == nil {
+		return r
+	}
+
 	s := t.source
 	off := mathutil.MinInt32(int32(len(s.buf)), s.toks[t.index].src)
 	return token.Position(s.file.PositionFor(mtoken.Pos(s.base+off), true))
