@@ -46,13 +46,30 @@ type cacheKey struct {
 	withTestFiles bool
 }
 
+type cacheItem struct {
+	pkg *Package
+	ch  chan struct{}
+}
+
+func newCacheItem() *cacheItem { return &cacheItem{ch: make(chan struct{})} }
+
+func (c *cacheItem) set(pkg *Package) {
+	c.pkg = pkg
+	close(c.ch)
+}
+
+func (c *cacheItem) wait() *Package {
+	<-c.ch
+	return c.pkg
+}
+
 type Cache struct {
 	sync.Mutex
-	lru *lru.TwoQueueCache[cacheKey, *Package]
+	lru *lru.TwoQueueCache[cacheKey, *cacheItem]
 }
 
 func NewCache(size int) (*Cache, error) {
-	c, err := lru.New2Q[cacheKey, *Package](size)
+	c, err := lru.New2Q[cacheKey, *cacheItem](size)
 	if err != nil {
 		return nil, err
 	}
@@ -134,11 +151,12 @@ func NewConfig(opts ...ConfigOption) (r *Config, err error) {
 	for i, v := range r.searchGoPaths {
 		r.searchGoPaths[i] = filepath.Join(v, "src")
 	}
-	if r.builtin, err = r.NewPackage("", "builtin", "", nil, false, TypeCheckAll); err != nil {
+	if r.builtin, err = r.NewPackage("", "builtin", "", nil, false, TypeCheckNone); err != nil {
 		return nil, err
 	}
 
 	r.builtin.isBuiltin = true
+	r.builtin.Scope.kind = UniverseScope
 	if err := r.builtin.check(newCtx(r)); err != nil {
 		return nil, err
 	}
@@ -146,24 +164,12 @@ func NewConfig(opts ...ConfigOption) (r *Config, err error) {
 	return r, nil
 }
 
-func (c *Config) get(k *cacheKey) *Package {
-	if c.cache == nil {
-		return nil
-	}
-
-	if pkg, ok := c.cache.lru.Get(*k); ok {
-		return pkg
+func (c *Config) universe() *Scope {
+	if c.builtin != nil {
+		return c.builtin.Scope
 	}
 
 	return nil
-}
-
-func (c *Config) put(k *cacheKey, p *Package) {
-	if c.cache == nil {
-		return
-	}
-
-	c.cache.lru.Add(*k, p)
 }
 
 func (c *Config) stat(name string) (fs.FileInfo, error) {
@@ -488,6 +494,8 @@ type Package struct {
 // error, if any. The fileFilter argument can be nil, in such case
 // DefaultFileFilter is used, which ignores Files with suffix _test.go unless
 // withTestFiles is true.
+//
+// NewPackage is safe for concurrent use by multiple goroutines.
 func (c *Config) NewPackage(dir, importPath, version string, fileFilter FileFilter, withTestFiles bool, typeCheck TypeCheck) (pkg *Package, err error) {
 	return c.newPackage(dir, importPath, version, fileFilter, withTestFiles, typeCheck, newImportGuard())
 }
@@ -520,9 +528,9 @@ func (c *Config) newPackage(dir, importPath, version string, fileFilter FileFilt
 		return nil, fmt.Errorf("matching Go files in %s: %v", fsPath, err)
 	}
 
-	var k *cacheKey
+	var k cacheKey
 	if c.cache != nil {
-		k = &cacheKey{
+		k = cacheKey{
 			buildTagsKey:  c.buildTagsKey,
 			cfg:           c,
 			fsPath:        fsPath,
@@ -534,13 +542,23 @@ func (c *Config) newPackage(dir, importPath, version string, fileFilter FileFilt
 			typeCheck:     typeCheck,
 			withTestFiles: withTestFiles,
 		}
-		if pkg = c.get(k); pkg != nil && pkg.matches(k, matches) {
-			return pkg, nil
+
+		c.cache.Lock() // ---------------------------------------- lock
+		item, ok := c.cache.lru.Get(k)
+		if ok {
+			c.cache.Unlock() // ---------------------------- unlock
+			if pkg = item.wait(); pkg != nil && pkg.matches(&k, matches) {
+				return pkg, nil
+			}
 		}
+
+		item = newCacheItem()
+		c.cache.lru.Add(k, item)
+		c.cache.Unlock() // ------------------------------------ unlock
 
 		defer func() {
 			if pkg != nil && err == nil {
-				c.put(k, pkg)
+				item.set(pkg)
 			}
 		}()
 	}
@@ -549,6 +567,7 @@ func (c *Config) newPackage(dir, importPath, version string, fileFilter FileFilt
 		AST:        map[string]*AST{},
 		FSPath:     fsPath,
 		ImportPath: importPath,
+		Scope:      newScope(c.universe(), PackageScope),
 		Version:    version,
 		cfg:        c,
 		guard:      guard,
@@ -558,83 +577,70 @@ func (c *Config) newPackage(dir, importPath, version string, fileFilter FileFilt
 	defer func() { r.guard = nil }()
 
 	sort.Strings(matches)
-	var mu sync.Mutex
-	var wg sync.WaitGroup
 
 	defer func() {
-		wg.Wait()
 		sort.Slice(r.GoFiles, func(i, j int) bool { return r.GoFiles[i].Name() < r.GoFiles[j].Name() })
 		if err != nil || len(r.InvalidGoFiles) != 0 || typeCheck == TypeCheckNone {
 			return
 		}
 
-		//TODO err = pkg.check(newCtx(c))
+		//err = pkg.check(newCtx(c))
 	}()
 
 	for _, path := range matches {
-		f, err := c.open(path)
-		if err != nil {
-			return r, fmt.Errorf("opening file %q: %v", path, err)
+		if err = c.newPackageFile(r, path); err != nil {
+			return r, err
 		}
-
-		var fi fs.FileInfo
-		if fi, err = f.Stat(); err != nil {
-			return r, fmt.Errorf("stat %s: %v", path, err)
-		}
-
-		if !fi.Mode().IsRegular() {
-			continue
-		}
-
-		wg.Add(1)
-		c.parallel.exec(func(path string, f fs.File, fi fs.FileInfo) func() {
-			return func() {
-				var err error
-
-				defer func() {
-					f.Close()
-					if err != nil {
-						mu.Lock()
-
-						defer mu.Unlock()
-
-						if r.InvalidGoFiles == nil {
-							r.InvalidGoFiles = map[string]error{}
-						}
-						r.InvalidGoFiles[path] = err
-					}
-					wg.Done()
-				}()
-
-				var b []byte
-				if b, err = io.ReadAll(f); err != nil {
-					err = fmt.Errorf("reading %s: %v", path, err)
-					return
-				}
-
-				p := newParser(newScope(nil, PackageScope), path, b, false)
-				if p.peek(0) == PACKAGE {
-					tok := Token{p.s.source, p.s.toks[p.ix].ch, int32(p.ix)}
-					if !c.checkConstraints(tok.Position(), tok.Sep()) {
-						return
-					}
-				}
-
-				var ast *AST
-				if ast, err = p.parse(); err != nil {
-					return
-				}
-
-				mu.Lock()
-
-				defer mu.Unlock()
-
-				r.AST[path] = ast
-				r.GoFiles = append(r.GoFiles, fi)
-			}
-		}(path, f, fi))
 	}
 	return r, nil
+}
+
+func (c *Config) newPackageFile(pkg *Package, path string) (err error) {
+	f, err := c.open(path)
+	if err != nil {
+		return fmt.Errorf("opening file %q: %v", path, err)
+	}
+
+	defer func() {
+		f.Close()
+		if err != nil {
+			if pkg.InvalidGoFiles == nil {
+				pkg.InvalidGoFiles = map[string]error{}
+			}
+			pkg.InvalidGoFiles[path] = err
+		}
+	}()
+
+	var fi fs.FileInfo
+	if fi, err = f.Stat(); err != nil {
+		return fmt.Errorf("stat %s: %v", path, err)
+	}
+
+	if !fi.Mode().IsRegular() {
+		return nil
+	}
+
+	var b []byte
+	if b, err = io.ReadAll(f); err != nil {
+		return fmt.Errorf("reading %s: %v", path, err)
+	}
+
+	p := newParser(pkg.Scope, path, b, false)
+	if p.peek(0) == PACKAGE {
+		tok := Token{p.s.source, p.s.toks[p.ix].ch, int32(p.ix)}
+		if !c.checkConstraints(tok.Position(), tok.Sep()) {
+			return nil
+		}
+	}
+
+	var ast *AST
+	if ast, err = p.parse(); err != nil {
+		return nil
+	}
+
+	pkg.AST[path] = ast
+	pkg.GoFiles = append(pkg.GoFiles, fi)
+	return nil
 }
 
 func (p *Package) matches(k *cacheKey, matches []string) bool {

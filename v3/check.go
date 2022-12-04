@@ -41,12 +41,6 @@ func (n *Package) check(c *ctx) error {
 	defer func() { n.isChecked = true }()
 
 	c.pkg = n
-	switch {
-	case n.isBuiltin:
-		n.Scope = newScope(nil, UniverseScope)
-	default:
-		n.Scope = newScope(c.cfg.builtin.Scope, PackageScope)
-	}
 	for _, v := range n.GoFiles {
 		path := filepath.Join(n.FSPath, v.Name())
 		n.AST[path].check(c)
@@ -60,13 +54,6 @@ func (n *AST) check(c *ctx) {
 	}
 
 	c.ast = n
-	n.FileScope.parent = c.pkg.Scope
-	for _, v := range n.packageScope.nodes {
-		switch ex := c.pkg.Scope.declare(v.declTok, v.n, int32(v.n.Visible()), nil, true); {
-		case ex.declTok.IsValid():
-			panic(todo(""))
-		}
-	}
 	n.SourceFile.check(c)
 }
 
@@ -119,6 +106,8 @@ func (n *ImportSpecNode) check(c *ctx) {
 		//TODO version
 		tc := c.pkg.typeCheck
 		switch tc {
+		case TypeCheckAll:
+			// nop
 		default:
 			panic(todo("", tc))
 		}
