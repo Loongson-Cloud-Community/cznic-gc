@@ -8,6 +8,7 @@ import (
 	"go/constant"
 	"go/token"
 	"path/filepath"
+	"sync"
 )
 
 type ctx struct {
@@ -62,6 +63,7 @@ func (n *SourceFileNode) check(c *ctx) {
 		return
 	}
 
+	n.PackageClause.check(c)
 	for l := n.ImportDeclList; l != nil; l = l.List {
 		l.ImportDecl.check(c)
 	}
@@ -76,10 +78,22 @@ func (n *SourceFileNode) check(c *ctx) {
 			x.check(c)
 		case *FunctionDeclNode:
 			x.check(c)
+		case *MethodDeclNode:
+			x.check(c)
 		default:
 			panic(todo("%v: %T %s", l.Position(), x, x.Source(false)))
 		}
 	}
+}
+
+func (n *PackageClauseNode) check(c *ctx) {
+	nm := n.PackageName.Src()
+	if ex := c.pkg.Name; ex.IsValid() && ex.Src() != nm {
+		c.err(n.PackageName, "found different packages %q and %q", ex.Src(), nm)
+		return
+	}
+
+	c.pkg.Name = n.PackageName
 }
 
 func (n *ImportDeclNode) check(c *ctx) {
@@ -87,32 +101,64 @@ func (n *ImportDeclNode) check(c *ctx) {
 		return
 	}
 
-	for l := n.ImportSpecList; l != nil; l = l.List {
-		l.ImportSpec.check(c)
+	type result struct {
+		spec *ImportSpecNode
+		pkg  *Package
+		err  error
 	}
+	var a []*result
+	var wg sync.WaitGroup
+	for l := n.ImportSpecList; l != nil; l = l.List {
+		r := &result{}
+		a = append(a, r)
+		wg.Add(1)
+		go func(isln *ImportSpecListNode, r *result) {
+
+			defer wg.Done()
+
+			r.spec = isln.ImportSpec
+			r.pkg, r.err = r.spec.check(c)
+		}(l, r)
+	}
+	wg.Wait()
+	fileScope := c.ast.FileScope
+	pkgScope := c.pkg.Scope
+	for _, v := range a {
+		switch ex := fileScope.declare(v.pkg.Name, v.spec, 0, nil, true); {
+		case ex.declTok.IsValid():
+			c.err(n, "%s redeclared, previous declaration at %v:", v.pkg.Name.Src(), ex.declTok.Position())
+			continue
+		}
+
+		switch ex := pkgScope.declare(v.pkg.Name, v.spec, 0, nil, true); {
+		case ex.declTok.IsValid():
+			c.err(n, "%s redeclared, previous declaration at %v:", v.pkg.Name.Src(), ex.declTok.Position())
+			continue
+		}
+	}
+	panic(todo("%v: %s", n.Position(), n.Source(false)))
 }
 
-func (n *ImportSpecNode) check(c *ctx) {
+func (n *ImportSpecNode) check(c *ctx) (*Package, error) {
 	if n == nil {
-		return
+		return nil, nil
 	}
 
 	switch {
 	case n.PERIOD.IsValid():
 		panic(todo(""))
-	case n.PackageName != nil:
+	case n.PackageName.IsValid():
 		panic(todo(""))
 	default:
 		//TODO version
-		tc := c.pkg.typeCheck
-		switch tc {
+		check := c.pkg.typeCheck
+		switch check {
 		case TypeCheckAll:
 			// nop
 		default:
-			panic(todo("", tc))
+			panic(todo("", check))
 		}
-		p, err := c.cfg.newPackage(c.pkg.FSPath, constant.StringVal(n.ImportPath.Value()), "", nil, false, tc, c.pkg.guard)
-		panic(todo("", n.Position(), n.Source(false), p != nil, err))
+		return c.cfg.newPackage(c.pkg.FSPath, constant.StringVal(n.ImportPath.Value()), "", nil, false, check, c.pkg.guard)
 	}
 }
 
@@ -163,7 +209,7 @@ func (n *TypeDefNode) check(c *ctx) Type {
 	return n.setType(n.TypeNode.check(c, builtin, n.LexicalScope()))
 }
 
-func (n *TypeNode) check(c *ctx, builtin string, sc *Scope) Type {
+func (n *TypeNode) check(c *ctx, builtin string, sc *Scope) (r Type) {
 	if n == nil {
 		return Invalid
 	}
@@ -173,6 +219,10 @@ func (n *TypeNode) check(c *ctx, builtin string, sc *Scope) Type {
 	}
 
 	defer n.exit()
+
+	// defer func() {
+	// 	trc("%v: %T %s", n.Position(), r, r)
+	// }()
 
 	switch builtin {
 	case "", "error":
@@ -354,6 +404,24 @@ func (n *ChannelTypeNode) check(c *ctx) Type {
 		}
 	}
 	return n.setType(&ChannelType{Dir: dir, Elem: n.ElementType.check(c, "", n.LexicalScope())})
+}
+
+func (n *PointerTypeNode) check(c *ctx) Type {
+	if n == nil {
+		return Invalid
+	}
+
+	if !n.enter(c, n) {
+		return n.Type()
+	}
+
+	defer n.exit()
+
+	c.disableTypeNameCheck++
+
+	defer func() { c.disableTypeNameCheck-- }()
+
+	return n.setType(&PointerType{Elem: n.BaseType.check(c, "", n.LexicalScope())})
 }
 
 func (n *ArrayTypeNode) check(c *ctx) Type {
@@ -568,20 +636,6 @@ func (n *ParenthesizedExpression) check(c *ctx) Type {
 	panic(todo("", n.Position(), n.Source(false)))
 }
 
-func (n *PointerTypeNode) check(c *ctx) Type {
-	if n == nil {
-		return Invalid
-	}
-
-	if !n.enter(c, n) {
-		return n.Type()
-	}
-
-	defer n.exit()
-
-	panic(todo("", n.Position(), n.Source(false)))
-}
-
 func (n *PrimaryExprNode) check(c *ctx) Type {
 	if n == nil {
 		return Invalid
@@ -607,7 +661,23 @@ func (n *StructTypeNode) check(c *ctx) Type {
 
 	defer n.exit()
 
-	panic(todo("", n.Position(), n.Source(false)))
+	var a []*FieldDeclNode
+	for l := n.FieldDeclList; l != nil; l = l.List {
+		switch fd := l.FieldDecl; {
+		case fd.EmbeddedField != nil:
+			panic(todo("", fd.Position(), fd.Source(false)))
+		default:
+			fd.TypeNode.check(c, "", n.LexicalScope())
+			for l := fd.IdentifierList; l != nil; l = l.List {
+				fd2 := *fd
+				id := *l
+				id.List = nil
+				fd2.IdentifierList = &id
+				a = append(a, &fd2)
+			}
+		}
+	}
+	return n.setType(&StructType{Fields: a})
 }
 
 func (n *UnaryExprNode) check(c *ctx) Type {
@@ -738,7 +808,7 @@ func (n *ParameterDeclListNode) check(c *ctx) Type {
 	return n.ParameterDecl.check(c)
 }
 
-func (n *ParameterDeclNode) check(c *ctx) Type {
+func (n *ParameterDeclNode) check(c *ctx) (r Type) {
 	if n == nil {
 		return Invalid
 	}
@@ -763,4 +833,17 @@ func (n *KeyedElementNode) setType(typ Type) Type {
 
 func (n *KeyedElementNode) setValue(val constant.Value) {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *MethodDeclNode) check(c *ctx) {
+	tt := n.Receiver.check(c)
+	rx := Invalid
+	switch len(tt.Types) {
+	case 1:
+		rx = tt.Types[0]
+	default:
+		c.err(n.Receiver, "invalid receiver")
+	}
+	_ = rx
+	//TODO panic(todo("%v: %T %s %T %q", n.Position(), n, n.Source(false), rx, rx))
 }

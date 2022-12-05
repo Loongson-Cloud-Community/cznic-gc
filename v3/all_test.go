@@ -46,6 +46,7 @@ var (
 	oReport            = flag.Bool("report", false, "")
 	oSrc               = flag.String("src", defaultSrc, "")
 	oTrc               = flag.Bool("trc", false, "")
+	oTrcObjects        = flag.Bool("trco", false, "")
 	oTrcExpectedErrors = flag.Bool("trce", false, "")
 
 	digits  = expand(unicode.Nd)
@@ -1125,6 +1126,14 @@ func TestTypeCheck(t *testing.T) {
 	if *oHeap && *oSrc == defaultSrc {
 		t.Logf("pkg count %v, heap %s", h(len(p.objects)), h(ms.HeapAlloc-ms0.HeapAlloc))
 	}
+	if *oTrcObjects {
+		for _, v := range p.objects {
+			pkg := v.(*Package)
+			for _, v := range pkg.GoFiles {
+				fmt.Println(filepath.Join(pkg.FSPath, v.Name()))
+			}
+		}
+	}
 }
 
 func TestGoTypeCheck(t *testing.T) {
@@ -1146,5 +1155,13 @@ func TestGoTypeCheck(t *testing.T) {
 	runtime.ReadMemStats(&ms)
 	if *oHeap && *oSrc == defaultSrc {
 		t.Logf("pkg count %v, heap %s", h(len(p.objects)), h(ms.HeapAlloc-ms0.HeapAlloc))
+	}
+	if *oTrcObjects {
+		for _, v := range p.objects {
+			pkg := v.(*packages.Package)
+			for _, v := range pkg.GoFiles {
+				fmt.Println(v)
+			}
+		}
 	}
 }

@@ -69,8 +69,12 @@ func (t Token) Source(full bool) string {
 	if !full && sep != "" {
 		sep = " "
 	}
-	// trc("           %q %q", sep, t.Src())
-	return sep + t.Src()
+	src := t.Src()
+	if !full && strings.ContainsRune(src, '\n') {
+		src = " "
+	}
+	// trc("%q %q -> %q %q", t.Sep(), t.Src(), sep, src)
+	return sep + src
 }
 
 // Positions implements Node.

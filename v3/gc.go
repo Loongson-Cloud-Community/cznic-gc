@@ -15,7 +15,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -105,6 +107,8 @@ type Config struct {
 	gopath        string
 	gopathKey     string // Zero byte separated
 	goroot        string
+	gocompiler    string // "gc", "gccgo"
+	goversion     string
 	lookup        func(rel, importPath, version string) (fsPath string, err error)
 	parallel      *parallel
 	searchGoPaths []string
@@ -121,7 +125,11 @@ func NewConfig(opts ...ConfigOption) (r *Config, err error) {
 		parallel:    newParallel(),
 	}
 
-	defer func() { r.configured = true }()
+	defer func() {
+		if r != nil {
+			r.configured = true
+		}
+	}()
 
 	r.lookup = r.DefaultLookup
 	ctx := build.Default
@@ -130,11 +138,52 @@ func NewConfig(opts ...ConfigOption) (r *Config, err error) {
 	r.goroot = r.getenv("GOROOT", ctx.GOROOT)
 	r.gopath = r.getenv("GOPATH", ctx.GOPATH)
 	r.buildTags = append(r.buildTags, r.goos, r.goarch)
+	r.gocompiler = runtime.Compiler
 	for _, opt := range opts {
 		if err := opt(r); err != nil {
 			return nil, err
 		}
 	}
+	//  During a particular build, the following build tags are satisfied:
+	//
+	//  the target operating system, as spelled by runtime.GOOS, set with the GOOS environment variable.
+	//  the target architecture, as spelled by runtime.GOARCH, set with the GOARCH environment variable.
+	//  "unix", if GOOS is a Unix or Unix-like system.
+	//  the compiler being used, either "gc" or "gccgo"
+	//  "cgo", if the cgo command is supported (see CGO_ENABLED in 'go help environment').
+	//  a term for each Go major release, through the current version: "go1.1" from Go version 1.1 onward, "go1.12" from Go 1.12, and so on.
+	//  any additional tags given by the -tags flag (see 'go help build').
+	//  There are no separate build tags for beta or minor releases.
+	if r.goversion == "" {
+		r.goversion = runtime.Version()
+	}
+	if !strings.HasPrefix(r.goversion, "go") || !strings.Contains(r.goversion, ".") {
+		return nil, fmt.Errorf("cannot parse Go version: %s", r.goversion)
+	}
+
+	ver := strings.SplitN(r.goversion[len("go"):], ".", 2)
+	verMajor, err := strconv.Atoi(ver[0])
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse Go version %s: %v", r.goversion, err)
+	}
+
+	if verMajor != 1 {
+		return nil, fmt.Errorf("unsupported Go version: %s", r.goversion)
+	}
+
+	if x := strings.IndexByte(ver[1], '.'); x >= 0 {
+		ver[1] = ver[1][:x]
+	}
+	verMinor, err := strconv.Atoi(ver[1])
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse Go version %s: %v", r.goversion, err)
+	}
+
+	for i := 1; i <= verMinor; i++ {
+		r.buildTags = append(r.buildTags, fmt.Sprintf("go%d.%d", verMajor, i))
+	}
+	r.buildTags = append(r.buildTags, r.gocompiler)
+	r.buildTags = append(r.buildTags, extraTags(verMajor, verMinor, r.goos, r.goarch)...)
 	if r.getenv("CGO_ENABLED", "1") == "1" {
 		r.buildTags = append(r.buildTags, "cgo")
 	}
@@ -210,10 +259,12 @@ func (c *Config) glob(pattern string) (matches []string, err error) {
 	return fs.Glob(c.fs, pattern)
 }
 
-func (c *Config) checkConstraints(pos token.Position, sep string) bool {
+func (c *Config) checkConstraints(pos token.Position, sep string) (r bool) {
 	if !strings.Contains(sep, "//go:build") && !strings.Contains(sep, "+build") {
 		return true
 	}
+
+	// defer func() { trc("", r) }()
 
 	lines := strings.Split(sep, "\n")
 	var build, plusBuild []string
@@ -234,7 +285,8 @@ func (c *Config) checkConstraints(pos token.Position, sep string) bool {
 			return true
 		}
 
-		return expr.Eval(func(tag string) bool {
+		return expr.Eval(func(tag string) (r bool) {
+			// defer func() { trc("%q: %v", tag, r) }()
 			switch tag {
 			case "unix":
 				return unixOS[c.goos]
@@ -252,7 +304,8 @@ func (c *Config) checkConstraints(pos token.Position, sep string) bool {
 			return true
 		}
 
-		if !expr.Eval(func(tag string) bool {
+		if !expr.Eval(func(tag string) (r bool) {
+			// defer func() { trc("%q: %v", tag, r) }()
 			switch tag {
 			case "unix":
 				return unixOS[c.goos]
@@ -367,8 +420,7 @@ func DefaultFileFilter(cfg *Config, importPath string, matchedFSPaths []string, 
 			if x := strings.LastIndexByte(base, '_'); x > 0 {
 				prevLast = base[x+1:]
 			}
-			switch {
-			case last != "" && prevLast != "":
+			if last != "" && prevLast != "" {
 				//  *_GOOS_GOARCH
 				if knownOS[prevLast] && prevLast != cfg.goos {
 					continue
@@ -377,9 +429,11 @@ func DefaultFileFilter(cfg *Config, importPath string, matchedFSPaths []string, 
 				if knownArch[last] && last != cfg.goarch {
 					continue
 				}
-			case last != "":
+			}
+
+			if last != "" {
 				// *_GOOS or *_GOARCH
-				if knownOS[prevLast] && prevLast != cfg.goos {
+				if knownOS[last] && last != cfg.goos {
 					continue
 				}
 
@@ -479,7 +533,8 @@ type Package struct {
 	GoFiles        []fs.FileInfo
 	ImportPath     string
 	InvalidGoFiles map[string]error // errors for particular files, if any
-	Scope          *Scope           // Package scope.
+	Name           Token
+	Scope          *Scope // Package scope.
 	Version        string
 	cfg            *Config
 	guard          *importGuard
@@ -584,15 +639,17 @@ func (c *Config) newPackage(dir, importPath, version string, fileFilter FileFilt
 			return
 		}
 
-		//err = pkg.check(newCtx(c))
+		//TODO err = pkg.check(newCtx(c))
 	}()
 
-	for _, path := range matches {
-		if err = c.newPackageFile(r, path); err != nil {
-			return r, err
+	c.parallel.throttle(func() {
+		for _, path := range matches {
+			if err = c.newPackageFile(r, path); err != nil {
+				return
+			}
 		}
-	}
-	return r, nil
+	})
+	return r, err
 }
 
 func (c *Config) newPackageFile(pkg *Package, path string) (err error) {
@@ -633,13 +690,13 @@ func (c *Config) newPackageFile(pkg *Package, path string) (err error) {
 		}
 	}
 
+	pkg.GoFiles = append(pkg.GoFiles, fi)
 	var ast *AST
 	if ast, err = p.parse(); err != nil {
 		return nil
 	}
 
 	pkg.AST[path] = ast
-	pkg.GoFiles = append(pkg.GoFiles, fi)
 	return nil
 }
 

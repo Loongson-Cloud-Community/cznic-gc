@@ -508,28 +508,50 @@ func h(v interface{}) string {
 }
 
 type parallel struct {
-	limit chan struct{}
-	wg    sync.WaitGroup
+	limiter chan struct{}
 }
 
 func newParallel() *parallel {
 	return &parallel{
-		limit: make(chan struct{}, runtime.GOMAXPROCS(0)),
+		limiter: make(chan struct{}, runtime.GOMAXPROCS(0)),
 	}
 }
 
-func (p *parallel) wait() { p.wg.Wait() }
+func (p *parallel) throttle(f func()) {
+	p.limiter <- struct{}{}
 
-func (p *parallel) exec(run func()) {
-	p.limit <- struct{}{}
-	p.wg.Add(1)
-
-	go func() {
-		defer func() {
-			p.wg.Done()
-			<-p.limit
-		}()
-
-		run()
+	defer func() {
+		<-p.limiter
 	}()
+
+	f()
+}
+
+func extraTags(verMajor, verMinor int, goos, goarch string) (r []string) {
+	// https://github.com/golang/go/commit/eeb7899137cda1c2cd60dab65ff41f627436db5b
+	//
+	// In Go 1.17 we added register ABI on AMD64 on Linux/macOS/Windows
+	// as a GOEXPERIMENT, on by default. In Go 1.18, we commit to always
+	// enabling register ABI on AMD64.
+	//
+	// Now "go build" for AMD64 always have goexperiment.regabi* tags
+	// set. However, at bootstrapping cmd/dist does not set the tags
+	// when building go_bootstrap. For this to work, unfortunately, we
+	// need to hard-code AMD64 to use register ABI in runtime code.
+	if verMajor == 1 {
+		switch {
+		case verMinor == 17:
+			switch goos {
+			case "linux", "darwin", "windows":
+				if goarch == "amd64" {
+					r = append(r, "goexperiment.regabiargs", "goexperiment.regabiwrappers")
+				}
+			}
+		case verMinor >= 18:
+			if goarch == "amd64" {
+				r = append(r, "goexperiment.regabiargs", "goexperiment.regabiwrappers")
+			}
+		}
+	}
+	return r
 }

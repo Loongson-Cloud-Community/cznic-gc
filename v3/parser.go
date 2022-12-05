@@ -5,6 +5,7 @@
 package gc // modernc.org/gc/v3
 
 import (
+	"fmt"
 	"go/constant"
 	"go/token"
 	"path/filepath"
@@ -17,10 +18,8 @@ import (
 	"modernc.org/strutil"
 )
 
-// gc.BasicLitNode x  1,290,305 =    72,257,080 á  56
-//         <total> x 16,631,227 =   922,384,160 á  55
-// gc.BasicLitNode x  1,290,309 =    41,289,888 á  32
-//         <total> x 16,631,361 =   891,423,912 á  54
+//                                         <total> x 16,603,469 =   892,265,816 á  54
+//                                         <total> x 16,024,194 =   887,787,224 á  55
 
 const parserBudget = 1e7
 
@@ -270,7 +269,7 @@ func (p *parser) err(pos token.Position, msg string, args ...interface{}) {
 
 func (p *parser) declare(s *Scope, nm Token, n visibiliter, visible int32, initOK bool) {
 	if ex := s.declare(nm, n, visible, p, initOK); ex.declTok.IsValid() && p.reportDeclarationErrors {
-		p.err(nm.Position(), "%s redeclared, previous declaration at %v: (%p)", nm.Src(), ex.declTok.Position(), s)
+		p.err(nm.Position(), "%s redeclared, previous declaration at %v:", nm.Src(), ex.declTok.Position())
 	}
 }
 
@@ -838,7 +837,7 @@ func (n *BlockNode) Position() (r token.Position) {
 	return n.LBRACE.Position()
 }
 
-func (p *parser) block(r *ReceiverNode, s *SignatureNode) *BlockNode {
+func (p *parser) block(rx *ParametersNode, s *SignatureNode) *BlockNode {
 	var (
 		ok            bool
 		lbraceTok     Token
@@ -854,8 +853,8 @@ func (p *parser) block(r *ReceiverNode, s *SignatureNode) *BlockNode {
 		ix := p.ix
 		// *ebnf.Token "{" ctx [LBRACE]
 		lbraceTok = p.expect(LBRACE)
-		if r != nil {
-			r.Parameters.declare(p, p.sc)
+		if rx != nil {
+			rx.declare(p, p.sc)
 		}
 		if s != nil {
 			s.Parameters.declare(p, p.sc)
@@ -2295,7 +2294,11 @@ func (n *FieldDeclNode) Position() (r token.Position) {
 		return r
 	}
 
-	panic("TODO")
+	if n.IdentifierList != nil {
+		return n.IdentifierList.Position()
+	}
+
+	return n.EmbeddedField.Position()
 }
 
 func (p *parser) fieldDecl() *FieldDeclNode {
@@ -2606,12 +2609,12 @@ func (n *FunctionBodyNode) Position() (r token.Position) {
 	return n.Block.Position()
 }
 
-func (p *parser) functionBody(r *ReceiverNode, s *SignatureNode) *FunctionBodyNode {
+func (p *parser) functionBody(rx *ParametersNode, s *SignatureNode) *FunctionBodyNode {
 	var (
 		block *BlockNode
 	)
 	// *ebnf.Name Block ctx [LBRACE]
-	if block = p.block(r, s); block == nil {
+	if block = p.block(rx, s); block == nil {
 		return nil
 	}
 	return &FunctionBodyNode{
@@ -3423,8 +3426,10 @@ func (p *parser) importDecl() *ImportDeclNode {
 //	ImportSpec = [ "." | PackageName ] ImportPath .
 type ImportSpecNode struct {
 	PERIOD      Token
-	PackageName *PackageNameNode
+	PackageName Token
 	ImportPath  *BasicLitNode
+
+	visible
 }
 
 // Source implements Node.
@@ -3440,7 +3445,7 @@ func (n *ImportSpecNode) Position() (r token.Position) {
 		return n.PERIOD.Position()
 	}
 
-	if n.PackageName != nil {
+	if n.PackageName.IsValid() {
 		return n.PackageName.Position()
 	}
 
@@ -3450,7 +3455,7 @@ func (n *ImportSpecNode) Position() (r token.Position) {
 func (p *parser) importSpec() *ImportSpecNode {
 	var (
 		periodTok   Token
-		packageName *PackageNameNode
+		packageName Token
 		importPath  *BasicLitNode
 	)
 	// ebnf.Sequence [ "." | PackageName ] ImportPath ctx [IDENT, PERIOD, STRING]
@@ -3466,12 +3471,12 @@ func (p *parser) importSpec() *ImportSpecNode {
 				periodTok = p.expect(PERIOD)
 			case IDENT: // 1
 				// *ebnf.Name PackageName ctx [IDENT]
-				if packageName = p.packageName(); packageName == nil {
+				if packageName = p.packageName(); !packageName.IsValid() {
 					goto _4
 				}
 				break
 			_4:
-				packageName = nil
+				packageName = Token{}
 				goto _0
 			default:
 				goto _0
@@ -3479,7 +3484,7 @@ func (p *parser) importSpec() *ImportSpecNode {
 		}
 		goto _1
 	_0:
-		packageName = nil
+		packageName = Token{}
 		periodTok = Token{}
 	_1:
 		// *ebnf.Name ImportPath ctx []
@@ -4322,7 +4327,7 @@ func (p *parser) mapType() *MapTypeNode {
 //	MethodDecl = "func" Receiver MethodName Signature [ FunctionBody ] .
 type MethodDeclNode struct {
 	FUNC         Token
-	Receiver     *ReceiverNode
+	Receiver     *ParametersNode
 	MethodName   Token
 	Signature    *SignatureNode
 	FunctionBody *FunctionBodyNode
@@ -4343,7 +4348,7 @@ func (n *MethodDeclNode) Position() (r token.Position) {
 func (p *parser) methodDecl() *MethodDeclNode {
 	var (
 		funcTok      Token
-		receiver     *ReceiverNode
+		receiver     *ParametersNode
 		methodName   Token
 		signature    *SignatureNode
 		functionBody *FunctionBodyNode
@@ -4766,7 +4771,7 @@ func (p *parser) operandName() *OperandNameNode {
 //	PackageClause = "package" PackageName .
 type PackageClauseNode struct {
 	PACKAGE     Token
-	PackageName *PackageNameNode
+	PackageName Token
 }
 
 // Source implements Node.
@@ -4784,7 +4789,7 @@ func (n *PackageClauseNode) Position() (r token.Position) {
 func (p *parser) packageClause() *PackageClauseNode {
 	var (
 		packageTok  Token
-		packageName *PackageNameNode
+		packageName Token
 	)
 	// ebnf.Sequence "package" PackageName ctx [PACKAGE]
 	{
@@ -4795,7 +4800,7 @@ func (p *parser) packageClause() *PackageClauseNode {
 		// *ebnf.Token "package" ctx [PACKAGE]
 		packageTok = p.expect(PACKAGE)
 		// *ebnf.Name PackageName ctx [IDENT]
-		if packageName = p.packageName(); packageName == nil {
+		if packageName = p.packageName(); !packageName.IsValid() {
 			p.back(ix)
 			return nil
 		}
@@ -4806,34 +4811,9 @@ func (p *parser) packageClause() *PackageClauseNode {
 	}
 }
 
-// PackageNameNode represents the production
-//
-//	PackageName = identifier .
-type PackageNameNode struct {
-	IDENT Token
-}
-
-// Source implements Node.
-func (n *PackageNameNode) Source(full bool) string { return nodeSource(n, full) }
-
-// Position implements Node.
-func (n *PackageNameNode) Position() (r token.Position) {
-	if n == nil {
-		return r
-	}
-
-	return n.IDENT.Position()
-}
-
-func (p *parser) packageName() *PackageNameNode {
-	var (
-		identTok Token
-	)
+func (p *parser) packageName() Token {
 	// *ebnf.Name identifier ctx [IDENT]
-	identTok = p.expect(IDENT)
-	return &PackageNameNode{
-		IDENT: identTok,
-	}
+	return p.expect(IDENT)
 }
 
 // ParameterDeclNode represents the production
@@ -5164,6 +5144,7 @@ type PointerTypeNode struct {
 	MUL      Token
 	BaseType *TypeNode
 	typer
+	lexicalScoper
 }
 
 // Source implements Node.
@@ -5200,8 +5181,9 @@ func (p *parser) pointerType() *PointerTypeNode {
 		}
 	}
 	return &PointerTypeNode{
-		MUL:      mulTok,
-		BaseType: baseType,
+		MUL:           mulTok,
+		BaseType:      baseType,
+		lexicalScoper: newLexicalScoper(p.sc),
 	}
 }
 
@@ -5412,7 +5394,7 @@ func (p *parser) primaryExpr(preBlock bool) Expression {
 //	QualifiedIdent = PackageName "." identifier .
 type QualifiedIdentNode struct {
 	lexicalScoper
-	PackageName *PackageNameNode
+	PackageName Token
 	PERIOD      Token
 	IDENT       Token
 }
@@ -5432,7 +5414,7 @@ func (n *QualifiedIdentNode) Position() (r token.Position) {
 func (p *parser) qualifiedIdent() *QualifiedIdentNode {
 	var (
 		ok          bool
-		packageName *PackageNameNode
+		packageName Token
 		periodTok   Token
 		identTok    Token
 	)
@@ -5443,7 +5425,7 @@ func (p *parser) qualifiedIdent() *QualifiedIdentNode {
 		}
 		ix := p.ix
 		// *ebnf.Name PackageName ctx [IDENT]
-		if packageName = p.packageName(); packageName == nil {
+		if packageName = p.packageName(); !packageName.IsValid() {
 			p.back(ix)
 			return nil
 		}
@@ -5646,36 +5628,9 @@ func (p *parser) rangeClause() *RangeClauseNode {
 	}
 }
 
-// ReceiverNode represents the production
-//
-//	Receiver = Parameters .
-type ReceiverNode struct {
-	Parameters *ParametersNode
-}
-
-// Source implements Node.
-func (n *ReceiverNode) Source(full bool) string { return nodeSource(n, full) }
-
-// Position implements Node.
-func (n *ReceiverNode) Position() (r token.Position) {
-	if n == nil {
-		return r
-	}
-
-	return n.Parameters.Position()
-}
-
-func (p *parser) receiver() *ReceiverNode {
-	var (
-		parameters *ParametersNode
-	)
+func (p *parser) receiver() *ParametersNode {
 	// *ebnf.Name Parameters ctx [LPAREN]
-	if parameters = p.parameters(); parameters == nil {
-		return nil
-	}
-	return &ReceiverNode{
-		Parameters: parameters,
-	}
+	return p.parameters()
 }
 
 func (p *parser) recvExpr() Expression {
@@ -7102,6 +7057,7 @@ type StructTypeNode struct {
 	LBRACE        Token
 	FieldDeclList *FieldDeclListNode
 	RBRACE        Token
+	lexicalScoper
 	typer
 }
 
@@ -7193,6 +7149,7 @@ func (p *parser) structType() *StructTypeNode {
 		LBRACE:        lbraceTok,
 		FieldDeclList: list,
 		RBRACE:        rbraceTok,
+		lexicalScoper: newLexicalScoper(p.sc),
 	}
 }
 
@@ -7805,6 +7762,15 @@ type TypeDefNode struct {
 	visible
 
 	typer
+}
+
+// String implements Type.
+func (n *TypeDefNode) String() string {
+	if n == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("%s%s", n.IDENT.Src(), n.TypeParameters.Source(false))
 }
 
 // Source implements Node.
