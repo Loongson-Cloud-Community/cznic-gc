@@ -24,9 +24,16 @@ var (
 
 // Singleton instances of some types.
 var (
-	Invalid    Type = &InvalidType{}
-	any             = &InterfaceType{}
-	comparable      = &InterfaceType{}
+	Invalid Type = &InvalidType{}
+
+	any            Type = &InterfaceType{}
+	comparable     Type = &InterfaceType{}
+	untypedBool    Type = PredefinedType(UntypedBool)
+	untypedComplex Type = PredefinedType(UntypedComplex)
+	untypedFloat   Type = PredefinedType(UntypedFloat)
+	untypedInt     Type = PredefinedType(UntypedInt)
+	untypedRune    Type = PredefinedType(UntypedRune)
+	untypedString  Type = PredefinedType(UntypedString)
 )
 
 const (
@@ -97,7 +104,7 @@ type typeNode interface {
 
 type typ interface {
 	Type() Type
-	check(*ctx) Type
+	check(*ctx, *Expression) Type
 	setType(Type) Type
 }
 
@@ -152,6 +159,7 @@ const (
 	UntypedFloat   // untyped float
 	UntypedInt     // untyped int
 	UntypedNil     // untyped nil
+	UntypedRune    // untyped rune
 	UntypedString  // untyped string
 )
 

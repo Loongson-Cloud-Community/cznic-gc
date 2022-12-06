@@ -40,12 +40,13 @@ func _() {
 	_ = x[UntypedFloat-29]
 	_ = x[UntypedInt-30]
 	_ = x[UntypedNil-31]
-	_ = x[UntypedString-32]
+	_ = x[UntypedRune-32]
+	_ = x[UntypedString-33]
 }
 
-const _Kind_name = "<invalid type>arrayboolchancomplex128complex64float32float64functionintint16int32int64int8interfacemappointerslicestringstructtupleuintuint16uint32uint64uint8uintptruntyped booluntyped complexuntyped floatuntyped intuntyped niluntyped string"
+const _Kind_name = "<invalid type>arrayboolchancomplex128complex64float32float64functionintint16int32int64int8interfacemappointerslicestringstructtupleuintuint16uint32uint64uint8uintptruntyped booluntyped complexuntyped floatuntyped intuntyped niluntyped runeuntyped string"
 
-var _Kind_index = [...]uint8{0, 14, 19, 23, 27, 37, 46, 53, 60, 68, 71, 76, 81, 86, 90, 99, 102, 109, 114, 120, 126, 131, 135, 141, 147, 153, 158, 165, 177, 192, 205, 216, 227, 241}
+var _Kind_index = [...]uint8{0, 14, 19, 23, 27, 37, 46, 53, 60, 68, 71, 76, 81, 86, 90, 99, 102, 109, 114, 120, 126, 131, 135, 141, 147, 153, 158, 165, 177, 192, 205, 216, 227, 239, 253}
 
 func (i Kind) String() string {
 	if i < 0 || i >= Kind(len(_Kind_index)-1) {

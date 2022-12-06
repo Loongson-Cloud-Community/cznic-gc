@@ -6,6 +6,7 @@ package gc // modernc.org/gc/v3
 
 import (
 	"fmt"
+	"go/constant"
 	"go/token"
 	"math"
 	"os"
@@ -554,4 +555,57 @@ func extraTags(verMajor, verMinor int, goos, goarch string) (r []string) {
 		}
 	}
 	return r
+}
+
+func isAnyInteger(t Type) bool {
+	switch t.Kind() {
+	case Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, UntypedInt:
+		return true
+	}
+
+	return false
+}
+
+func isAnyFloat(t Type) bool {
+	switch t.Kind() {
+	case Float32, Float64, UntypedFloat:
+		return true
+	}
+
+	return false
+}
+
+func isAnyComplex(t Type) bool {
+	switch t.Kind() {
+	case Complex64, Complex128, UntypedComplex:
+		return true
+	}
+
+	return false
+}
+
+func isAnyUntyped(t Type) bool {
+	switch t.Kind() {
+	case UntypedBool, UntypedComplex, UntypedFloat, UntypedInt, UntypedNil, UntypedRune, UntypedString:
+		return true
+	}
+
+	return false
+}
+
+func typeFromValue(v constant.Value) Type {
+	switch v.Kind() {
+	case constant.Int:
+		return untypedInt
+	case constant.Bool:
+		return untypedBool
+	case constant.Float:
+		return untypedFloat
+	case constant.String:
+		return untypedFloat
+	case constant.Complex:
+		return untypedComplex
+	default:
+		panic(todo("", v.Kind(), v))
+	}
 }

@@ -16,8 +16,6 @@ type ctx struct {
 	cfg  *Config
 	errs errList
 	pkg  *Package
-
-	disableTypeNameCheck int
 }
 
 func (c *ctx) err(n Node, msg string, args ...interface{}) {
@@ -42,6 +40,7 @@ func (n *Package) check(c *ctx) error {
 	defer func() { n.isChecked = true }()
 
 	c.pkg = n
+	trc("PKG %q", n.ImportPath)
 	for _, v := range n.GoFiles {
 		path := filepath.Join(n.FSPath, v.Name())
 		n.AST[path].check(c)
@@ -170,7 +169,7 @@ func (n *TypeDeclNode) check(c *ctx) {
 	for l := n.TypeSpecList; l != nil; l = l.List {
 		switch x := l.TypeSpec.(type) {
 		case *TypeDefNode:
-			x.check(c)
+			x.check(c, nil)
 		case *AliasDeclNode:
 			x.check(c)
 		default:
@@ -184,14 +183,15 @@ func (n *AliasDeclNode) check(c *ctx) {
 		return
 	}
 
-	var builtin string
 	if c.pkg.isBuiltin {
-		builtin = n.IDENT.Src()
+		n.TypeNode.checkBuiltin(c, n.IDENT.Src())
+		return
 	}
-	n.TypeNode.check(c, builtin, n.LexicalScope())
+
+	n.TypeNode.check(c)
 }
 
-func (n *TypeDefNode) check(c *ctx) Type {
+func (n *TypeDefNode) check(c *ctx, _ *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -202,31 +202,17 @@ func (n *TypeDefNode) check(c *ctx) Type {
 
 	defer n.exit()
 
-	var builtin string
 	if c.pkg.isBuiltin {
-		builtin = n.IDENT.Src()
+		return n.setType(n.TypeNode.checkBuiltin(c, n.IDENT.Src()))
 	}
-	return n.setType(n.TypeNode.check(c, builtin, n.LexicalScope()))
+
+	return n.setType(n.TypeNode.check(c))
 }
 
-func (n *TypeNode) check(c *ctx, builtin string, sc *Scope) (r Type) {
-	if n == nil {
-		return Invalid
-	}
-
-	if !n.enter(c, n) {
-		return n.Type()
-	}
-
-	defer n.exit()
-
-	// defer func() {
-	// 	trc("%v: %T %s", n.Position(), r, r)
-	// }()
-
+func (n *TypeNode) checkBuiltin(c *ctx, builtin string) (r Type) {
 	switch builtin {
-	case "", "error":
-		// nop
+	case "error":
+		return n.check(c)
 	case "bool":
 		return n.setType(PredefinedType(Bool))
 	case "byte", "uint8":
@@ -268,19 +254,33 @@ func (n *TypeNode) check(c *ctx, builtin string, sc *Scope) (r Type) {
 	default:
 		panic(todo("%v %q %q", n.Position(), n.Source(false), builtin))
 	}
+}
+
+func (n *TypeNode) check(c *ctx) (r Type) {
+	if n == nil {
+		return Invalid
+	}
+
+	if !n.enter(c, n) {
+		return n.Type()
+	}
+
+	defer n.exit()
+
+	// defer func() {
+	// 	trc("%v: %T %s", n.Position(), r, r)
+	// }()
 
 	switch {
 	case n.TypeName != nil:
-		switch x := n.TypeName.(type) {
+		sc := n.TypeName.LexicalScope()
+		switch x := n.TypeName.Name.(type) {
 		case Token:
 			switch y := sc.lookup(x); z := y.n.(type) {
 			case *TypeDefNode:
-				if c.disableTypeNameCheck == 0 {
-					z.check(c)
-				}
 				return n.setType(z)
 			case *AliasDeclNode:
-				return n.setType(z.TypeNode.check(c, "", z.LexicalScope()))
+				return n.setType(z.TypeNode.check(c))
 			default:
 				panic(todo("%v: %T %s %v %p", n.Position(), z, n.Source(false), sc.kind, sc.Parent()))
 			}
@@ -288,7 +288,7 @@ func (n *TypeNode) check(c *ctx, builtin string, sc *Scope) (r Type) {
 			panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
 		}
 	case n.TypeLit != nil:
-		return n.setType(n.TypeLit.check(c))
+		return n.setType(n.TypeLit.check(c, nil))
 	}
 	panic(todo("%v %q", n.Position(), n.Source(false)))
 }
@@ -339,11 +339,13 @@ func (n *ConstSpecNode) check(c *ctx) {
 		return
 	}
 
-	e.check(c)
-	panic(todo("", n.Position(), n.Source(false)))
+	et := e.check(c, &n.ExpressionList.Expression)
+	if n.TypeNode != nil {
+		panic(todo("", n.Position(), n.Source(false), et))
+	}
 }
 
-func (n *SliceTypeNode) check(c *ctx) Type {
+func (n *SliceTypeNode) check(c *ctx, _ *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -354,14 +356,10 @@ func (n *SliceTypeNode) check(c *ctx) Type {
 
 	defer n.exit()
 
-	c.disableTypeNameCheck++
-
-	defer func() { c.disableTypeNameCheck-- }()
-
-	return n.setType(&SliceType{Elem: n.ElementType.check(c, "", n.LexicalScope())})
+	return n.setType(&SliceType{Elem: n.ElementType.check(c)})
 }
 
-func (n *MapTypeNode) check(c *ctx) Type {
+func (n *MapTypeNode) check(c *ctx, _ *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -372,15 +370,10 @@ func (n *MapTypeNode) check(c *ctx) Type {
 
 	defer n.exit()
 
-	c.disableTypeNameCheck++
-
-	defer func() { c.disableTypeNameCheck-- }()
-
-	sc := n.LexicalScope()
-	return n.setType(&MapType{Key: n.KeyType.check(c, "", sc), Elem: n.ElementType.check(c, "", sc)})
+	return n.setType(&MapType{Key: n.KeyType.check(c), Elem: n.ElementType.check(c)})
 }
 
-func (n *ChannelTypeNode) check(c *ctx) Type {
+func (n *ChannelTypeNode) check(c *ctx, _ *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -390,10 +383,6 @@ func (n *ChannelTypeNode) check(c *ctx) Type {
 	}
 
 	defer n.exit()
-
-	c.disableTypeNameCheck++
-
-	defer func() { c.disableTypeNameCheck-- }()
 
 	dir := SendRecv
 	if n.ARROW.IsValid() {
@@ -403,10 +392,10 @@ func (n *ChannelTypeNode) check(c *ctx) Type {
 			dir = SendOnly
 		}
 	}
-	return n.setType(&ChannelType{Dir: dir, Elem: n.ElementType.check(c, "", n.LexicalScope())})
+	return n.setType(&ChannelType{Dir: dir, Elem: n.ElementType.check(c)})
 }
 
-func (n *PointerTypeNode) check(c *ctx) Type {
+func (n *PointerTypeNode) check(c *ctx, _ *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -417,28 +406,10 @@ func (n *PointerTypeNode) check(c *ctx) Type {
 
 	defer n.exit()
 
-	c.disableTypeNameCheck++
-
-	defer func() { c.disableTypeNameCheck-- }()
-
-	return n.setType(&PointerType{Elem: n.BaseType.check(c, "", n.LexicalScope())})
+	return n.setType(&PointerType{Elem: n.BaseType.check(c)})
 }
 
-func (n *ArrayTypeNode) check(c *ctx) Type {
-	if n == nil {
-		return Invalid
-	}
-
-	if !n.enter(c, n) {
-		return n.Type()
-	}
-
-	defer n.exit()
-
-	panic(todo("", n.Position(), n.Source(false)))
-}
-
-func (n *LiteralValueNode) check(c *ctx) Type {
+func (n *ArrayTypeNode) check(c *ctx, _ *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -452,21 +423,7 @@ func (n *LiteralValueNode) check(c *ctx) Type {
 	panic(todo("", n.Position(), n.Source(false)))
 }
 
-func (n *BasicLitNode) check(c *ctx) Type {
-	// if n == nil {
-	// 	return Invalid
-	// }
-
-	// if !n.enter(c, n) {
-	// 	return n.Type()
-	// }
-
-	// defer n.exit()
-
-	panic(todo("", n.Position(), n.Source(false)))
-}
-
-func (n *BinaryExpression) check(c *ctx) Type {
+func (n *LiteralValueNode) check(c *ctx, _ *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -480,7 +437,135 @@ func (n *BinaryExpression) check(c *ctx) Type {
 	panic(todo("", n.Position(), n.Source(false)))
 }
 
-func (n *CompositeLitNode) check(c *ctx) Type {
+func (n *BasicLitNode) check(c *ctx, _ *Expression) Type {
+	return n.Type()
+}
+
+// Type implements Expression.
+func (n *BasicLitNode) Type() Type {
+	switch n.Token.Ch() {
+	case INT:
+		return untypedInt
+	case CHAR:
+		return untypedRune
+	case FLOAT:
+		return untypedFloat
+	default:
+		panic(todo("", dump(n.Token)))
+	}
+}
+
+func (n *BinaryExpression) check(c *ctx, _ *Expression) (r Type) {
+	if n == nil {
+		return Invalid
+	}
+
+	// trc("(IN) %v: LHS %T %q %q RHS %T %q", n.Op.Position(), n.LHS, n.LHS.Source(false), n.Op.Ch(), n.RHS, n.RHS.Source(false))
+	// defer func() {
+	// 	trc("(OUT) %v: LHS %q %q RHS %q", n.Op.Position(), n.LHS.Source(false), n.Op.Ch(), n.RHS.Source(false))
+	// 	trc("(OUT.A) %v: lhs %T, typ %T %[3]s, val %T %[4]v, rhs %T, typ %T %[6]s, val %T %[7]v, n.Type() %T, r %T , n.Value() %T", n.Op.Position(), n.LHS, n.LHS.Type(), n.LHS.Value(), n.RHS, n.RHS.Type(), n.RHS.Value(), n.Type(), r, n.Value())
+	// 	trc("(OUT.B) %v: %s %s (r %s %s), %s %s", n.Op.Position(), n.Type().Kind(), n.Type(), r.Kind(), r, n.Value().Kind(), n.Value())
+	// }()
+
+	if !n.enter(c, n) {
+		return n.Type()
+	}
+
+	defer n.exit()
+
+	lhs := n.LHS.check(c, &n.LHS)
+	rhs := n.RHS.check(c, &n.RHS)
+	lv := n.LHS.Value()
+	rv := n.RHS.Value()
+	// trc("(IN.A) %v: LHS %T %s, val %s %s, RHS %T %s, val %s %s", n.Op.Position(), lhs, lhs, lv.Kind(), lv, rhs, rhs, rv.Kind(), rv)
+	if lhs == Invalid || rhs == Invalid {
+		return Invalid
+	}
+
+	switch n.Op.Ch() {
+	case ADD:
+		// +    sum                    integers, floats, complex values, strings
+		return n.setType(n.checkOperands(c, true, true, true, true))
+	case SUB, MUL, QUO:
+		// -    difference             integers, floats, complex values
+		// *    product                integers, floats, complex values
+		// /    quotient               integers, floats, complex values
+		return n.setType(n.checkOperands(c, true, true, true, false))
+	case SHL, SHR:
+		if !isAnyInteger(lhs) {
+			c.err(n.Op, "shift operand must be an integer: %v", lhs)
+			return Invalid
+		}
+
+		if !isAnyInteger(rhs) {
+			c.err(n.Op, "shift count must be an integer: %v", rhs)
+			return Invalid
+		}
+
+		// integer << integer >= 0
+		switch rv.Kind() {
+		case constant.Int:
+			if constant.Sign(rv) < 0 {
+				c.err(n.Op, "shift count must be >= 0")
+				return Invalid
+			}
+
+			cnt64, ok := constant.Uint64Val(rv)
+			if !ok {
+				c.err(n.Op, "invalid shift count: %v", rv)
+				return Invalid
+			}
+			cnt := uint(cnt64)
+			if !ok || uint64(cnt) != cnt64 {
+				c.err(n.Op, "invalid shift count: %d", cnt64)
+				return Invalid
+			}
+
+			if v := constant.Shift(lv, n.Op.Ch(), cnt); v.Kind() != constant.Unknown {
+				n.setValue(v)
+			}
+			return n.setType(lhs)
+		case constant.Unknown:
+			return n.setType(lhs)
+		default:
+			panic(todo("", n.Op.Position(), n.Source(false), lhs, n.Op.Ch(), rhs, rv.Kind()))
+		}
+	default:
+		panic(todo("", n.Op.Position(), n.Source(false), lhs, n.Op.Ch(), rhs))
+	}
+}
+
+func (n *BinaryExpression) checkOperands(c *ctx, intsOK, floatsOK, complexOK, stringsOK bool) Type {
+	lhs := n.LHS.Type()
+	rhs := n.RHS.Type()
+	lv := n.LHS.Value()
+	rv := n.RHS.Value()
+
+	if lhs.Kind() == rhs.Kind() {
+		if intsOK && isAnyInteger(lhs) || floatsOK && isAnyFloat(lhs) || complexOK && isAnyComplex(lhs) {
+			if v := constant.BinaryOp(lv, n.Op.Ch(), rv); v.Kind() != constant.Unknown {
+				n.setValue(v)
+			}
+			return lhs
+		}
+
+		panic(todo("", n.Op.Position(), n.Source(false), n.LHS.Type(), n.Op.Ch(), n.RHS.Type()))
+	}
+
+	if isAnyUntyped(lhs) && isAnyUntyped(rhs) && lv.Kind() != constant.Unknown && rv.Kind() != constant.Unknown {
+		if v := constant.BinaryOp(lv, n.Op.Ch(), rv); v.Kind() != constant.Unknown {
+			n.setValue(v)
+			return typeFromValue(v)
+		}
+	}
+
+	switch lhs.Kind() {
+	default:
+		panic(todo("", n.Op.Position(), n.Source(false), n.LHS.Type(), n.Op.Ch(), n.RHS.Type()))
+	}
+}
+
+func (n *CompositeLitNode) check(c *ctx, _ *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -494,7 +579,7 @@ func (n *CompositeLitNode) check(c *ctx) Type {
 	panic(todo("", n.Position(), n.Source(false)))
 }
 
-func (n *ConversionNode) check(c *ctx) Type {
+func (n *ConversionNode) check(c *ctx, _ *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -508,7 +593,7 @@ func (n *ConversionNode) check(c *ctx) Type {
 	panic(todo("", n.Position(), n.Source(false)))
 }
 
-func (n *FunctionLitNode) check(c *ctx) Type {
+func (n *FunctionLitNode) check(c *ctx, _ *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -522,7 +607,7 @@ func (n *FunctionLitNode) check(c *ctx) Type {
 	panic(todo("", n.Position(), n.Source(false)))
 }
 
-func (n *FunctionTypeNode) check(c *ctx) Type {
+func (n *FunctionTypeNode) check(c *ctx, _ *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -536,7 +621,7 @@ func (n *FunctionTypeNode) check(c *ctx) Type {
 	panic(todo("", n.Position(), n.Source(false)))
 }
 
-func (n *InterfaceTypeNode) check(c *ctx) Type {
+func (n *InterfaceTypeNode) check(c *ctx, _ *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -577,10 +662,10 @@ func (n *MethodElemNode) check(c *ctx) {
 		return
 	}
 
-	n.Signature.check(c)
+	n.Signature.check(c, nil)
 }
 
-func (n *MethodExprNode) check(c *ctx) Type {
+func (n *MethodExprNode) check(c *ctx, _ *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -594,7 +679,34 @@ func (n *MethodExprNode) check(c *ctx) Type {
 	panic(todo("", n.Position(), n.Source(false)))
 }
 
-func (n *OperandNameNode) check(c *ctx) Type {
+func (n *OperandNameNode) check(c *ctx, _ *Expression) Type {
+	if n == nil {
+		return Invalid
+	}
+
+	sc := n.LexicalScope()
+	switch x := n.Name.(type) {
+	case Token:
+		switch y := sc.lookup(x); z := y.n.(type) {
+		case *ConstSpecNode:
+			n.resolvedTo = z
+			if z.TypeNode != nil {
+				return z.TypeNode.check(c)
+			}
+
+			return z.ExpressionList.Expression.check(c, &z.ExpressionList.Expression)
+		case *TypeDefNode:
+			n.resolvedTo = z
+			return z
+		default:
+			panic(todo("%v: %T %s %v %p", n.Position(), z, n.Source(false), sc.kind, sc.Parent()))
+		}
+	default:
+		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+	}
+}
+
+func (n *OperandNode) check(c *ctx, _ *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -608,7 +720,7 @@ func (n *OperandNameNode) check(c *ctx) Type {
 	panic(todo("", n.Position(), n.Source(false)))
 }
 
-func (n *OperandNode) check(c *ctx) Type {
+func (n *PrimaryExprNode) check(c *ctx, ep *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -619,38 +731,25 @@ func (n *OperandNode) check(c *ctx) Type {
 
 	defer n.exit()
 
-	panic(todo("", n.Position(), n.Source(false)))
+	typ := n.Operand.check(c, &n.Operand)
+	switch x := n.Operand.(type) {
+	case *OperandNameNode:
+		switch y := x.ResolvedTo().(type) {
+		case *TypeDefNode:
+			//TODO rewrite *ep to ConversionNode
+			panic(todo("%v: %T %s", x.Position(), y, x.Source(false)))
+		default:
+			panic(todo("%v: %T %s", x.Position(), y, x.Source(false)))
+		}
+	}
+	val := n.Operand.Value()
+	for _, v := range n.PostfixList {
+		panic(todo("", v.Position(), v.Source(false)))
+	}
+	panic(todo("", n.Position(), n.Source(false), typ, val))
 }
 
-func (n *ParenthesizedExpression) check(c *ctx) Type {
-	if n == nil {
-		return Invalid
-	}
-
-	if !n.enter(c, n) {
-		return n.Type()
-	}
-
-	defer n.exit()
-
-	panic(todo("", n.Position(), n.Source(false)))
-}
-
-func (n *PrimaryExprNode) check(c *ctx) Type {
-	if n == nil {
-		return Invalid
-	}
-
-	if !n.enter(c, n) {
-		return n.Type()
-	}
-
-	defer n.exit()
-
-	panic(todo("", n.Position(), n.Source(false)))
-}
-
-func (n *StructTypeNode) check(c *ctx) Type {
+func (n *StructTypeNode) check(c *ctx, _ *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -667,7 +766,7 @@ func (n *StructTypeNode) check(c *ctx) Type {
 		case fd.EmbeddedField != nil:
 			panic(todo("", fd.Position(), fd.Source(false)))
 		default:
-			fd.TypeNode.check(c, "", n.LexicalScope())
+			fd.TypeNode.check(c)
 			for l := fd.IdentifierList; l != nil; l = l.List {
 				fd2 := *fd
 				id := *l
@@ -678,20 +777,6 @@ func (n *StructTypeNode) check(c *ctx) Type {
 		}
 	}
 	return n.setType(&StructType{Fields: a})
-}
-
-func (n *UnaryExprNode) check(c *ctx) Type {
-	if n == nil {
-		return Invalid
-	}
-
-	if !n.enter(c, n) {
-		return n.Type()
-	}
-
-	defer n.exit()
-
-	panic(todo("", n.Position(), n.Source(false)))
 }
 
 func (n *VarDeclNode) check(c *ctx) {
@@ -717,7 +802,7 @@ func (n *VarSpecNode) check(c *ctx) {
 		return
 	}
 
-	n.TypeNode.check(c, "", n.LexicalScope())
+	n.TypeNode.check(c)
 	ids := n.IdentifierList.Len()
 	exprs := n.ExpressionList.Len()
 	sc := n.LexicalScope()
@@ -761,10 +846,10 @@ func (n *FunctionDeclNode) check(c *ctx) {
 		return
 	}
 
-	n.Signature.check(c)
+	n.Signature.check(c, nil)
 }
 
-func (n *SignatureNode) check(c *ctx) Type {
+func (n *SignatureNode) check(c *ctx, _ *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -775,32 +860,32 @@ func (n *SignatureNode) check(c *ctx) Type {
 
 	defer n.exit()
 
-	in := n.Parameters.check(c)
+	in := n.Parameters.check(c, nil)
 	out := n.Result.check(c)
 	return n.setType(newTupleType([]Type{in, out}))
 }
 
-func (n *ResultNode) check(c *ctx) (r *TupleType) {
+func (n *ResultNode) check(c *ctx) (r Type) {
 	if n == nil {
 		return newTupleType(nil)
 	}
 
-	return n.Parameters.check(c)
+	return n.Parameters.check(c, nil)
 }
 
-func (n *ParametersNode) check(c *ctx) (r *TupleType) {
-	r = newTupleType(nil)
+func (n *ParametersNode) check(c *ctx, _ *Expression) Type {
+	r := newTupleType(nil)
 	if n == nil {
 		return r
 	}
 
 	for l := n.ParameterDeclList; l != nil; l = l.List {
-		r.Types = append(r.Types, l.check(c))
+		r.Types = append(r.Types, l.check(c, nil))
 	}
 	return r
 }
 
-func (n *ParameterDeclListNode) check(c *ctx) Type {
+func (n *ParameterDeclListNode) check(c *ctx, _ *Expression) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -813,7 +898,7 @@ func (n *ParameterDeclNode) check(c *ctx) (r Type) {
 		return Invalid
 	}
 
-	return n.TypeNode.check(c, "", n.LexicalScope())
+	return n.TypeNode.check(c)
 }
 
 // Type implements Type.
@@ -822,9 +907,9 @@ func (n *KeyedElementNode) Type() Type { return n.Element2.Type() }
 // Value implements Value.
 func (n *KeyedElementNode) Value() constant.Value { return n.Element2.Value() }
 
-func (n *KeyedElementNode) check(c *ctx) Type {
-	n.Element.check(c)
-	return n.Element2.check(c)
+func (n *KeyedElementNode) check(c *ctx, _ *Expression) Type {
+	n.Element.check(c, &n.Element)
+	return n.Element2.check(c, &n.Element2)
 }
 
 func (n *KeyedElementNode) setType(typ Type) Type {
@@ -836,7 +921,7 @@ func (n *KeyedElementNode) setValue(val constant.Value) {
 }
 
 func (n *MethodDeclNode) check(c *ctx) {
-	tt := n.Receiver.check(c)
+	tt := n.Receiver.check(c, nil).(*TupleType)
 	rx := Invalid
 	switch len(tt.Types) {
 	case 1:
@@ -846,4 +931,81 @@ func (n *MethodDeclNode) check(c *ctx) {
 	}
 	_ = rx
 	//TODO panic(todo("%v: %T %s %T %q", n.Position(), n, n.Source(false), rx, rx))
+}
+
+func (n *OperandNameNode) Type() Type {
+	switch x := n.ResolvedTo().(type) {
+	case *ConstSpecNode:
+		if x.TypeNode != nil {
+			panic(todo("%v: %T", n.Position(), x))
+		}
+
+		return x.ExpressionList.Expression.Type()
+	default:
+		panic(todo("%v: %T", n.Position(), x))
+	}
+}
+
+func (n *OperandNameNode) Value() constant.Value {
+	switch x := n.ResolvedTo().(type) {
+	case *ConstSpecNode:
+		return x.ExpressionList.Expression.Value()
+	case *TypeDefNode:
+		return unknown
+	default:
+		panic(todo("%v: %T", n.Position(), x))
+	}
+}
+
+func (n *OperandNameNode) setType(typ Type) Type {
+	panic(todo("", n.Position()))
+}
+
+func (n *OperandNameNode) setValue(val constant.Value) {
+	panic(todo("", n.Position()))
+}
+
+func (n *ParenthesizedExpression) check(c *ctx, _ *Expression) Type {
+	return n.Expression.check(c, &n.Expression)
+}
+
+func (n *ParenthesizedExpression) Type() Type {
+	return n.Expression.Type()
+}
+
+func (n *ParenthesizedExpression) Value() constant.Value {
+	return n.Expression.Value()
+}
+
+func (n *ParenthesizedExpression) setType(typ Type) Type {
+	panic(todo("", n.Position()))
+}
+
+func (n *ParenthesizedExpression) setValue(val constant.Value) {
+	panic(todo("", n.Position()))
+}
+
+func (n *UnaryExprNode) check(c *ctx, _ *Expression) Type {
+	if n == nil {
+		return Invalid
+	}
+
+	switch t := n.UnaryExpr.check(c, &n.UnaryExpr); n.Op.Ch() {
+	case ARROW:
+		if x, ok := t.(*ChannelType); ok {
+			return x.Elem
+		}
+	default:
+		return t
+	}
+
+	return Invalid
+}
+
+func (n *UnaryExprNode) Type() Type {
+	panic(todo("", n.Position(), n.Source(false)))
+}
+
+func (n *UnaryExprNode) setType(typ Type) Type {
+	panic(todo("", n.Position(), n.Source(false)))
 }
