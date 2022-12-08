@@ -30,6 +30,15 @@ import (
 //                                         <total> x 14,422,538 =   719,042,280 á  50
 //                                         <total> x 14,423,062 =   719,068,384 á  50
 //                                         <total> x 14,423,240 =   717,114,200 á  50
+//                                         <total> x 14,425,901 =   711,567,152 á  49
+//                                         <total> x 14,474,065 =   710,068,032 á  49
+//                                         <total> x 14,481,041 =   710,373,680 á  49
+//                                         <total> x 14,481,767 =   710,408,768 á  49
+//                                         <total> x 14,482,935 =   710,465,552 á  49
+//                                         <total> x 14,484,493 =   710,543,264 á  49
+//                                         <total> x 14,484,620 =   710,549,440 á  49
+//                                         <total> x 14,459,311 =   708,514,080 á  49
+//                                         <total> x 14,459,693 =   708,534,224 á  49
 
 const parserBudget = 1e7
 
@@ -163,7 +172,7 @@ func dump(n Node) string { return strutil.PrettyString(n, "", "", hooks) }
 
 // nodeSource returns the source text of n. If full is false, every non empty
 // separator is replaced by a single space.
-func nodeSource(n Node, full bool) string {
+func nodeSource(n interface{}, full bool) string {
 	var a []int32
 	var t Token
 	nodeSource0(&t.source, &a, n)
@@ -799,7 +808,7 @@ func (n *BasicLitNode) Value() constant.Value {
 	return n.val
 }
 
-func (n *BasicLitNode) setType(Type) Type {
+func (n *BasicLitNode) setType(Type, *ctx, Node) Type {
 	panic(todo("internal error: %s", dump(n)))
 }
 
@@ -1183,7 +1192,7 @@ func (p *parser) commClause() *CommClauseNode {
 //
 //	CompositeLit = LiteralType LiteralValue .
 type CompositeLitNode struct {
-	LiteralType  *LiteralTypeNode
+	LiteralType  Node
 	LiteralValue *LiteralValueNode
 	typer
 	valuer
@@ -1203,7 +1212,7 @@ func (n *CompositeLitNode) Position() (r token.Position) {
 
 func (p *parser) compositeLit() *CompositeLitNode {
 	var (
-		literalType  *LiteralTypeNode
+		literalType  Node
 		literalValue *LiteralValueNode
 	)
 	// ebnf.Sequence LiteralType LiteralValue ctx [LBRACK, MAP, STRUCT]
@@ -3962,33 +3971,29 @@ func (p *parser) literal() Expression {
 	}
 }
 
-// LiteralTypeNode represents the production
+// ArrayLiteralTypeNode represents the production
 //
-//	LiteralType = StructType | ArrayType | "[" "..." "]" ElementType | SliceType | MapType .
-type LiteralTypeNode struct {
-	StructType  *StructTypeNode
-	ArrayType   *ArrayTypeNode
+//	ArrayLiteralType = StructType | ArrayType | "[" "..." "]" ElementType | SliceType | MapType .
+type ArrayLiteralTypeNode struct {
 	LBRACK      Token
 	ELLIPSIS    Token
 	RBRACK      Token
 	ElementType *TypeNode
-	SliceType   *SliceTypeNode
-	MapType     *MapTypeNode
 }
 
 // Source implements Node.
-func (n *LiteralTypeNode) Source(full bool) string { return nodeSource(n, full) }
+func (n *ArrayLiteralTypeNode) Source(full bool) string { return nodeSource(n, full) }
 
 // Position implements Node.
-func (n *LiteralTypeNode) Position() (r token.Position) {
+func (n *ArrayLiteralTypeNode) Position() (r token.Position) {
 	if n == nil {
 		return r
 	}
 
-	panic("TODO")
+	return n.LBRACK.Position()
 }
 
-func (p *parser) literalType() *LiteralTypeNode {
+func (p *parser) literalType() Node {
 	var (
 		ok          bool
 		structType  *StructTypeNode
@@ -4004,21 +4009,15 @@ func (p *parser) literalType() *LiteralTypeNode {
 	switch p.c() {
 	case STRUCT: // 0
 		// *ebnf.Name StructType ctx [STRUCT]
-		if structType = p.structType(); structType == nil {
-			goto _0
+		if structType = p.structType(); structType != nil {
+			return structType
 		}
-		break
-	_0:
-		structType = nil
-		return nil
 	case LBRACK: // 1 2 3
 		// *ebnf.Name ArrayType ctx [LBRACK]
-		if arrayType = p.arrayType(); arrayType == nil {
-			goto _2
+		if arrayType = p.arrayType(); arrayType != nil {
+			return arrayType
 		}
-		break
-	_2:
-		arrayType = nil
+
 		// ebnf.Sequence "[" "..." "]" ElementType ctx [LBRACK]
 		{
 			if p.peek(1) != ELLIPSIS {
@@ -4046,42 +4045,30 @@ func (p *parser) literalType() *LiteralTypeNode {
 				goto _3
 			}
 		}
-		break
+		return &ArrayLiteralTypeNode{
+			LBRACK:      lbrackTok,
+			ELLIPSIS:    ellipsisTok,
+			RBRACK:      rbrackTok,
+			ElementType: elementType,
+		}
 	_3:
 		elementType = nil
 		ellipsisTok = Token{}
 		lbrackTok = Token{}
 		rbrackTok = Token{}
 		// *ebnf.Name SliceType ctx [LBRACK]
-		if sliceType = p.sliceType(); sliceType == nil {
-			goto _4
+		if sliceType = p.sliceType(); sliceType != nil {
+			return sliceType
 		}
-		break
-	_4:
-		sliceType = nil
+
 		return nil
 	case MAP: // 4
 		// *ebnf.Name MapType ctx [MAP]
-		if mapType = p.mapType(); mapType == nil {
-			goto _5
+		if mapType = p.mapType(); mapType != nil {
+			return mapType
 		}
-		break
-	_5:
-		mapType = nil
-		return nil
-	default:
-		return nil
 	}
-	return &LiteralTypeNode{
-		StructType:  structType,
-		ArrayType:   arrayType,
-		LBRACK:      lbrackTok,
-		ELLIPSIS:    ellipsisTok,
-		RBRACK:      rbrackTok,
-		ElementType: elementType,
-		SliceType:   sliceType,
-		MapType:     mapType,
-	}
+	return nil
 }
 
 // KeyedElementListNode represents the production
@@ -5212,10 +5199,10 @@ func (p *parser) postStmt() *PostStmtNode {
 
 // PrimaryExprNode represents the production
 //
-//	PrimaryExpr = ( Operand | Conversion | MethodExpr ) { Selector | Index | Slice | TypeAssertion | Arguments } .
+//	PrimaryExpr = Operand | Conversion | MethodExpr { Selector | Index | Slice | TypeAssertion | Arguments } .
 type PrimaryExprNode struct {
-	Operand     Expression
-	PostfixList []Node
+	PrimaryExpr Expression
+	Postfix     Node
 	typer
 	valuer
 }
@@ -5229,10 +5216,10 @@ func (n *PrimaryExprNode) Position() (r token.Position) {
 		return r
 	}
 
-	return n.Operand.Position()
+	return n.PrimaryExpr.Position()
 }
 
-func (p *parser) primaryExpr(preBlock bool) Expression {
+func (p *parser) primaryExpr(preBlock bool) (r Expression) {
 	var (
 		item0      Expression
 		operand    Expression
@@ -5307,6 +5294,9 @@ func (p *parser) primaryExpr(preBlock bool) Expression {
 			p.back(ix)
 			return nil
 		}
+
+		r = item0
+
 		// *ebnf.Repetition { Selector | Index | Slice | TypeAssertion | Arguments } ctx []
 	_7:
 		{
@@ -5365,19 +5355,13 @@ func (p *parser) primaryExpr(preBlock bool) Expression {
 					goto _8
 				}
 				list = append(list, item)
+				r = &PrimaryExprNode{PrimaryExpr: r, Postfix: item}
 				goto _7
 			}
 		_8:
 		}
 	}
-	if len(list) == 0 {
-		return item0
-	}
-
-	return &PrimaryExprNode{
-		Operand:     item0,
-		PostfixList: list,
-	}
+	return r
 }
 
 // QualifiedIdentNode represents the production
@@ -6212,13 +6196,6 @@ func (p *parser) expr2ident(e Expression) (r Token) {
 		}
 
 		p.err(x.Position(), "expected identifier")
-	case *PrimaryExprNode:
-		if len(x.PostfixList) != 0 && p.reportDeclarationErrors {
-			p.err(x.Position(), "expected identifier")
-			break
-		}
-
-		return p.expr2ident(x.Operand)
 	default:
 		if p.reportDeclarationErrors {
 			p.err(x.Position(), "expected identifier")

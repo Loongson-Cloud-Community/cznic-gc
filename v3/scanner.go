@@ -194,12 +194,12 @@ func newSource(name string, buf []byte) *source {
 	}
 }
 
-type errWithPosition struct {
+type ErrWithPosition struct {
 	pos token.Position
 	err error
 }
 
-func (e errWithPosition) String() string {
+func (e ErrWithPosition) String() string {
 	switch {
 	case e.pos.IsValid():
 		return fmt.Sprintf("%v: %v", e.pos, e.err)
@@ -208,7 +208,7 @@ func (e errWithPosition) String() string {
 	}
 }
 
-type errList []errWithPosition
+type errList []ErrWithPosition
 
 func (e errList) Err() (r error) {
 	if len(e) == 0 {
@@ -220,7 +220,7 @@ func (e errList) Err() (r error) {
 
 func (e errList) Error() string {
 	w := 0
-	prev := errWithPosition{pos: token.Position{Offset: -1}}
+	prev := ErrWithPosition{pos: token.Position{Offset: -1}}
 	for _, v := range e {
 		if v.pos.Line == 0 || v.pos.Offset != prev.pos.Offset || v.err.Error() != prev.err.Error() {
 			e[w] = v
@@ -239,9 +239,9 @@ func (e errList) Error() string {
 func (e *errList) err(pos token.Position, msg string, args ...interface{}) {
 	switch {
 	case len(args) == 0:
-		*e = append(*e, errWithPosition{pos, fmt.Errorf("%s", msg)})
+		*e = append(*e, ErrWithPosition{pos, fmt.Errorf("%s", msg)})
 	default:
-		*e = append(*e, errWithPosition{pos, fmt.Errorf(msg, args...)})
+		*e = append(*e, ErrWithPosition{pos, fmt.Errorf(msg, args...)})
 	}
 }
 

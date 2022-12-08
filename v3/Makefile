@@ -1,4 +1,31 @@
-.PHONY:	clean edit editor test test2 back report report2 parser2 benchmarks benchmarks2 mem memgo race nreport
+.PHONY:	all clean edit editor test test2 back report report2 parser2 benchmarks benchmarks2 mem memgo race nreport build_all_targets
+
+all:
+
+build_all_targets:
+	GOOS=darwin GOARCH=amd64 go test -c -o /dev/null
+	GOOS=darwin GOARCH=arm64 go test -c -o /dev/null
+	GOOS=freebsd GOARCH=386 go test -c -o /dev/null
+	GOOS=freebsd GOARCH=amd64 go test -c -o /dev/null
+	GOOS=freebsd GOARCH=arm go test -c -o /dev/null
+	GOOS=freebsd GOARCH=arm64 go test -c -o /dev/null
+	GOOS=illumos GOARCH=amd64 go test -c -o /dev/null
+	GOOS=linux GOARCH=386 go test -c -o /dev/null
+	GOOS=linux GOARCH=amd64 go test -c -o /dev/null
+	GOOS=linux GOARCH=arm go test -c -o /dev/null
+	GOOS=linux GOARCH=arm64 go test -c -o /dev/null
+	GOOS=linux GOARCH=ppc64le go test -c -o /dev/null
+	GOOS=linux GOARCH=riscv64 go test -c -o /dev/null
+	GOOS=linux GOARCH=s390x go test -c -o /dev/null
+	GOOS=netbsd GOARCH=386 go test -c -o /dev/null
+	GOOS=netbsd GOARCH=amd64 go test -c -o /dev/null
+	GOOS=netbsd GOARCH=arm go test -c -o /dev/null
+	GOOS=openbsd GOARCH=386 go test -c -o /dev/null
+	GOOS=openbsd GOARCH=amd64 go test -c -o /dev/null
+	GOOS=openbsd GOARCH=arm64 go test -c -o /dev/null
+	GOOS=windows GOARCH=386 go test -c -o /dev/null
+	GOOS=windows GOARCH=amd64 go test -c -o /dev/null
+	GOOS=windows GOARCH=arm64 go test -c -o /dev/null
 
 clean:
 	rm -f cpu.test mem.test *.out

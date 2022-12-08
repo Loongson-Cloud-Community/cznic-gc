@@ -609,3 +609,11 @@ func typeFromValue(v constant.Value) Type {
 		panic(todo("", v.Kind(), v))
 	}
 }
+
+func roundup(n, to int64) int64 {
+	if r := n % to; r != 0 {
+		return n + to - r
+	}
+
+	return n
+}

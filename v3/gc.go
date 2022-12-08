@@ -95,6 +95,8 @@ type ConfigOption func(*Config) error
 // Config instances can be shared, they are not mutated once created and
 // configured.
 type Config struct {
+	abi           *ABI
+	any           *InterfaceType
 	buildTagMap   map[string]bool
 	buildTags     []string
 	buildTagsKey  string // Zero byte separated
@@ -114,6 +116,7 @@ type Config struct {
 	searchGoPaths []string
 	searchGoroot  []string
 
+	arch32bit  bool
 	configured bool
 }
 
@@ -144,6 +147,15 @@ func NewConfig(opts ...ConfigOption) (r *Config, err error) {
 			return nil, err
 		}
 	}
+	if r.abi, err = NewABI(r.goos, r.goarch); err != nil {
+		return nil, err
+	}
+	switch r.goarch {
+	case "386", "arm":
+		r.arch32bit = true
+	}
+	r.any = &InterfaceType{cfg: r}
+
 	//  During a particular build, the following build tags are satisfied:
 	//
 	//  the target operating system, as spelled by runtime.GOOS, set with the GOOS environment variable.
@@ -171,8 +183,11 @@ func NewConfig(opts ...ConfigOption) (r *Config, err error) {
 		return nil, fmt.Errorf("unsupported Go version: %s", r.goversion)
 	}
 
-	if x := strings.IndexByte(ver[1], '.'); x >= 0 {
+	switch x, x2 := strings.IndexByte(ver[1], '.'), strings.Index(ver[1], "rc"); {
+	case x >= 0:
 		ver[1] = ver[1][:x]
+	case x2 >= 0:
+		ver[1] = ver[1][:x2]
 	}
 	verMinor, err := strconv.Atoi(ver[1])
 	if err != nil {

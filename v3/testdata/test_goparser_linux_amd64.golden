@@ -741,6 +741,7 @@
 /usr/local/go/src/cmd/compile/internal/test/lang_test.go
 /usr/local/go/src/cmd/compile/internal/test/logic_test.go
 /usr/local/go/src/cmd/compile/internal/test/mulconst_test.go
+/usr/local/go/src/cmd/compile/internal/test/race.go
 /usr/local/go/src/cmd/compile/internal/test/reproduciblebuilds_test.go
 /usr/local/go/src/cmd/compile/internal/test/shift_test.go
 /usr/local/go/src/cmd/compile/internal/test/ssa_test.go
@@ -3634,6 +3635,10 @@
 /usr/local/go/src/internal/reflectlite/tostring_test.go
 /usr/local/go/src/internal/reflectlite/type.go
 /usr/local/go/src/internal/reflectlite/value.go
+/usr/local/go/src/internal/safefilepath/path.go
+/usr/local/go/src/internal/safefilepath/path_other.go
+/usr/local/go/src/internal/safefilepath/path_test.go
+/usr/local/go/src/internal/safefilepath/path_windows.go
 /usr/local/go/src/internal/singleflight/singleflight.go
 /usr/local/go/src/internal/singleflight/singleflight_test.go
 /usr/local/go/src/internal/syscall/execenv/execenv_default.go
@@ -7785,6 +7790,7 @@
 /usr/local/go/test/fixedbugs/issue55122b.go
 /usr/local/go/test/fixedbugs/issue5515.go
 /usr/local/go/test/fixedbugs/issue5581.go
+/usr/local/go/test/fixedbugs/issue55889.go
 /usr/local/go/test/fixedbugs/issue5607.go
 /usr/local/go/test/fixedbugs/issue5609.go
 /usr/local/go/test/fixedbugs/issue56105.go
@@ -8709,6 +8715,7 @@
 /usr/local/go/test/winbatch.go
 /usr/local/go/test/writebarrier.go
 /usr/local/go/test/zerodivide.go
+abi.go
 all_test.go
 check.go
 etc.go

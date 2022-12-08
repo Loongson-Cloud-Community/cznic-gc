@@ -35,21 +35,22 @@ func _() {
 	_ = x[Uint64-24]
 	_ = x[Uint8-25]
 	_ = x[Uintptr-26]
-	_ = x[UntypedBool-27]
-	_ = x[UntypedComplex-28]
-	_ = x[UntypedFloat-29]
-	_ = x[UntypedInt-30]
-	_ = x[UntypedNil-31]
-	_ = x[UntypedRune-32]
-	_ = x[UntypedString-33]
+	_ = x[UnsafePointer-27]
+	_ = x[UntypedBool-28]
+	_ = x[UntypedComplex-29]
+	_ = x[UntypedFloat-30]
+	_ = x[UntypedInt-31]
+	_ = x[UntypedNil-32]
+	_ = x[UntypedRune-33]
+	_ = x[UntypedString-34]
 }
 
-const _Kind_name = "<invalid type>arrayboolchancomplex128complex64float32float64functionintint16int32int64int8interfacemappointerslicestringstructtupleuintuint16uint32uint64uint8uintptruntyped booluntyped complexuntyped floatuntyped intuntyped niluntyped runeuntyped string"
+const _Kind_name = "<invalid type>arrayboolchancomplex128complex64float32float64functionintint16int32int64int8interfacemappointerslicestringstructtupleuintuint16uint32uint64uint8uintptrunsafe.Pointeruntyped booluntyped complexuntyped floatuntyped intuntyped niluntyped runeuntyped string"
 
-var _Kind_index = [...]uint8{0, 14, 19, 23, 27, 37, 46, 53, 60, 68, 71, 76, 81, 86, 90, 99, 102, 109, 114, 120, 126, 131, 135, 141, 147, 153, 158, 165, 177, 192, 205, 216, 227, 239, 253}
+var _Kind_index = [...]uint16{0, 14, 19, 23, 27, 37, 46, 53, 60, 68, 71, 76, 81, 86, 90, 99, 102, 109, 114, 120, 126, 131, 135, 141, 147, 153, 158, 165, 179, 191, 206, 219, 230, 241, 253, 267}
 
 func (i Kind) String() string {
-	if i < 0 || i >= Kind(len(_Kind_index)-1) {
+	if i >= Kind(len(_Kind_index)-1) {
 		return "Kind(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
 	return _Kind_name[_Kind_index[i]:_Kind_index[i+1]]
@@ -58,14 +59,14 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[typeGuardUnchecked-0]
-	_ = x[typeGuardChecking-1]
-	_ = x[typeGuardChecked-2]
+	_ = x[guardUnchecked-0]
+	_ = x[guardChecking-1]
+	_ = x[guardChecked-2]
 }
 
-const _guard_name = "typeGuardUncheckedtypeGuardCheckingtypeGuardChecked"
+const _guard_name = "guardUncheckedguardCheckingguardChecked"
 
-var _guard_index = [...]uint8{0, 18, 35, 51}
+var _guard_index = [...]uint8{0, 14, 27, 39}
 
 func (i guard) String() string {
 	if i >= guard(len(_guard_index)-1) {
