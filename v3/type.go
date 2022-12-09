@@ -6,6 +6,7 @@ package gc // modernc.org/gc/v3
 
 import (
 	"fmt"
+	"go/constant"
 	"strings"
 
 	"modernc.org/mathutil"
@@ -71,6 +72,8 @@ type Type interface {
 	// A negative value is reported when the size was not determined.
 	Size() int64
 	String() string
+
+	isTypeParam() bool
 }
 
 // A Kind represents the specific kind of type that a Type represents. The zero
@@ -166,9 +169,21 @@ func (g *guard) enter(c *ctx, n Node) bool {
 
 func (g *guard) exit() { *g = guardChecked }
 
+const (
+	attrTypeParam typeAttr = 1 << iota
+)
+
+type typeAttr byte
+
+func (t typeAttr) isTypeParam() bool { return t&attrTypeParam != 0 }
+func (t *typeAttr) setTypeParam()    { *t |= attrTypeParam }
+
 type typer struct {
-	guard
 	typ Type
+
+	typeAttr
+
+	guard
 }
 
 func newTyper(t Type) typer { return typer{typ: t} }
@@ -239,6 +254,9 @@ func (t *typer) Type() Type {
 // InvalidType represents an invalid type.
 type InvalidType struct{}
 
+// isTypeParam implements Type.
+func (t *InvalidType) isTypeParam() bool { return false }
+
 // Align implements Type.
 func (t *InvalidType) Align() int64 { return -1 }
 
@@ -258,6 +276,8 @@ func (t *InvalidType) String() string { return "<invalid type>" }
 type PredefinedType struct {
 	kind Kind
 	cfg  *Config
+
+	typeAttr
 }
 
 // Align implements Type.
@@ -297,6 +317,8 @@ func (t *PredefinedType) String() string { return t.Kind().String() }
 type InterfaceType struct {
 	Elems []Node //TODO
 	cfg   *Config
+
+	typeAttr
 }
 
 // Align implements Type.
@@ -360,6 +382,9 @@ type TupleType struct {
 
 func newTupleType(types []Type) *TupleType { return &TupleType{types} }
 
+// isTypeParam implements Type.
+func (t *TupleType) isTypeParam() bool { return false }
+
 // Align implements Type.
 func (t *TupleType) Align() int64 { return -1 }
 
@@ -394,6 +419,8 @@ func (t *TupleType) String() string {
 type SliceType struct {
 	Elem Type
 	cfg  *Config
+
+	typeAttr
 }
 
 // Align implements Type.
@@ -440,6 +467,8 @@ type MapType struct {
 	Elem Type
 	Key  Type
 	cfg  *Config
+
+	typeAttr
 }
 
 // Align implements Type.
@@ -496,6 +525,8 @@ type ChannelType struct {
 	Dir  ChanDir
 	Elem Type
 	cfg  *Config
+
+	typeAttr
 }
 
 // Align implements Type.
@@ -552,6 +583,8 @@ func (t *ChannelType) String() string {
 type PointerType struct {
 	Elem Type
 	cfg  *Config
+
+	typeAttr
 }
 
 func newPointer(pkg *Package, t Type) *PointerType {
@@ -601,6 +634,8 @@ func (t *PointerType) String() string {
 type ArrayType struct {
 	Elems int64
 	Elem  Type
+
+	typeAttr
 
 	g guard
 }
@@ -697,6 +732,8 @@ type StructType struct {
 
 	sz int64
 
+	typeAttr
+
 	align      int8
 	fieldAlign int8
 
@@ -770,7 +807,11 @@ func (t *StructType) size(c *ctx, n Node) {
 
 // Size implements Type.
 func (t *StructType) Size() int64 {
-	panic(todo(""))
+	if t.g != guardChecked {
+		panic(todo("", t))
+	}
+
+	return t.sz
 }
 
 // Kind implements Type.
@@ -804,4 +845,162 @@ func (t *StructType) String() string {
 	}
 	b.WriteByte('}')
 	return b.String()
+}
+
+func roundup(n, to int64) int64 {
+	if r := n % to; r != 0 {
+		return n + to - r
+	}
+
+	return n
+}
+
+// Type definitions
+//
+// A type definition creates a new, distinct type with the same underlying type
+// and operations as the given type and binds an identifier, the type name, to
+// it.
+//
+//	TypeDef = identifier [ TypeParameters ] Type .
+//
+// The new type is called a defined type. It is different from any other type,
+// including the type it is created from.
+func isDefinedType(t Type) bool {
+	_, ok := t.(*TypeDefNode)
+	return ok
+}
+
+// Predeclared types, defined types, and type parameters are called named
+// types. An alias denotes a named type if the type given in the alias
+// declaration is a named type.
+func isNamedType(t Type) bool {
+	return isDefinedType(t) || t.isTypeParam()
+}
+
+func implements(n Node, v, t Type) bool {
+	panic(todo("%v: %s %s", n.Position(), v, t))
+}
+
+// Type identity
+//
+// Two types are either identical or different.
+//
+// A named type is always different from any other type. Otherwise, two types
+// are identical if their underlying type literals are structurally equivalent;
+// that is, they have the same literal structure and corresponding components
+// have identical types. In detail:
+//
+// - Two array types are identical if they have identical element types and the
+// same array length.
+//
+// - Two slice types are identical if they have identical element types.
+//
+// - Two struct types are identical if they have the same sequence of fields,
+// and if corresponding fields have the same names, and identical types, and
+// identical tags. Non-exported field names from different packages are always
+// different.
+//
+// - Two pointer types are identical if they have identical base types.
+//
+// - Two function types are identical if they have the same number of
+// parameters and result values, corresponding parameter and result types are
+// identical, and either both functions are variadic or neither is. Parameter
+// and result names are not required to match.
+//
+// - Two interface types are identical if they define the same type set.
+//
+// - Two map types are identical if they have identical key and element types.
+//
+// - Two channel types are identical if they have identical element types and
+// the same direction.
+//
+// - Two instantiated types are identical if their defined types and all type
+// arguments are identical.
+func isIdentical(n Node, v, t Type) bool {
+	if v == t {
+		return true
+	}
+
+	if isAnyUntypedType(v) != isAnyUntypedType(t) {
+		return false
+	}
+
+	if isAnyUntypedType(v) && isAnyUntypedType(t) {
+		return v.Kind() == t.Kind()
+	}
+
+	panic(todo("%v: %v %s", n.Position(), v, t))
+}
+
+// Underlying types
+//
+// Each type T has an underlying type: If T is one of the predeclared boolean,
+// numeric, or string types, or a type literal, the corresponding underlying
+// type is T itself. Otherwise, T's underlying type is the underlying type of
+// the type to which T refers in its declaration. For a type parameter that is
+// the underlying type of its type constraint, which is always an interface.
+func underlyingType(n Node, t Type) Type {
+	for {
+		switch x := t.(type) {
+		case *PredefinedType:
+			return t
+		case *TypeDefNode:
+			t = x.TypeNode.Type()
+		default:
+			panic(todo("%v: %T %[2]s", n.Position(), x))
+		}
+	}
+}
+
+func isAnyIntegerType(t Type) bool {
+	switch t.Kind() {
+	case Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, UntypedInt:
+		return true
+	}
+
+	return false
+}
+
+func isAnyFloatType(t Type) bool {
+	switch t.Kind() {
+	case Float32, Float64, UntypedFloat:
+		return true
+	}
+
+	return false
+}
+
+func isAnyComplexType(t Type) bool {
+	switch t.Kind() {
+	case Complex64, Complex128, UntypedComplex:
+		return true
+	}
+
+	return false
+}
+
+func isAnyUntypedType(t Type) bool {
+	switch t.Kind() {
+	case UntypedBool, UntypedComplex, UntypedFloat, UntypedInt, UntypedNil, UntypedRune, UntypedString:
+		return true
+	}
+
+	return false
+}
+
+func typeFromValue(v constant.Value) Type {
+	switch v.Kind() {
+	case constant.Int:
+		return untypedInt
+	case constant.Bool:
+		return untypedBool
+	case constant.Float:
+		return untypedFloat
+	case constant.String:
+		return untypedFloat
+	case constant.Complex:
+		return untypedComplex
+	default:
+		panic(todo("", v.Kind(), v))
+	}
 }

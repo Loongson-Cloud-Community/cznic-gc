@@ -39,6 +39,12 @@ import (
 //                                         <total> x 14,484,620 =   710,549,440 á  49
 //                                         <total> x 14,459,311 =   708,514,080 á  49
 //                                         <total> x 14,459,693 =   708,534,224 á  49
+//                                         <total> x 14,460,173 =   708,558,088 á  49
+//                                         <total> x 14,461,091 =   708,751,992 á  49
+//                                         <total> x 14,461,141 =   706,268,448 á  49
+//                                         <total> x 14,461,182 =   707,678,232 á  49
+//                                         <total> x 14,461,242 =   714,720,336 á  49
+//                                         <total> x 14,461,219 =   797,198,184 á  55
 
 const parserBudget = 1e7
 
@@ -1297,6 +1303,7 @@ func (p *parser) constDecl() *ConstDeclNode {
 		lparenTok Token
 		list      *ConstSpecListNode
 		rparenTok Token
+		iota      int64
 	)
 	// ebnf.Sequence "const" ( ConstSpec | "(" { ConstSpec ";" } [ ConstSpec ] ")" ) ctx [CONST]
 	{
@@ -1313,7 +1320,7 @@ func (p *parser) constDecl() *ConstDeclNode {
 		switch p.c() {
 		case IDENT: // 0
 			// *ebnf.Name ConstSpec ctx [IDENT]
-			if constSpec = p.constSpec(); constSpec == nil {
+			if constSpec = p.constSpec(iota); constSpec == nil {
 				goto _0
 			}
 			list = &ConstSpecListNode{
@@ -1341,7 +1348,7 @@ func (p *parser) constDecl() *ConstDeclNode {
 						// ebnf.Sequence ConstSpec ";" ctx [IDENT]
 						ix := p.ix
 						// *ebnf.Name ConstSpec ctx [IDENT]
-						if constSpec = p.constSpec(); constSpec == nil {
+						if constSpec = p.constSpec(iota); constSpec == nil {
 							p.back(ix)
 							goto _5
 						}
@@ -1368,6 +1375,7 @@ func (p *parser) constDecl() *ConstDeclNode {
 							ConstSpec: constSpec,
 							SEMICOLON: semicolonTok,
 						}
+						iota++
 						if item != nil {
 							item.List = next
 						}
@@ -1411,8 +1419,15 @@ type ConstSpecNode struct {
 	TypeNode       *TypeNode
 	ASSIGN         Token
 	ExpressionList *ExpressionListNode
+	src            *ConstSpecNode
 
+	iota int64
+
+	typer
+	valuer
 	visible
+
+	isBuiltin bool
 }
 
 // Source implements Node.
@@ -1427,7 +1442,7 @@ func (n *ConstSpecNode) Position() (r token.Position) {
 	return n.IdentifierList.Position()
 }
 
-func (p *parser) constSpec() (r *ConstSpecNode) {
+func (p *parser) constSpec(iota int64) (r *ConstSpecNode) {
 	var (
 		ok             bool
 		identifierList *IdentifierListNode
@@ -1492,6 +1507,7 @@ func (p *parser) constSpec() (r *ConstSpecNode) {
 		TypeNode:       typeNode,
 		ASSIGN:         assignTok,
 		ExpressionList: expressionList,
+		iota:           iota,
 	}
 	ids := r.IdentifierList.Len()
 	exprs := r.ExpressionList.Len()
@@ -1511,6 +1527,7 @@ func (p *parser) constSpec() (r *ConstSpecNode) {
 		e2.List = nil
 		e = e.List
 		cs := *r
+		cs.src = r
 		cs.IdentifierList = &n2
 		cs.ExpressionList = &e2
 		p.declare(sc, n.IDENT, &cs, visible, false)
@@ -4100,7 +4117,6 @@ type LiteralValueNode struct {
 	KeyedElementList *KeyedElementListNode
 	RBRACE           Token
 	typer
-	valuer
 }
 
 // Source implements Node.
@@ -4702,6 +4718,9 @@ type OperandNameNode struct {
 	Name       Node
 	resolvedTo Node
 	lexicalScoper
+
+	typer
+	valuer
 }
 
 func (n *OperandNameNode) ResolvedTo() Node { return n.resolvedTo }
@@ -7717,6 +7736,7 @@ type TypeDefNode struct {
 	TypeParameters *TypeParametersNode
 	TypeNode       *TypeNode
 
+	pkg *Package
 	typer
 	visible
 }

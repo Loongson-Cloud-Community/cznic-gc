@@ -12,14 +12,44 @@ import (
 	"sync"
 )
 
+type iotaval struct {
+	val   int64
+	valid bool
+}
+
 type ctx struct {
-	abi  *ABI
-	ast  *AST
-	cfg  *Config
-	errs errList
-	pkg  *Package
+	abi     *ABI
+	ast     *AST
+	cfg     *Config
+	errs    errList
+	intType *PredefinedType
+	iotaval iotaval
+	maxInt  int64
+	maxUint uint64
+	minInt  int64
+	pkg     *Package
 
 	arch32bit bool
+}
+
+func newCtx(cfg *Config) *ctx {
+	r := &ctx{
+		abi:       cfg.abi,
+		arch32bit: cfg.arch32bit,
+		cfg:       cfg,
+	}
+	r.intType = &PredefinedType{kind: Int, cfg: cfg}
+	switch {
+	case cfg.arch32bit:
+		r.maxInt = math.MaxInt32
+		r.maxUint = math.MaxUint32
+		r.minInt = math.MinInt32
+	default:
+		r.maxInt = math.MaxInt64
+		r.maxUint = math.MaxUint64
+		r.minInt = math.MinInt64
+	}
+	return r
 }
 
 func (c *ctx) err(n Node, msg string, args ...interface{}) {
@@ -30,11 +60,102 @@ func (c *ctx) err(n Node, msg string, args ...interface{}) {
 	c.errs.err(pos, msg, args...)
 }
 
-func newCtx(cfg *Config) *ctx {
-	return &ctx{
-		abi:       cfg.abi,
-		arch32bit: cfg.arch32bit,
-		cfg:       cfg,
+// Assignability
+//
+// A value x of type V is assignable to a variable of type T ("x is assignable
+// to T") if one of the following conditions applies:
+//
+// - V and T are identical.
+//
+// - V and T have identical underlying types but are not type parameters and at
+// least one of V or T is not a named type.
+//
+// - V and T are channel types with identical element types, V is a
+// bidirectional channel, and at least one of V or T is not a named type.
+//
+// - T is an interface type, but not a type parameter, and x implements T.
+//
+// - x is the predeclared identifier nil and T is a pointer, function, slice,
+// map, channel, or interface type, but not a type parameter.
+//
+// - x is an untyped constant representable by a value of type T.
+//
+// Additionally, if x's type V or T are type parameters, x is assignable to a
+// variable of type T if one of the following conditions applies:
+//
+// - x is the predeclared identifier nil, T is a type parameter, and x is
+// assignable to each type in T's type set.
+//
+// - V is not a named type, T is a type parameter, and x is assignable to each
+// type in T's type set.
+//
+// - V is a type parameter and T is not a named type, and values of each type
+// in V's type set are assignable to T.
+func (c *ctx) isAssignable(n Node, x Expression, t Type) bool {
+	v := x.Type()
+	val := x.Value()
+	if isIdentical(n, v, t) {
+		return true
+	}
+
+	if isIdentical(n, underlyingType(n, v), underlyingType(n, t)) && !v.isTypeParam() && !t.isTypeParam() && (!isNamedType(v) || !isNamedType(t)) {
+		return true
+	}
+
+	if v.Kind() == Chan && t.Kind() == Chan {
+		panic(todo("%v: %v %s -> %s", n.Position(), val, v, t))
+	}
+
+	if t.Kind() == Interface && !t.isTypeParam() && implements(n, v, t) {
+		panic(todo("%v: %v %s -> %s", n.Position(), val, v, t))
+	}
+
+	tdef, ok := v.(*TypeDefNode)
+	if ok && tdef.pkg.isBuiltin && tdef.IDENT.Src() == "nil" && !t.isTypeParam() {
+		panic(todo("%v: %v %s -> %s", n.Position(), val, v, t))
+	}
+
+	if val.Kind() != constant.Unknown && c.isRepresentable(n, x, t) {
+		return true
+	}
+
+	panic(todo("%v: %v %s -> %s", n.Position(), val, v, t))
+}
+
+// Representability
+//
+// A constant x is representable by a value of type T, where T is not a type
+// parameter, if one of the following conditions applies:
+//
+// - x is in the set of values determined by T.
+//
+// - T is a floating-point type and x can be rounded to T's precision without
+// overflow. Rounding uses IEEE 754 round-to-even rules but with an IEEE
+// negative zero further simplified to an unsigned zero. Note that constant
+// values never result in an IEEE negative zero, NaN, or infinity.
+//
+// - T is a complex type, and x's components real(x) and imag(x) are
+// representable by values of T's component type (float32 or float64).
+//
+// If T is a type parameter, x is representable by a value of type T if x is
+// representable by a value of each type in T's type set.
+func (c *ctx) isRepresentable(n Node, x Expression, t Type) bool {
+	v := x.Type()
+	val := x.Value()
+	switch val.Kind() {
+	case constant.Int:
+		switch t.Kind() {
+		case Uint8:
+			i, ok := constant.Uint64Val(val)
+			return ok && i <= math.MaxUint8
+		case Int:
+			i, ok := constant.Int64Val(val)
+			return ok && i >= c.minInt && i <= c.maxInt
+		default:
+			panic(todo("%v: %v %s %s -> %s %s", n.Position(), val, v, v.Kind(), t, t.Kind()))
+		}
+	default:
+		panic(todo("%v: %v %s %s -> %s %s", n.Position(), val, v, v.Kind(), t, t.Kind()))
 	}
 }
 
@@ -146,6 +267,7 @@ func (n *ImportDeclNode) check(c *ctx) {
 			continue
 		}
 	}
+
 	panic(todo("%v: %s", n.Position(), n.Source(false)))
 }
 
@@ -213,6 +335,7 @@ func (n *TypeDefNode) check(c *ctx, _ *Expression) Type {
 
 	defer n.exit()
 
+	n.pkg = c.pkg
 	if c.pkg.isBuiltin {
 		return n.setType(n.TypeNode.checkBuiltin(c, n.IDENT.Src()), c, n)
 	}
@@ -305,57 +428,98 @@ func (n *TypeNode) check(c *ctx) (r Type) {
 }
 
 func (n *ConstDeclNode) check(c *ctx) {
-	if n == nil {
+	if n == nil || n.ConstSpecList == nil {
 		return
 	}
 
+	var last Expression
 	for l := n.ConstSpecList; l != nil; l = l.List {
-		l.check(c)
+		var e Expression
+		if l.ConstSpec.ExpressionList != nil {
+			e = l.ConstSpec.ExpressionList.Expression
+		}
+		switch {
+		case e != nil:
+			last = e
+		default:
+			e = cloneExpression(last)
+		}
+		l.check(c, e)
 	}
 }
 
-func (n *ConstSpecListNode) check(c *ctx) {
+func (n *ConstSpecListNode) check(c *ctx, e Expression) {
 	if n == nil {
 		return
 	}
 
-	n.ConstSpec.check(c)
+	n.ConstSpec.check(c, e)
 }
 
-func (n *ConstSpecNode) check(c *ctx) {
+func (n *ConstSpecNode) check(c *ctx, e Expression) Type {
 	if n == nil {
-		return
+		return Invalid
 	}
+
+	if !n.enter(c, n) {
+		return n.Type()
+	}
+
+	defer n.exit()
 
 	id := n.IdentifierList.IDENT
-	e := n.ExpressionList.Expression
+	pe := &e
+	if e == nil {
+		e = n.ExpressionList.Expression
+		pe = &n.ExpressionList.Expression
+	}
 	if !id.IsValid() || e == nil {
-		return
+		return Invalid
 	}
 
 	nm := id.Src()
 	if c.pkg.isBuiltin {
+		n.isBuiltin = true
 		switch nm {
 		case "true":
-			e.setType(&PredefinedType{kind: Bool, cfg: c.cfg}, c, e)
 			e.setValue(trueVal)
 			setChecked(e)
+			return n.setType(e.setType(&PredefinedType{kind: Bool, cfg: c.cfg}, c, e), c, nil)
 		case "false":
-			e.setType(&PredefinedType{kind: Bool, cfg: c.cfg}, c, e)
 			e.setValue(falseVal)
 			setChecked(e)
+			return n.setType(e.setType(&PredefinedType{kind: Bool, cfg: c.cfg}, c, e), c, nil)
 		case "iota":
 			// nop
 		default:
 			panic(todo("", n.Position(), n.Source(false), nm))
 		}
-		return
 	}
 
-	et := e.check(c, &n.ExpressionList.Expression)
-	if n.TypeNode != nil {
-		panic(todo("", n.Position(), n.Source(false), et))
+	save := c.iotaval
+	c.iotaval = iotaval{n.iota, true}
+
+	defer func() { c.iotaval = save }()
+
+	e.check(c, pe)
+	e = *pe
+	if n.TypeNode == nil {
+		return n.setType(e.Type(), c, n)
 	}
+
+	// If the type is present, all constants take the type specified, and the
+	// expressions must be assignable to that type, which must not be a type
+	// parameter.
+	ct := n.TypeNode.check(c)
+	if ct.isTypeParam() {
+		c.err(n.TypeNode, "constant type must not be a type parameter")
+		return Invalid
+	}
+
+	if !c.isAssignable(e, e, ct) {
+		c.err(e, "%s (type %s) is not assignable to type %s", e.Source(false), e.Type(), ct)
+	}
+	return n.setType(ct, c, n)
 }
 
 func (n *SliceTypeNode) check(c *ctx, _ *Expression) Type {
@@ -435,7 +599,7 @@ func (n *ArrayTypeNode) check(c *ctx, _ *Expression) Type {
 
 	exprT := n.ArrayLength.check(c, &n.ArrayLength)
 	exprV := n.ArrayLength.Value()
-	if !isAnyInteger(exprT) || exprV.Kind() != constant.Int {
+	if !isAnyIntegerType(exprT) || exprV.Kind() != constant.Int {
 		panic(todo("", n.Position(), n.Source(false)))
 	}
 
@@ -506,12 +670,12 @@ func (n *BinaryExpression) check(c *ctx, _ *Expression) (r Type) {
 		// /    quotient               integers, floats, complex values
 		return n.setType(n.checkOperands(c, true, true, true, false), c, n)
 	case SHL, SHR:
-		if !isAnyInteger(lhs) {
+		if !isAnyIntegerType(lhs) {
 			c.err(n.Op, "shift operand must be an integer: %v", lhs)
 			return Invalid
 		}
 
-		if !isAnyInteger(rhs) {
+		if !isAnyIntegerType(rhs) {
 			c.err(n.Op, "shift count must be an integer: %v", rhs)
 			return Invalid
 		}
@@ -544,6 +708,12 @@ func (n *BinaryExpression) check(c *ctx, _ *Expression) (r Type) {
 		default:
 			panic(todo("", n.Op.Position(), n.Source(false), lhs, n.Op.Ch(), rhs, rv.Kind()))
 		}
+	case AND, OR, XOR, AND_NOT:
+		// &    bitwise AND            integers
+		// |    bitwise OR             integers
+		// ^    bitwise XOR            integers
+		// &^   bit clear (AND NOT)    integers
+		return n.setType(n.checkOperands(c, true, false, false, false), c, n)
 	default:
 		panic(todo("", n.Op.Position(), n.Source(false), lhs, n.Op.Ch(), rhs))
 	}
@@ -556,7 +726,7 @@ func (n *BinaryExpression) checkOperands(c *ctx, intsOK, floatsOK, complexOK, st
 	rv := n.RHS.Value()
 
 	if lhs.Kind() == rhs.Kind() {
-		if intsOK && isAnyInteger(lhs) || floatsOK && isAnyFloat(lhs) || complexOK && isAnyComplex(lhs) {
+		if intsOK && isAnyIntegerType(lhs) || floatsOK && isAnyFloatType(lhs) || complexOK && isAnyComplexType(lhs) {
 			if v := constant.BinaryOp(lv, n.Op.Ch(), rv); v.Kind() != constant.Unknown {
 				n.setValue(v)
 			}
@@ -566,7 +736,7 @@ func (n *BinaryExpression) checkOperands(c *ctx, intsOK, floatsOK, complexOK, st
 		panic(todo("", n.Op.Position(), n.Source(false), n.LHS.Type(), n.Op.Ch(), n.RHS.Type()))
 	}
 
-	if isAnyUntyped(lhs) && isAnyUntyped(rhs) && lv.Kind() != constant.Unknown && rv.Kind() != constant.Unknown {
+	if isAnyUntypedType(lhs) && isAnyUntypedType(rhs) && lv.Kind() != constant.Unknown && rv.Kind() != constant.Unknown {
 		if v := constant.BinaryOp(lv, n.Op.Ch(), rv); v.Kind() != constant.Unknown {
 			n.setValue(v)
 			return typeFromValue(v)
@@ -597,13 +767,30 @@ func (n *CompositeLitNode) check(c *ctx, _ *Expression) Type {
 
 	t := x.check(c, nil)
 	x.setType(t, c, n)
+	n.LiteralValue.check(c, nil)
 	n.LiteralValue.checkLiteral(c, t)
-	n.setValue(n.LiteralValue.Value())
 	return n.setType(t, c, n)
 }
 
+// Value implements Value.
+func (n *LiteralValueNode) Value() constant.Value { return unknown }
+
+func (n *LiteralValueNode) setValue(val constant.Value) {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
 func (n *LiteralValueNode) check(c *ctx, _ *Expression) Type {
-	panic(todo("%v: internal error: %s", n.Position(), n.Source(false)))
+	if n == nil {
+		return Invalid
+	}
+
+	if !n.enter(c, n) {
+		return n.Type()
+	}
+
+	defer n.exit()
+
+	return nil
 }
 
 func (n *LiteralValueNode) checkLiteral(c *ctx, t Type) {
@@ -627,13 +814,56 @@ func (n *LiteralValueNode) checkLiteral(c *ctx, t Type) {
 	n.setType(t, c, n)
 }
 
+// For array and slice literals the following rules apply:
+//
+// - Each element has an associated integer index marking its position in the
+// array.
+//
+// - An element with a key uses the key as its index. The key must be a
+// non-negative constant representable by a value of type int; and if it is
+// typed it must be of integer type.
+//
+// - An element without a key uses the previous element's index plus one. If
+// the first element has no key, its index is zero.
 func (n *LiteralValueNode) checkArrayLiteral(c *ctx, t *ArrayType) {
-	// var ix int64
-	// elemT := t.Elem
+	n.typ = t
+	ix := int64(-1)
+	elemT := t.Elem
 	for l := n.KeyedElementList; l != nil; l = l.List {
+		var e Expression
+		var pe *Expression
 		switch x := l.KeyedElement.(type) {
+		case *KeyedElementNode:
+			k := x.Element
+			kt := k.Type()
+			kv := k.Value()
+			switch {
+			case !isAnyIntegerType(kt):
+				c.err(k, "key type must be int: %s", kt)
+			case kv.Kind() == constant.Unknown:
+				c.err(k, "key value must be a constatnt: %s", k.Source(false))
+			case !c.isRepresentable(k, k, c.intType):
+				c.err(k, "key value must be representable by a value of type int: %s", k.Source(false))
+			default:
+				ix, _ = constant.Int64Val(kv)
+			}
+			e = x.Element2
+			pe = &x.Element2
+		case Expression:
+			e = x
+			pe = &l.KeyedElement
+			ix++
 		default:
 			panic(todo("%v: %T %s", x.Position(), x, x.Source(false)))
+		}
+
+		if ix < 0 || ix >= t.Elems {
+			c.err(e, "index %d out of range: [0, %d)", ix, t.Elems)
+		}
+		e.check(c, pe)
+		e = *pe
+		if !c.isAssignable(e, e, elemT) {
+			c.err(e, "%s (type %s) is not assignable to type %s", e.Source(false), e.Type(), elemT)
 		}
 	}
 }
@@ -746,20 +976,38 @@ func (n *OperandNameNode) check(c *ctx, _ *Expression) Type {
 		return Invalid
 	}
 
+	if !n.enter(c, n) {
+		return n.Type()
+	}
+
+	defer n.exit()
+
 	sc := n.LexicalScope()
 	switch x := n.Name.(type) {
 	case Token:
 		switch y := sc.lookup(x); z := y.n.(type) {
 		case *ConstSpecNode:
 			n.resolvedTo = z
-			if z.TypeNode != nil {
-				return z.TypeNode.check(c)
+			isBuiltin := z.isBuiltin
+			if z.src != nil {
+				isBuiltin = z.src.isBuiltin
 			}
+			t := z.check(c, nil)
+			switch {
+			case x.Src() == "iota" && isBuiltin:
+				if !c.iotaval.valid {
+					c.err(n, "cannot use iota outside constant declaration")
+					break
+				}
 
-			return z.ExpressionList.Expression.check(c, &z.ExpressionList.Expression)
+				n.setValue(constant.MakeInt64(c.iotaval.val))
+			default:
+				n.setValue(z.ExpressionList.Expression.Value())
+			}
+			return n.setType(t, c, n)
 		case *TypeDefNode:
 			n.resolvedTo = z
-			return z
+			return n.setType(z, c, n)
 		default:
 			panic(todo("%v: %T %s %v %p", n.Position(), z, n.Source(false), sc.kind, sc.Parent()))
 		}
@@ -813,6 +1061,7 @@ func (n *PrimaryExprNode) check(c *ctx, ep *Expression) Type {
 	typ := n.PrimaryExpr.check(c, &n.PrimaryExpr)
 	switch x := n.PrimaryExpr.(type) {
 	case *OperandNameNode:
+		trc("", x.Position(), x.Source(false))
 		switch y := x.ResolvedTo().(type) {
 		case *TypeDefNode:
 			switch z := n.Postfix.(type) {
@@ -1061,38 +1310,6 @@ func (n *MethodDeclNode) check(c *ctx) {
 	//TODO panic(todo("%v: %T %s %T %q", n.Position(), n, n.Source(false), rx, rx))
 }
 
-func (n *OperandNameNode) Type() Type {
-	switch x := n.ResolvedTo().(type) {
-	case *ConstSpecNode:
-		if x.TypeNode != nil {
-			panic(todo("%v: %T", n.Position(), x))
-		}
-
-		return x.ExpressionList.Expression.Type()
-	default:
-		panic(todo("%v: %T", n.Position(), x))
-	}
-}
-
-func (n *OperandNameNode) Value() constant.Value {
-	switch x := n.ResolvedTo().(type) {
-	case *ConstSpecNode:
-		return x.ExpressionList.Expression.Value()
-	case *TypeDefNode:
-		return unknown
-	default:
-		panic(todo("%v: %T", n.Position(), x))
-	}
-}
-
-func (n *OperandNameNode) setType(typ Type, c *ctx, nd Node) Type {
-	panic(todo("", n.Position()))
-}
-
-func (n *OperandNameNode) setValue(val constant.Value) {
-	panic(todo("", n.Position()))
-}
-
 func (n *ParenthesizedExpression) check(c *ctx, _ *Expression) Type {
 	return n.Expression.check(c, &n.Expression)
 }
@@ -1131,7 +1348,7 @@ func (n *UnaryExprNode) check(c *ctx, _ *Expression) Type {
 }
 
 func (n *UnaryExprNode) Type() Type {
-	panic(todo("", n.Position(), n.Source(false)))
+	return n.Type()
 }
 
 func (n *UnaryExprNode) setType(typ Type, c *ctx, nd Node) Type {
