@@ -53,7 +53,13 @@ var (
 	letters = expand(unicode.L)
 	re      *regexp.Regexp
 	wd      string
+	probes  probeA
 )
+
+type probeA [4]int32
+
+func (p *probeA) inc(i int)     { atomic.AddInt32(&p[i], 1) }
+func (p *probeA) incN(i, n int) { atomic.AddInt32(&p[i], int32(n)) }
 
 func TestMain(m *testing.M) {
 	flag.BoolVar(&noBack, "noback", false, "panic on parser back")
@@ -574,6 +580,7 @@ func TestParser(t *testing.T) {
 			t.Logf("AST breakdown\n%s", nodeReport(p.objects...))
 		}
 	}
+	t.Log(h(probes[0]), h(probes[1]), h(probes[2]), h(probes[3]))
 }
 
 func testParser(p *testParallel, t *testing.T, root string, gld *golden) {
@@ -863,11 +870,6 @@ func TestNewConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// _ = c
-	// for k, v := range c.builtin.Scope.nodes {
-	// 	trc("", k, v.declTok.Position())
-	// }
 }
 
 func TestNewPackage(t *testing.T) {

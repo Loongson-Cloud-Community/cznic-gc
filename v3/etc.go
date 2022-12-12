@@ -555,15 +555,3 @@ func extraTags(verMajor, verMinor int, goos, goarch string) (r []string) {
 	}
 	return r
 }
-
-func cloneExpression(e Expression) Expression {
-	switch x := e.(type) {
-	case *OperandNameNode:
-		r := *x
-		r.typer = typer{}
-		r.valuer = valuer{}
-		return &r
-	default:
-		panic(todo("%T", x))
-	}
-}
