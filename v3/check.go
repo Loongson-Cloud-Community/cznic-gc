@@ -278,9 +278,9 @@ func (n *ImportSpecNode) check(c *ctx) (*Package, error) {
 
 	switch {
 	case n.PERIOD.IsValid():
-		panic(todo(""))
+		panic(todo("", n.Position(), n.Source(false)))
 	case n.PackageName.IsValid():
-		panic(todo(""))
+		panic(todo("", n.Position(), n.Source(false)))
 	default:
 		//TODO version
 		check := c.pkg.typeCheck
@@ -312,16 +312,17 @@ func (n *TypeDeclNode) check(c *ctx) {
 }
 
 func (n *AliasDeclNode) check(c *ctx) {
-	if n == nil {
-		return
-	}
+	panic(todo("", n.Position(), n.Source(false)))
+	// if n == nil {
+	// 	return
+	// }
 
-	if c.pkg.isBuiltin {
-		n.TypeNode.checkBuiltin(c, n.IDENT.Src())
-		return
-	}
+	// if c.pkg.isBuiltin {
+	// 	n.TypeNode.checkBuiltin(c, n.IDENT.Src())
+	// 	return
+	// }
 
-	n.TypeNode.check(c)
+	// n.TypeNode.check(c)
 }
 
 func (n *TypeDefNode) check(c *ctx, _ *Expression) Type {
@@ -336,52 +337,69 @@ func (n *TypeDefNode) check(c *ctx, _ *Expression) Type {
 	defer n.exit()
 
 	n.pkg = c.pkg
-	if c.pkg.isBuiltin {
-		return n.setType(n.TypeNode.checkBuiltin(c, n.IDENT.Src()), c, n)
-	}
+	return n.setType(typeNodeCheck(n.TypeNode, c), c, n)
+}
 
-	return n.setType(n.TypeNode.check(c), c, n)
+func typeNodeCheck(n Node, c *ctx) (r Type) {
+	switch x := n.(type) {
+	case *TypeNameNode:
+		if c.pkg.isBuiltin {
+			switch y := x.Name.(type) {
+			case Token:
+				switch y.Src() {
+				case "bool":
+					return &PredefinedType{kind: Bool, cfg: c.cfg}
+				case "uint8":
+					return &PredefinedType{kind: Uint8, cfg: c.cfg}
+				case "uint16":
+					return &PredefinedType{kind: Uint16, cfg: c.cfg}
+				case "uint32":
+					return &PredefinedType{kind: Uint32, cfg: c.cfg}
+				case "uint64":
+					return &PredefinedType{kind: Uint64, cfg: c.cfg}
+				case "int8":
+					return &PredefinedType{kind: Int8, cfg: c.cfg}
+				case "int16":
+					return &PredefinedType{kind: Int16, cfg: c.cfg}
+				case "int32":
+					return &PredefinedType{kind: Int32, cfg: c.cfg}
+				case "int64":
+					return &PredefinedType{kind: Int64, cfg: c.cfg}
+				case "float32":
+					return &PredefinedType{kind: Float32, cfg: c.cfg}
+				case "float64":
+					return &PredefinedType{kind: Float64, cfg: c.cfg}
+				case "complex64":
+					return &PredefinedType{kind: Complex64, cfg: c.cfg}
+				case "complex128":
+					return &PredefinedType{kind: Complex128, cfg: c.cfg}
+				case "string":
+					return &PredefinedType{kind: String, cfg: c.cfg}
+				case "int":
+					return &PredefinedType{kind: Int, cfg: c.cfg}
+				case "uint":
+					return &PredefinedType{kind: Uint, cfg: c.cfg}
+				case "uintptr":
+					return &PredefinedType{kind: Uintptr, cfg: c.cfg}
+				default:
+					panic(todo("%v: %q %s", n.Position(), y.Src(), n.Source(false)))
+				}
+			default:
+				panic(todo("%v: %T %s", n.Position(), y, n.Source(false)))
+			}
+		}
+
+		panic(todo("", n.Position(), n.Source(false)))
+	default:
+		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+	}
 }
 
 func (n *TypeNode) checkBuiltin(c *ctx, builtin string) (r Type) {
-	panic(todo(""))
+	panic(todo("", n.Position(), n.Source(false)))
 	// switch builtin {
 	// case "error":
 	// 	return n.check(c)
-	// case "bool":
-	// 	return n.setType(&PredefinedType{kind: Bool, cfg: c.cfg}, c, n)
-	// case "byte", "uint8":
-	// 	return n.setType(&PredefinedType{kind: Uint8, cfg: c.cfg}, c, n)
-	// case "uint16":
-	// 	return n.setType(&PredefinedType{kind: Uint16, cfg: c.cfg}, c, n)
-	// case "uint32":
-	// 	return n.setType(&PredefinedType{kind: Uint32, cfg: c.cfg}, c, n)
-	// case "uint64":
-	// 	return n.setType(&PredefinedType{kind: Uint64, cfg: c.cfg}, c, n)
-	// case "int8":
-	// 	return n.setType(&PredefinedType{kind: Int8, cfg: c.cfg}, c, n)
-	// case "int16":
-	// 	return n.setType(&PredefinedType{kind: Int16, cfg: c.cfg}, c, n)
-	// case "rune", "int32":
-	// 	return n.setType(&PredefinedType{kind: Int32, cfg: c.cfg}, c, n)
-	// case "int64":
-	// 	return n.setType(&PredefinedType{kind: Int64, cfg: c.cfg}, c, n)
-	// case "float32", "FloatType":
-	// 	return n.setType(&PredefinedType{kind: Float32, cfg: c.cfg}, c, n)
-	// case "float64":
-	// 	return n.setType(&PredefinedType{kind: Float64, cfg: c.cfg}, c, n)
-	// case "complex64", "ComplexType":
-	// 	return n.setType(&PredefinedType{kind: Complex64, cfg: c.cfg}, c, n)
-	// case "complex128":
-	// 	return n.setType(&PredefinedType{kind: Complex128, cfg: c.cfg}, c, n)
-	// case "string":
-	// 	return n.setType(&PredefinedType{kind: String, cfg: c.cfg}, c, n)
-	// case "int", "Type", "Type1", "IntegerType":
-	// 	return n.setType(&PredefinedType{kind: Int, cfg: c.cfg}, c, n)
-	// case "uint":
-	// 	return n.setType(&PredefinedType{kind: Uint, cfg: c.cfg}, c, n)
-	// case "uintptr":
-	// 	return n.setType(&PredefinedType{kind: Uintptr, cfg: c.cfg}, c, n)
 	// case "any":
 	// 	return n.setType(c.cfg.any, c, n)
 	// case "comparable":
@@ -392,11 +410,11 @@ func (n *TypeNode) checkBuiltin(c *ctx, builtin string) (r Type) {
 }
 
 func (n *TypeNode) Type() Type {
-	panic(todo(""))
+	panic(todo("", n.Position(), n.Source(false)))
 }
 
 func (n *TypeNode) check(c *ctx) (r Type) {
-	panic(todo(""))
+	panic(todo("", n.Position(), n.Source(false)))
 	// if n == nil {
 	// 	return Invalid
 	// }
@@ -434,29 +452,60 @@ func (n *TypeNode) check(c *ctx) (r Type) {
 }
 
 func (n *ConstDeclNode) check(c *ctx) {
-	panic(todo(""))
-	// if n == nil || n.ConstSpecList == nil {
-	// 	return
-	// }
+	if n == nil || n.ConstSpecList == nil {
+		return
+	}
 
-	// var last Expression
-	// for l := n.ConstSpecList; l != nil; l = l.List {
-	// 	var e Expression
-	// 	if l.ConstSpec.ExpressionList != nil {
-	// 		e = l.ConstSpec.ExpressionList.Expression
-	// 	}
-	// 	switch {
-	// 	case e != nil:
-	// 		last = e
-	// 	default:
-	// 		e = cloneExpression(last)
-	// 	}
-	// 	l.check(c, e)
-	// }
+	switch x := n.ConstSpecList.(type) {
+	case *ConstSpecListNode:
+		var prevWithExpression Node
+		for l := x; l != nil; l = l.List {
+			switch y := l.ConstSpec.(type) {
+			case *ConstSpecNode:
+				if c.pkg.isBuiltin {
+					switch y.IDENT.Src() {
+					case "true":
+						y.Expression.setValue(trueVal)
+						setChecked(y.Expression)
+						y.Expression.setType(&PredefinedType{kind: Bool, cfg: c.cfg}, c, y.Expression)
+					case "false":
+						y.Expression.setValue(falseVal)
+						setChecked(y.Expression)
+						y.Expression.setType(&PredefinedType{kind: Bool, cfg: c.cfg}, c, y.Expression)
+					default:
+						panic(todo("", y.Position(), y.Source(false)))
+					}
+					continue
+				}
+
+				if y.Expression != nil {
+					prevWithExpression = y
+				}
+				_ = prevWithExpression
+				panic(todo("", y.Position(), y.Source(false)))
+			default:
+				panic(todo("%v: %T %s", n.Position(), y, n.Source(false)))
+			}
+			// var e Expression
+			// if l.ConstSpec.ExpressionList != nil {
+			// 	e = l.ConstSpec.ExpressionList.Expression
+			// }
+			// switch {
+			// case e != nil:
+			// 	last = e
+			// default:
+			// 	e = cloneExpression(last)
+			// }
+			// l.check(c, e)
+		}
+	default:
+		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+	}
+
 }
 
 func (n *ConstSpecListNode) check(c *ctx, e Expression) {
-	panic(todo(""))
+	panic(todo("", n.Position(), n.Source(false)))
 	// if n == nil {
 	// 	return
 	// }
@@ -465,7 +514,7 @@ func (n *ConstSpecListNode) check(c *ctx, e Expression) {
 }
 
 func (n *ConstSpec2Node) check(c *ctx, e Expression) Type {
-	panic(todo(""))
+	panic(todo("", n.Position(), n.Source(false)))
 	// if n == nil {
 	// 	return Invalid
 	// }
@@ -532,97 +581,102 @@ func (n *ConstSpec2Node) check(c *ctx, e Expression) Type {
 }
 
 func (n *SliceTypeNode) check(c *ctx, _ *Expression) Type {
-	if n == nil {
-		return Invalid
-	}
+	panic(todo("", n.Position(), n.Source(false)))
+	// if n == nil {
+	// 	return Invalid
+	// }
 
-	if !n.enter(c, n) {
-		return n.Type()
-	}
+	// if !n.enter(c, n) {
+	// 	return n.Type()
+	// }
 
-	defer n.exit()
+	// defer n.exit()
 
-	return n.setType(&SliceType{Elem: n.ElementType.check(c), cfg: c.cfg}, c, n)
+	// return n.setType(&SliceType{Elem: n.ElementType.check(c), cfg: c.cfg}, c, n)
 }
 
 func (n *MapTypeNode) check(c *ctx, _ *Expression) Type {
-	if n == nil {
-		return Invalid
-	}
+	panic(todo("", n.Position(), n.Source(false)))
+	// if n == nil {
+	// 	return Invalid
+	// }
 
-	if !n.enter(c, n) {
-		return n.Type()
-	}
+	// if !n.enter(c, n) {
+	// 	return n.Type()
+	// }
 
-	defer n.exit()
+	// defer n.exit()
 
-	return n.setType(&MapType{Key: n.KeyType.check(c), Elem: n.ElementType.check(c), cfg: c.cfg}, c, n)
+	// return n.setType(&MapType{Key: n.KeyType.check(c), Elem: n.ElementType.check(c), cfg: c.cfg}, c, n)
 }
 
 func (n *ChannelTypeNode) check(c *ctx, _ *Expression) Type {
-	if n == nil {
-		return Invalid
-	}
+	panic(todo("", n.Position(), n.Source(false)))
+	// if n == nil {
+	// 	return Invalid
+	// }
 
-	if !n.enter(c, n) {
-		return n.Type()
-	}
+	// if !n.enter(c, n) {
+	// 	return n.Type()
+	// }
 
-	defer n.exit()
+	// defer n.exit()
 
-	dir := SendRecv
-	if n.ARROW.IsValid() {
-		if n.ARROW.index < n.CHAN.index { // <-chan
-			dir = RecvOnly
-		} else {
-			dir = SendOnly
-		}
-	}
-	return n.setType(&ChannelType{Dir: dir, Elem: n.ElementType.check(c), cfg: c.cfg}, c, n)
+	// dir := SendRecv
+	// if n.ARROW.IsValid() {
+	// 	if n.ARROW.index < n.CHAN.index { // <-chan
+	// 		dir = RecvOnly
+	// 	} else {
+	// 		dir = SendOnly
+	// 	}
+	// }
+	// return n.setType(&ChannelType{Dir: dir, Elem: n.ElementType.check(c), cfg: c.cfg}, c, n)
 }
 
 func (n *PointerTypeNode) check(c *ctx, _ *Expression) Type {
-	if n == nil {
-		return Invalid
-	}
+	panic(todo("", n.Position(), n.Source(false)))
+	// if n == nil {
+	// 	return Invalid
+	// }
 
-	if !n.enter(c, n) {
-		return n.Type()
-	}
+	// if !n.enter(c, n) {
+	// 	return n.Type()
+	// }
 
-	defer n.exit()
+	// defer n.exit()
 
-	return n.setType(&PointerType{Elem: n.BaseType.check(c), cfg: c.cfg}, c, n)
+	// return n.setType(&PointerType{Elem: n.BaseType.check(c), cfg: c.cfg}, c, n)
 }
 
 func (n *ArrayTypeNode) check(c *ctx, _ *Expression) Type {
-	if n == nil {
-		return Invalid
-	}
+	panic(todo("", n.Position(), n.Source(false)))
+	// if n == nil {
+	// 	return Invalid
+	// }
 
-	if !n.enter(c, n) {
-		return n.Type()
-	}
+	// if !n.enter(c, n) {
+	// 	return n.Type()
+	// }
 
-	defer n.exit()
+	// defer n.exit()
 
-	exprT := n.ArrayLength.check(c, &n.ArrayLength)
-	exprV := n.ArrayLength.Value()
-	if !isAnyIntegerType(exprT) || exprV.Kind() != constant.Int {
-		panic(todo("", n.Position(), n.Source(false)))
-	}
+	// exprT := n.ArrayLength.check(c, &n.ArrayLength)
+	// exprV := n.ArrayLength.Value()
+	// if !isAnyIntegerType(exprT) || exprV.Kind() != constant.Int {
+	// 	panic(todo("", n.Position(), n.Source(false)))
+	// }
 
-	elems, ok := constant.Int64Val(exprV)
-	if !ok || elems > math.MaxInt64 {
-		panic(todo("", n.Position(), n.Source(false)))
-	}
+	// elems, ok := constant.Int64Val(exprV)
+	// if !ok || elems > math.MaxInt64 {
+	// 	panic(todo("", n.Position(), n.Source(false)))
+	// }
 
-	return n.setType(&ArrayType{Elems: int64(elems), Elem: n.ElementType.check(c)}, c, n)
+	// return n.setType(&ArrayType{Elems: int64(elems), Elem: n.ElementType.check(c)}, c, n)
 }
 
 // Value implements Value.
 func (n *BasicLitNode) Value() constant.Value {
-	panic(todo("internal error: %s", dump(n)))
+	return constant.MakeFromLiteral((*Token)(n).Src(), (*Token)(n).Ch(), 0)
 }
 
 func (n *BasicLitNode) setType(Type, *ctx, Node) Type {
@@ -891,20 +945,21 @@ func (n *LiteralValueNode) checkArrayLiteral(c *ctx, t *ArrayType) {
 }
 
 func (n *ConversionNode) check(c *ctx, _ *Expression) Type {
-	if n == nil {
-		return Invalid
-	}
+	panic(todo("", n.Position(), n.Source(false)))
+	// if n == nil {
+	// 	return Invalid
+	// }
 
-	if !n.enter(c, n) {
-		return n.Type()
-	}
+	// if !n.enter(c, n) {
+	// 	return n.Type()
+	// }
 
-	defer n.exit()
+	// defer n.exit()
 
-	t := n.TypeNode.check(c)
-	n.Expression.check(c, &n.Expression)
-	n.setValue(convertValue(c, n.Expression, n.Expression.Value(), t))
-	return n.setType(t, c, n.Expression)
+	// t := n.TypeNode.check(c)
+	// n.Expression.check(c, &n.Expression)
+	// n.setValue(convertValue(c, n.Expression, n.Expression.Value(), t))
+	// return n.setType(t, c, n.Expression)
 }
 
 func (n *FunctionLitNode) check(c *ctx, _ *Expression) Type {
@@ -1030,7 +1085,7 @@ func (n *OperandQualifiedNameNode) check(c *ctx, _ *Expression) Type {
 }
 
 func (n *OperandNameNode) check(c *ctx, _ *Expression) Type {
-	panic(todo(""))
+	panic(todo("", n.Position(), n.Source(false)))
 	// if n == nil {
 	// 	return Invalid
 	// }
@@ -1090,7 +1145,7 @@ func (n *OperandNode) check(c *ctx, _ *Expression) Type {
 }
 
 func (n *PrimaryExprNode) check(c *ctx, ep *Expression) Type {
-	panic(todo(""))
+	panic(todo("", n.Position(), n.Source(false)))
 	// if n == nil {
 	// 	return Invalid
 	// }
@@ -1181,37 +1236,38 @@ func (n *PrimaryExprNode) check(c *ctx, ep *Expression) Type {
 }
 
 func (n *StructTypeNode) check(c *ctx, _ *Expression) Type {
-	if n == nil {
-		return Invalid
-	}
+	panic(todo("", n.Position(), n.Source(false)))
+	// if n == nil {
+	// 	return Invalid
+	// }
 
-	if !n.enter(c, n) {
-		return n.Type()
-	}
+	// if !n.enter(c, n) {
+	// 	return n.Type()
+	// }
 
-	defer n.exit()
+	// defer n.exit()
 
-	var a []Field
-	for l := n.FieldDeclList; l != nil; l = l.List {
-		switch fd := l.FieldDecl; {
-		case fd.EmbeddedField != nil:
-			panic(todo("", fd.Position(), fd.Source(false)))
-		default:
-			fd.TypeNode.check(c)
-			for l := fd.IdentifierList; l != nil; l = l.List {
-				fd2 := *fd
-				id := *l
-				id.List = nil
-				fd2.IdentifierList = &id
-				a = append(a, Field{n: &fd2})
-			}
-		}
-	}
-	return n.setType(&StructType{Fields: a}, c, n)
+	// var a []Field
+	// for l := n.FieldDeclList; l != nil; l = l.List {
+	// 	switch fd := l.FieldDecl; {
+	// 	case fd.EmbeddedField != nil:
+	// 		panic(todo("", fd.Position(), fd.Source(false)))
+	// 	default:
+	// 		fd.TypeNode.check(c)
+	// 		for l := fd.IdentifierList; l != nil; l = l.List {
+	// 			fd2 := *fd
+	// 			id := *l
+	// 			id.List = nil
+	// 			fd2.IdentifierList = &id
+	// 			a = append(a, Field{n: &fd2})
+	// 		}
+	// 	}
+	// }
+	// return n.setType(&StructType{Fields: a}, c, n)
 }
 
 func (n *VarDeclNode) check(c *ctx) {
-	panic(todo(""))
+	panic(todo("", n.Position(), n.Source(false)))
 	// if n == nil {
 	// 	return
 	// }
@@ -1222,7 +1278,7 @@ func (n *VarDeclNode) check(c *ctx) {
 }
 
 func (n *VarSpecListNode) check(c *ctx) {
-	panic(todo(""))
+	panic(todo("", n.Position(), n.Source(false)))
 	// if n == nil {
 	// 	return
 	// }
@@ -1231,29 +1287,30 @@ func (n *VarSpecListNode) check(c *ctx) {
 }
 
 func (n *VarSpec2Node) check(c *ctx) {
-	if n == nil {
-		return
-	}
+	panic(todo("", n.Position(), n.Source(false)))
+	// if n == nil {
+	// 	return
+	// }
 
-	n.TypeNode.check(c)
-	ids := n.IdentifierList.Len()
-	exprs := n.ExpressionList.Len()
-	sc := n.LexicalScope()
-	switch x := checkBalance(ids, exprs); x {
-	case balanceExtraLhs:
-		if exprs == 0 {
-			for l := n.IdentifierList; l != nil; l = l.List {
-				n.check1(c, sc, l.IDENT)
-			}
-			return
-		}
+	// n.TypeNode.check(c)
+	// ids := n.IdentifierList.Len()
+	// exprs := n.ExpressionList.Len()
+	// sc := n.LexicalScope()
+	// switch x := checkBalance(ids, exprs); x {
+	// case balanceExtraLhs:
+	// 	if exprs == 0 {
+	// 		for l := n.IdentifierList; l != nil; l = l.List {
+	// 			n.check1(c, sc, l.IDENT)
+	// 		}
+	// 		return
+	// 	}
 
-		panic(todo("", n.Position(), n.Source(false), ids, exprs, x))
-	case balanceEqual:
-		n.check1(c, sc, n.IdentifierList.IDENT)
-	default:
-		panic(todo("", n.Position(), n.Source(false), ids, exprs, x))
-	}
+	// 	panic(todo("", n.Position(), n.Source(false), ids, exprs, x))
+	// case balanceEqual:
+	// 	n.check1(c, sc, n.IdentifierList.IDENT)
+	// default:
+	// 	panic(todo("", n.Position(), n.Source(false), ids, exprs, x))
+	// }
 }
 
 func (n *VarSpec2Node) check1(c *ctx, sc *Scope, id Token) {
@@ -1333,11 +1390,12 @@ func (n *ParameterDeclListNode) check(c *ctx, _ *Expression) Type {
 }
 
 func (n *ParameterDeclNode) check(c *ctx) (r Type) {
-	if n == nil {
-		return Invalid
-	}
+	panic(todo("", n.Position(), n.Source(false)))
+	// if n == nil {
+	// 	return Invalid
+	// }
 
-	return n.TypeNode.check(c)
+	// return n.TypeNode.check(c)
 }
 
 // Type implements Type.

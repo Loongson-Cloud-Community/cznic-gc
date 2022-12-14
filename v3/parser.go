@@ -39,6 +39,9 @@ import (
 //    all_test.go:1129: pkg count 516, heap 543,393,136
 //    all_test.go:1129: pkg count 516, heap 544,638,544
 //    all_test.go:1129: pkg count 516, heap 474,343,936
+//    all_test.go:1129: pkg count 516, heap 459,353,840
+//    all_test.go:1129: pkg count 516, heap 457,275,512
+//    all_test.go:1129: pkg count 516, heap 455,355,680
 
 //                                         <total> x 16,603,469 =   892,265,816 á  54
 //                                         <total> x 16,024,194 =   887,787,224 á  55
@@ -80,6 +83,9 @@ import (
 //                                         <total> x 13,943,178 =   647,906,568 á  46
 //                                         <total> x 13,924,463 =   648,999,976 á  47
 //                                         <total> x 13,322,751 =   541,059,736 á  41
+//                                         <total> x 12,815,541 =   510,052,400 á  40
+//                                         <total> x 12,815,675 =   506,593,488 á  40
+//                                         <total> x 12,639,779 =   500,965,136 á  40
 
 const parserBudget = 1e7
 
@@ -500,7 +506,7 @@ func (p *parser) additiveExpression(preBlock bool) (r Expression) {
 type AliasDeclNode struct {
 	IDENT    Token
 	ASSIGN   Token
-	TypeNode *TypeNode
+	TypeNode Node
 
 	visible
 }
@@ -521,7 +527,7 @@ func (p *parser) aliasDecl() (r *AliasDeclNode) {
 	var (
 		identTok  Token
 		assignTok Token
-		typeNode  *TypeNode
+		typeNode  Node
 	)
 	// ebnf.Sequence identifier "=" Type ctx [IDENT]
 	{
@@ -581,7 +587,7 @@ func (n *ArgumentsNode) Position() (r token.Position) {
 type Arguments1Node struct {
 	LPAREN     Token
 	Expression Expression
-	TypeNode   *TypeNode
+	TypeNode   Node
 	COMMA      Token
 	ELLIPSIS   Token
 	COMMA2     Token
@@ -627,7 +633,7 @@ func (n *Arguments2Node) Position() (r token.Position) {
 type Arguments3Node struct {
 	LPAREN         Token
 	ExpressionList *ExpressionListNode
-	TypeNode       *TypeNode
+	TypeNode       Node
 	COMMA          Token
 	ELLIPSIS       Token
 	COMMA2         Token
@@ -651,7 +657,7 @@ func (p *parser) arguments() Node {
 		ok             bool
 		lparenTok      Token
 		expressionList *ExpressionListNode
-		typeNode       *TypeNode
+		typeNode       Node
 		commaTok       Token
 		ellipsisTok    Token
 		comma2Tok      Token
@@ -812,7 +818,7 @@ type ArrayTypeNode struct {
 	LBRACK      Token
 	ArrayLength Expression
 	RBRACK      Token
-	ElementType *TypeNode
+	ElementType Node
 	typer
 }
 
@@ -834,7 +840,7 @@ func (p *parser) arrayType() *ArrayTypeNode {
 		lbrackTok   Token
 		arrayLength Expression
 		rbrackTok   Token
-		elementType *TypeNode
+		elementType Node
 	)
 	// ebnf.Sequence "[" ArrayLength "]" ElementType ctx [LBRACK]
 	{
@@ -1083,7 +1089,7 @@ func (p *parser) channel() Expression {
 type ChannelTypeNode struct {
 	CHAN        Token
 	ARROW       Token
-	ElementType *TypeNode
+	ElementType Node
 	typer
 }
 
@@ -1107,7 +1113,7 @@ func (p *parser) channelType() *ChannelTypeNode {
 	var (
 		chanTok     Token
 		arrowTok    Token
-		elementType *TypeNode
+		elementType Node
 	)
 	// ebnf.Sequence ( "chan" "<-" | "chan" | "<-" "chan" ) ElementType ctx [ARROW, CHAN]
 	{
@@ -1538,12 +1544,12 @@ func (p *parser) constDecl() *ConstDeclNode {
 
 // ConstSpecNode represents the production
 //
-//	ConstSpec = IdentifierList [ [ Type ] "=" Expression ] .
+//	ConstSpec = Identifier [ [ Type ] "=" Expression ] .
 type ConstSpecNode struct {
-	IdentifierList *IdentifierListNode
-	TypeNode       *TypeNode
-	ASSIGN         Token
-	Expression     Expression
+	IDENT      Token
+	TypeNode   Node
+	ASSIGN     Token
+	Expression Expression
 
 	iota int64
 
@@ -1559,7 +1565,7 @@ func (n *ConstSpecNode) Position() (r token.Position) {
 		return r
 	}
 
-	return n.IdentifierList.Position()
+	return n.IDENT.Position()
 }
 
 // ConstSpec2Node represents the production
@@ -1567,7 +1573,7 @@ func (n *ConstSpecNode) Position() (r token.Position) {
 //	ConstSpec = IdentifierList [ [ Type ] "=" ExpressionList ] .
 type ConstSpec2Node struct {
 	IdentifierList *IdentifierListNode
-	TypeNode       *TypeNode
+	TypeNode       Node
 	ASSIGN         Token
 	ExpressionList *ExpressionListNode
 
@@ -1592,7 +1598,7 @@ func (p *parser) constSpec(iota int64) Node {
 	var (
 		ok             bool
 		identifierList *IdentifierListNode
-		typeNode       *TypeNode
+		typeNode       Node
 		assignTok      Token
 		expressionList *ExpressionListNode
 	)
@@ -1649,20 +1655,20 @@ func (p *parser) constSpec(iota int64) Node {
 	}
 	sc := p.sc
 	visible := int32(p.ix)
-	if expressionList.Len() < 2 {
+	if expressionList.Len() < 2 && identifierList.Len() < 2 {
 		r := &ConstSpecNode{
-			IdentifierList: identifierList,
-			TypeNode:       typeNode,
-			ASSIGN:         assignTok,
-			Expression:     expressionList.first(),
-			iota:           iota,
+			IDENT:      identifierList.first(),
+			TypeNode:   typeNode,
+			ASSIGN:     assignTok,
+			Expression: expressionList.first(),
+			iota:       iota,
 		}
-		ids := r.IdentifierList.Len()
+		ids := identifierList.Len()
 		exprs := expressionList.Len()
 		if exprs != 0 && ids != exprs {
 			p.err(r.ASSIGN.Position(), "different number of identifiers and expressions: %v %v", ids, exprs)
 		}
-		for l := r.IdentifierList; l != nil; l = l.List {
+		for l := identifierList; l != nil; l = l.List {
 			p.declare(sc, l.IDENT, r, visible, false)
 		}
 		return r
@@ -1738,7 +1744,7 @@ func (p *parser) continueStmt() *ContinueStmtNode {
 //
 //	Conversion = Type "(" Expression [ "," ] ")" .
 type ConversionNode struct {
-	TypeNode   *TypeNode
+	TypeNode   Node
 	LPAREN     Token
 	Expression Expression
 	COMMA      Token
@@ -1762,7 +1768,7 @@ func (n *ConversionNode) Position() (r token.Position) {
 func (p *parser) conversion() *ConversionNode {
 	var (
 		ok         bool
-		typeNode   *TypeNode
+		typeNode   Node
 		lparenTok  Token
 		expression Expression
 		commaTok   Token
@@ -2491,7 +2497,7 @@ func (p *parser) fallthroughStmt() *FallthroughStmtNode {
 //	FieldDecl = ( IdentifierList Type | EmbeddedField ) [ Tag ] .
 type FieldDeclNode struct {
 	IdentifierList *IdentifierListNode
-	TypeNode       *TypeNode
+	TypeNode       Node
 	EmbeddedField  *EmbeddedFieldNode
 	Tag            *TagNode
 }
@@ -2515,7 +2521,7 @@ func (n *FieldDeclNode) Position() (r token.Position) {
 func (p *parser) fieldDecl() *FieldDeclNode {
 	var (
 		identifierList *IdentifierListNode
-		typeNode       *TypeNode
+		typeNode       Node
 		embeddedField  *EmbeddedFieldNode
 		tag            *TagNode
 	)
@@ -3177,6 +3183,13 @@ func (n *IdentifierListNode) Len() (r int) {
 	return r
 }
 
+func (n *IdentifierListNode) first() (r Token) {
+	if n != nil {
+		r = n.IDENT
+	}
+	return r
+}
+
 // Source implements Node.
 func (n *IdentifierListNode) Source(full bool) string { return nodeSource(n, full) }
 
@@ -3235,6 +3248,31 @@ func (p *parser) identifierList() *IdentifierListNode {
 	return list
 }
 
+// IfElseStmtNode represents the production
+//
+//	IfStmt = "if" Expression Block [ "else" ( IfStmt | Block ) ] | "if" SimpleStmt ";" Expression Block [ "else" ( IfStmt | Block ) ] .
+type IfElseStmtNode struct {
+	IF         Token
+	Expression Expression
+	Block      *BlockNode
+	ELSE       Token
+	ElseClause Node
+	SimpleStmt Node
+	SEMICOLON  Token
+}
+
+// Source implements Node.
+func (n *IfElseStmtNode) Source(full bool) string { return nodeSource(n, full) }
+
+// Position implements Node.
+func (n *IfElseStmtNode) Position() (r token.Position) {
+	if n == nil {
+		return r
+	}
+
+	panic("TODO")
+}
+
 // IfStmtNode represents the production
 //
 //	IfStmt = "if" Expression Block [ "else" ( IfStmt | Block ) ] | "if" SimpleStmt ";" Expression Block [ "else" ( IfStmt | Block ) ] .
@@ -3242,9 +3280,6 @@ type IfStmtNode struct {
 	IF         Token
 	Expression Expression
 	Block      *BlockNode
-	ELSE       Token
-	IfStmt     *IfStmtNode
-	Block2     *BlockNode
 	SimpleStmt Node
 	SEMICOLON  Token
 }
@@ -3261,14 +3296,14 @@ func (n *IfStmtNode) Position() (r token.Position) {
 	panic("TODO")
 }
 
-func (p *parser) ifStmt() *IfStmtNode {
+func (p *parser) ifStmt() Node {
 	var (
 		ok           bool
 		ifTok        Token
 		expression   Expression
 		block        *BlockNode
 		elseTok      Token
-		ifStmt       *IfStmtNode
+		ifStmt       Node
 		block2       *BlockNode
 		simpleStmt   Node
 		semicolonTok Token
@@ -3346,6 +3381,14 @@ func (p *parser) ifStmt() *IfStmtNode {
 						p.back(ix)
 						goto _1
 					}
+				}
+			default:
+				return &IfStmtNode{
+					IF:         ifTok,
+					Expression: expression,
+					Block:      block,
+					SimpleStmt: simpleStmt,
+					SEMICOLON:  semicolonTok,
 				}
 			}
 			goto _2
@@ -3466,13 +3509,19 @@ func (p *parser) ifStmt() *IfStmtNode {
 	default:
 		return nil
 	}
-	return &IfStmtNode{
+	var elseClause Node
+	switch {
+	case ifStmt != nil:
+		elseClause = ifStmt
+	case block2 != nil:
+		elseClause = block2
+	}
+	return &IfElseStmtNode{
 		IF:         ifTok,
 		Expression: expression,
 		Block:      block,
 		ELSE:       elseTok,
-		IfStmt:     ifStmt,
-		Block2:     block2,
+		ElseClause: elseClause,
 		SimpleStmt: simpleStmt,
 		SEMICOLON:  semicolonTok,
 	}
@@ -4155,7 +4204,7 @@ type ArrayLiteralTypeNode struct {
 	LBRACK      Token
 	ELLIPSIS    Token
 	RBRACK      Token
-	ElementType *TypeNode
+	ElementType Node
 }
 
 // Source implements Node.
@@ -4178,7 +4227,7 @@ func (p *parser) literalType() Node {
 		lbrackTok   Token
 		ellipsisTok Token
 		rbrackTok   Token
-		elementType *TypeNode
+		elementType Node
 		sliceType   *SliceTypeNode
 		mapType     *MapTypeNode
 	)
@@ -4404,9 +4453,9 @@ func (p *parser) logicalAndExpression(preBlock bool) (r Expression) {
 type MapTypeNode struct {
 	MAP         Token
 	LBRACK      Token
-	KeyType     *TypeNode
+	KeyType     Node
 	RBRACK      Token
-	ElementType *TypeNode
+	ElementType Node
 	typer
 }
 
@@ -4427,9 +4476,9 @@ func (p *parser) mapType() *MapTypeNode {
 		ok          bool
 		mapTok      Token
 		lbrackTok   Token
-		keyType     *TypeNode
+		keyType     Node
 		rbrackTok   Token
-		elementType *TypeNode
+		elementType Node
 	)
 	// ebnf.Sequence "map" "[" KeyType "]" ElementType ctx [MAP]
 	{
@@ -4622,7 +4671,7 @@ func (p *parser) methodElem() *MethodElemNode {
 //
 //	MethodExpr = ReceiverType "." MethodName .
 type MethodExprNode struct {
-	ReceiverType *TypeNode
+	ReceiverType Node
 	PERIOD       Token
 	MethodName   Token
 	typer
@@ -4644,7 +4693,7 @@ func (n *MethodExprNode) Position() (r token.Position) {
 func (p *parser) methodExpr() *MethodExprNode {
 	var (
 		ok           bool
-		receiverType *TypeNode
+		receiverType Node
 		periodTok    Token
 		methodName   Token
 	)
@@ -4992,7 +5041,7 @@ func (p *parser) packageName() Token {
 type ParameterDeclNode struct {
 	IdentifierList *IdentifierListNode
 	ELLIPSIS       Token
-	TypeNode       *TypeNode
+	TypeNode       Node
 
 	visible
 }
@@ -5021,7 +5070,7 @@ func (p *parser) parameterDecl() *ParameterDeclNode {
 	var (
 		identTok    Token
 		ellipsisTok Token
-		typeNode    *TypeNode
+		typeNode    Node
 	)
 	// ebnf.Alternative identifier "..." Type | identifier Type | "..." Type | Type ctx [ARROW, CHAN, ELLIPSIS, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT]
 	switch p.c() {
@@ -5262,24 +5311,40 @@ _1:
 				item := list0[i]
 				decl := item.ParameterDecl
 				typ := decl.TypeNode
-				if typ.TypeArgs != nil {
-					panic(todo("%v: %s", decl.Position(), decl.Source(false)))
-				}
+				switch x := typ.(type) {
+				case *TypeNode:
+					if x.TypeArgs != nil {
+						panic(todo("%v: %s", decl.Position(), decl.Source(false)))
+					}
 
-				if typ.TypeName == nil {
-					p.err(typ.Position(), "syntax error: mixed named and unnamed parameters")
-					continue
-				}
+					if x.TypeName == nil {
+						p.err(x.Position(), "syntax error: mixed named and unnamed parameters")
+						continue
+					}
 
-				switch x := typ.TypeName.Name.(type) {
-				case Token:
-					// { param , } vs { , ident }
-					idl.COMMA = item.COMMA
-					li := &IdentifierListNode{IDENT: x}
-					li.List = idl
-					idl = li
+					switch y := x.TypeName.Name.(type) {
+					case Token:
+						// { param , } vs { , ident }
+						idl.COMMA = item.COMMA
+						li := &IdentifierListNode{IDENT: y}
+						li.List = idl
+						idl = li
+					default:
+						p.err(y.Position(), "syntax error: mixed named and unnamed parameters")
+					}
+				case *TypeNameNode:
+					switch y := x.Name.(type) {
+					case Token:
+						// { param , } vs { , ident }
+						idl.COMMA = item.COMMA
+						li := &IdentifierListNode{IDENT: y}
+						li.List = idl
+						idl = li
+					default:
+						p.err(y.Position(), "syntax error: mixed named and unnamed parameters")
+					}
 				default:
-					p.err(typ.Position(), "syntax error: mixed named and unnamed parameters")
+					p.err(x.Position(), "syntax error: mixed named and unnamed parameters")
 				}
 			}
 			grp.ParameterDecl.IdentifierList = idl
@@ -5315,7 +5380,7 @@ func (n *ParametersNode) declare(p *parser, s *Scope) {
 //	PointerType = "*" BaseType .
 type PointerTypeNode struct {
 	MUL      Token
-	BaseType *TypeNode
+	BaseType Node
 	typer
 }
 
@@ -5334,7 +5399,7 @@ func (n *PointerTypeNode) Position() (r token.Position) {
 func (p *parser) pointerType() *PointerTypeNode {
 	var (
 		mulTok   Token
-		baseType *TypeNode
+		baseType Node
 	)
 	// ebnf.Sequence "*" BaseType ctx [MUL]
 	{
@@ -5946,7 +6011,7 @@ func (p *parser) relationalExpression(preBlock bool) (r Expression) {
 //	Result = Parameters | Type .
 type ResultNode struct {
 	Parameters *ParametersNode
-	TypeNode   *TypeNode
+	TypeNode   Node
 }
 
 // Source implements Node.
@@ -5964,7 +6029,7 @@ func (n *ResultNode) Position() (r token.Position) {
 func (p *parser) result() *ResultNode {
 	var (
 		parameters *ParametersNode
-		typeNode   *TypeNode
+		typeNode   Node
 	)
 	// ebnf.Alternative Parameters | Type ctx [ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT]
 	switch p.c() {
@@ -6737,7 +6802,7 @@ func (p *parser) slice() *SliceNode {
 type SliceTypeNode struct {
 	LBRACK      Token
 	RBRACK      Token
-	ElementType *TypeNode
+	ElementType Node
 	typer
 }
 
@@ -6757,7 +6822,7 @@ func (p *parser) sliceType() *SliceTypeNode {
 	var (
 		lbrackTok   Token
 		rbrackTok   Token
-		elementType *TypeNode
+		elementType Node
 	)
 	// ebnf.Sequence "[" "]" ElementType ctx [LBRACK]
 	{
@@ -6961,7 +7026,7 @@ func (p *parser) statement() Node {
 		gotoStmt        *GotoStmtNode
 		fallthroughStmt *FallthroughStmtNode
 		block           *BlockNode
-		ifStmt          *IfStmtNode
+		ifStmt          Node
 		switchStmt      *SwitchStmtNode
 		selectStmt      *SelectStmtNode
 		forStmt         *ForStmtNode
@@ -7381,14 +7446,10 @@ func (p *parser) topLevelDecl() (r Node) {
 
 // TypeNode represents the production
 //
-//	Type = TypeName [ TypeArgs ] | TypeLit | "(" Type ")" .
+//	Type = TypeName TypeArgs .
 type TypeNode struct {
 	TypeName *TypeNameNode
 	TypeArgs *TypeArgsNode
-	TypeLit  typeNode
-	LPAREN   Token
-	TypeNode *TypeNode
-	RPAREN   Token
 }
 
 // Source implements Node.
@@ -7404,8 +7465,25 @@ func (n *TypeNode) Position() (r token.Position) {
 		return n.TypeName.Position()
 	}
 
-	if n.TypeLit != nil {
-		return n.TypeLit.Position()
+	return r
+}
+
+// ParenthesizedTypeNode represents the production
+//
+//	ParenthesizedType = "(" Type ")" .
+type ParenthesizedTypeNode struct {
+	LPAREN   Token
+	TypeNode Node
+	RPAREN   Token
+}
+
+// Source implements Node.
+func (n *ParenthesizedTypeNode) Source(full bool) string { return nodeSource(n, full) }
+
+// Position implements Node.
+func (n *ParenthesizedTypeNode) Position() (r token.Position) {
+	if n == nil {
+		return r
 	}
 
 	if n.LPAREN.IsValid() {
@@ -7415,14 +7493,14 @@ func (n *TypeNode) Position() (r token.Position) {
 	return r
 }
 
-func (p *parser) type1() *TypeNode {
+func (p *parser) type1() Node {
 	var (
 		ok        bool
 		typeName  *TypeNameNode
 		typeArgs  *TypeArgsNode
-		typeLit   typeNode
+		typeLit   Node
 		lparenTok Token
-		typeNode  *TypeNode
+		typeNode  Node
 		rparenTok Token
 	)
 	// ebnf.Alternative TypeName [ TypeArgs ] | TypeLit | "(" Type ")" ctx [ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT]
@@ -7449,6 +7527,10 @@ func (p *parser) type1() *TypeNode {
 			typeArgs = nil
 		_3:
 		}
+		if typeArgs == nil {
+			return typeName
+		}
+
 		break
 	_0:
 		typeArgs = nil
@@ -7459,7 +7541,7 @@ func (p *parser) type1() *TypeNode {
 		if typeLit = p.typeLit(); typeLit == nil {
 			goto _4
 		}
-		break
+		return typeLit
 	_4:
 		typeLit = nil
 		return nil
@@ -7485,7 +7567,7 @@ func (p *parser) type1() *TypeNode {
 				goto _6
 			}
 		}
-		break
+		return &ParenthesizedTypeNode{LPAREN: lparenTok, TypeNode: typeNode, RPAREN: rparenTok}
 	_6:
 		lparenTok = Token{}
 		rparenTok = Token{}
@@ -7497,10 +7579,6 @@ func (p *parser) type1() *TypeNode {
 	return &TypeNode{
 		TypeName: typeName,
 		TypeArgs: typeArgs,
-		TypeLit:  typeLit,
-		LPAREN:   lparenTok,
-		TypeNode: typeNode,
-		RPAREN:   rparenTok,
 	}
 }
 
@@ -7575,7 +7653,7 @@ func (p *parser) typeArgs() *TypeArgsNode {
 type TypeAssertionNode struct {
 	PERIOD   Token
 	LPAREN   Token
-	TypeNode *TypeNode
+	TypeNode Node
 	RPAREN   Token
 }
 
@@ -7596,7 +7674,7 @@ func (p *parser) typeAssertion() *TypeAssertionNode {
 		ok        bool
 		periodTok Token
 		lparenTok Token
-		typeNode  *TypeNode
+		typeNode  Node
 		rparenTok Token
 	)
 	// ebnf.Sequence "." "(" Type ")" ctx [PERIOD]
@@ -7876,7 +7954,7 @@ func (p *parser) typeDecl() *TypeDeclNode {
 type TypeDefNode struct {
 	IDENT          Token
 	TypeParameters *TypeParametersNode
-	TypeNode       *TypeNode
+	TypeNode       Node
 
 	pkg *Package
 	typer
@@ -7908,7 +7986,7 @@ func (p *parser) typeDef() (r *TypeDefNode) {
 	var (
 		identTok       Token
 		typeParameters *TypeParametersNode
-		typeNode       *TypeNode
+		typeNode       Node
 	)
 	// ebnf.Sequence identifier [ TypeParameters ] Type ctx [IDENT]
 	{
@@ -8030,7 +8108,7 @@ func (p *parser) typeElem() *TypeElemListNode {
 //	TypeList = Type { "," Type } .
 type TypeListNode struct {
 	COMMA    Token
-	TypeNode *TypeNode
+	TypeNode Node
 	List     *TypeListNode
 }
 
@@ -8052,7 +8130,7 @@ func (n *TypeListNode) Position() (r token.Position) {
 
 func (p *parser) typeList() *TypeListNode {
 	var (
-		typeNode   *TypeNode
+		typeNode   Node
 		list, last *TypeListNode
 	)
 	// ebnf.Sequence Type { "," Type } ctx [ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT]
@@ -8071,7 +8149,7 @@ func (p *parser) typeList() *TypeListNode {
 	_0:
 		{
 			var commaTok Token
-			var typeNode *TypeNode
+			var typeNode Node
 			switch p.c() {
 			case COMMA:
 				// ebnf.Sequence "," Type ctx [COMMA]
@@ -8732,7 +8810,7 @@ func (p *parser) typeSwitchStmt() *TypeSwitchStmtNode {
 //
 //	TypeTerm = Type | UnderlyingType .
 type TypeTermNode struct {
-	TypeNode       *TypeNode
+	TypeNode       Node
 	UnderlyingType *UnderlyingTypeNode
 }
 
@@ -8750,7 +8828,7 @@ func (n *TypeTermNode) Position() (r token.Position) {
 
 func (p *parser) typeTerm() *TypeTermNode {
 	var (
-		typeNode       *TypeNode
+		typeNode       Node
 		underlyingType *UnderlyingTypeNode
 	)
 	// ebnf.Alternative Type | UnderlyingType ctx [ARROW, CHAN, FUNC, IDENT, INTERFACE, LBRACK, LPAREN, MAP, MUL, STRUCT, TILDE]
@@ -8885,7 +8963,7 @@ func (p *parser) unaryExpr(preBlock bool) Expression {
 //	UnderlyingType = "~" Type .
 type UnderlyingTypeNode struct {
 	TILDE    Token
-	TypeNode *TypeNode
+	TypeNode Node
 }
 
 // Source implements Node.
@@ -8903,7 +8981,7 @@ func (n *UnderlyingTypeNode) Position() (r token.Position) {
 func (p *parser) underlyingType() *UnderlyingTypeNode {
 	var (
 		tildeTok Token
-		typeNode *TypeNode
+		typeNode Node
 	)
 	// ebnf.Sequence "~" Type ctx [TILDE]
 	{
@@ -9075,7 +9153,7 @@ func (p *parser) varDecl() *VarDeclNode {
 //	VarSpec = identifier ( Type [ "=" ExpressionList ] | "=" ExpressionList ) .
 type VarSpecNode struct {
 	IDENT          Token
-	TypeNode       *TypeNode
+	TypeNode       Node
 	ASSIGN         Token
 	ExpressionList *ExpressionListNode
 	lexicalScoper
@@ -9100,7 +9178,7 @@ func (n *VarSpecNode) Position() (r token.Position) {
 //	VarSpec = IdentifierList ( Type [ "=" ExpressionList ] | "=" ExpressionList ) .
 type VarSpec2Node struct {
 	IdentifierList *IdentifierListNode
-	TypeNode       *TypeNode
+	TypeNode       Node
 	ASSIGN         Token
 	ExpressionList *ExpressionListNode
 	lexicalScoper
@@ -9123,7 +9201,7 @@ func (n *VarSpec2Node) Position() (r token.Position) {
 func (p *parser) varSpec() Node {
 	var (
 		identifierList *IdentifierListNode
-		typeNode       *TypeNode
+		typeNode       Node
 		assignTok      Token
 		expressionList *ExpressionListNode
 	)

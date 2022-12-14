@@ -711,7 +711,8 @@ func (f *Field) Name() string {
 }
 
 func (f *Field) Type() Type {
-	return f.n.TypeNode.Type()
+	panic(todo(""))
+	// return f.n.TypeNode.Type()
 }
 
 func (f *Field) Tag() string {
@@ -837,7 +838,8 @@ func (t *StructType) String() string {
 		case v.EmbeddedField != nil:
 			fmt.Fprintf(&b, "%s", strings.TrimSpace(v.EmbeddedField.Source(false)))
 		default:
-			fmt.Fprintf(&b, "%s %s", v.IdentifierList.IDENT.Src(), v.TypeNode.Type())
+			panic(todo(""))
+			// fmt.Fprintf(&b, "%s %s", v.IdentifierList.IDENT.Src(), v.TypeNode.Type())
 		}
 	}
 	if len(t.Fields) != 0 {
@@ -945,7 +947,8 @@ func underlyingType(n Node, t Type) Type {
 		case *PredefinedType:
 			return t
 		case *TypeDefNode:
-			t = x.TypeNode.Type()
+			panic(todo(""))
+			// t = x.TypeNode.Type()
 		default:
 			panic(todo("%v: %T %[2]s", n.Position(), x))
 		}
