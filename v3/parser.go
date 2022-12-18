@@ -42,6 +42,8 @@ import (
 //    all_test.go:1129: pkg count 516, heap 459,353,840
 //    all_test.go:1129: pkg count 516, heap 457,275,512
 //    all_test.go:1129: pkg count 516, heap 455,355,680
+//    all_test.go:1129: pkg count 516, heap 455,330,536
+//    all_test.go:1129: pkg count 516, heap 455,375,880
 
 //                                         <total> x 16,603,469 =   892,265,816 á  54
 //                                         <total> x 16,024,194 =   887,787,224 á  55
@@ -86,6 +88,8 @@ import (
 //                                         <total> x 12,815,541 =   510,052,400 á  40
 //                                         <total> x 12,815,675 =   506,593,488 á  40
 //                                         <total> x 12,639,779 =   500,965,136 á  40
+//                                         <total> x 12,640,847 =   501,008,776 á  40
+//                                         <total> x 12,640,913 =   501,011,504 á  40
 
 const parserBudget = 1e7
 
@@ -4778,7 +4782,7 @@ func (p *parser) multiplicativeExpression(preBlock bool) (r Expression) {
 
 // OperandNode represents the production
 //
-//	Operand = Literal | OperandName [ TypeArgs ] [ LiteralValue ] | "(" Expression ")" .
+//	Operand = Literal | OperandName [ TypeArgs ] [ LiteralValue ] .
 type OperandNode struct {
 	OperandName  Expression
 	TypeArgs     *TypeArgsNode
@@ -8823,7 +8827,11 @@ func (n *TypeTermNode) Position() (r token.Position) {
 		return r
 	}
 
-	panic("TODO")
+	if n.TypeNode != nil {
+		return n.TypeNode.Position()
+	}
+
+	return n.UnderlyingType.Position()
 }
 
 func (p *parser) typeTerm() *TypeTermNode {

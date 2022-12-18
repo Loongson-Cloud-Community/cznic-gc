@@ -312,17 +312,11 @@ func (n *TypeDeclNode) check(c *ctx) {
 }
 
 func (n *AliasDeclNode) check(c *ctx) {
-	panic(todo("", n.Position(), n.Source(false)))
-	// if n == nil {
-	// 	return
-	// }
+	if n == nil {
+		return
+	}
 
-	// if c.pkg.isBuiltin {
-	// 	n.TypeNode.checkBuiltin(c, n.IDENT.Src())
-	// 	return
-	// }
-
-	// n.TypeNode.check(c)
+	typeNodeCheck(n.TypeNode, c)
 }
 
 func (n *TypeDefNode) check(c *ctx, _ *Expression) Type {
@@ -337,6 +331,13 @@ func (n *TypeDefNode) check(c *ctx, _ *Expression) Type {
 	defer n.exit()
 
 	n.pkg = c.pkg
+	if c.pkg.isBuiltin {
+		switch n.IDENT.Src() {
+		case "comparable":
+			return n.setType(comparable, c, n)
+		}
+	}
+
 	return n.setType(typeNodeCheck(n.TypeNode, c), c, n)
 }
 
@@ -390,6 +391,8 @@ func typeNodeCheck(n Node, c *ctx) (r Type) {
 		}
 
 		panic(todo("", n.Position(), n.Source(false)))
+	case *InterfaceTypeNode:
+		return x.check(c, nil)
 	default:
 		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
 	}
