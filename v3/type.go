@@ -30,6 +30,7 @@ var (
 var (
 	Invalid Type = &InvalidType{}
 
+	any        = &InterfaceType{}
 	comparable = &InterfaceType{}
 
 	untypedBool    Type = &PredefinedType{kind: UntypedBool}
@@ -704,6 +705,8 @@ func (t *ArrayType) String() string {
 type Field struct {
 	n   *FieldDeclNode
 	off int64
+
+	typ Type
 }
 
 func (f *Field) Name() string {
@@ -711,8 +714,7 @@ func (f *Field) Name() string {
 }
 
 func (f *Field) Type() Type {
-	panic(todo(""))
-	// return f.n.TypeNode.Type()
+	return f.typ
 }
 
 func (f *Field) Tag() string {

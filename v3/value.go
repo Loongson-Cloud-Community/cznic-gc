@@ -10,9 +10,10 @@ import (
 )
 
 var (
-	falseVal = constant.MakeBool(false)
-	trueVal  = constant.MakeBool(true)
-	unknown  = constant.MakeUnknown()
+	falseVal   = constant.MakeBool(false)
+	trueVal    = constant.MakeBool(true)
+	unknown    = constant.MakeUnknown()
+	zeroIntVal = constant.MakeInt64(0)
 )
 
 type valuer struct{ val constant.Value }

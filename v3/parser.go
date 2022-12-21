@@ -31,7 +31,6 @@ import (
 //    all_test.go:1129: pkg count 516, heap 567,709,952
 //    all_test.go:1129: pkg count 516, heap 555,500,960
 //    all_test.go:1129: pkg count 516, heap 551,777,488
-//    all_test.go:1129: pkg count 516, heap 551,759,992
 //    all_test.go:1129: pkg count 516, heap 548,683,512
 //    all_test.go:1129: pkg count 516, heap 548,447,936
 //    all_test.go:1129: pkg count 516, heap 547,480,288
@@ -42,8 +41,11 @@ import (
 //    all_test.go:1129: pkg count 516, heap 459,353,840
 //    all_test.go:1129: pkg count 516, heap 457,275,512
 //    all_test.go:1129: pkg count 516, heap 455,355,680
-//    all_test.go:1129: pkg count 516, heap 455,330,536
-//    all_test.go:1129: pkg count 516, heap 455,375,880
+//    all_test.go:1129: pkg count 516, heap 454,663,568
+//    all_test.go:1129: pkg count 516, heap 454,581,072
+//    all_test.go:1129: pkg count 516, heap 454,607,112
+//    all_test.go:1129: pkg count 516, heap 454,709,968
+//    all_test.go:1129: pkg count 516, heap 455,312,784
 
 //                                         <total> x 16,603,469 =   892,265,816 á  54
 //                                         <total> x 16,024,194 =   887,787,224 á  55
@@ -54,20 +56,12 @@ import (
 //                                         <total> x 14,056,581 =   696,851,856 á  50
 //                                         <total> x 14,056,453 =   708,480,848 á  50
 //                                         <total> x 14,422,414 =   719,035,680 á  50
-//                                         <total> x 14,422,538 =   719,042,280 á  50
-//                                         <total> x 14,423,062 =   719,068,384 á  50
 //                                         <total> x 14,423,240 =   717,114,200 á  50
 //                                         <total> x 14,425,901 =   711,567,152 á  49
 //                                         <total> x 14,474,065 =   710,068,032 á  49
 //                                         <total> x 14,481,041 =   710,373,680 á  49
 //                                         <total> x 14,481,767 =   710,408,768 á  49
-//                                         <total> x 14,482,935 =   710,465,552 á  49
 //                                         <total> x 14,484,493 =   710,543,264 á  49
-//                                         <total> x 14,484,620 =   710,549,440 á  49
-//                                         <total> x 14,459,311 =   708,514,080 á  49
-//                                         <total> x 14,459,693 =   708,534,224 á  49
-//                                         <total> x 14,460,173 =   708,558,088 á  49
-//                                         <total> x 14,461,091 =   708,751,992 á  49
 //                                         <total> x 14,461,141 =   706,268,448 á  49
 //                                         <total> x 14,461,182 =   707,678,232 á  49
 //                                         <total> x 14,461,242 =   714,720,336 á  49
@@ -89,7 +83,8 @@ import (
 //                                         <total> x 12,815,675 =   506,593,488 á  40
 //                                         <total> x 12,639,779 =   500,965,136 á  40
 //                                         <total> x 12,640,847 =   501,008,776 á  40
-//                                         <total> x 12,640,913 =   501,011,504 á  40
+//                                         <total> x 12,603,003 =   499,658,832 á  40
+//                                         <total> x 12,603,001 =   502,473,720 á  40
 
 const parserBudget = 1e7
 
@@ -118,7 +113,7 @@ func (n *visible) Visible() int { return int(n.visible) }
 
 func (n *visible) setVisible(i int32) { n.visible = i }
 
-type scoped struct {
+type named struct {
 	n       visibiliter
 	declTok Token
 }
@@ -134,7 +129,7 @@ const (
 )
 
 type Scope struct {
-	nodes  map[string]scoped
+	nodes  map[string]named
 	parent *Scope
 
 	kind ScopeKind
@@ -146,7 +141,7 @@ func (s *Scope) Kind() ScopeKind { return s.kind }
 
 func (s *Scope) Parent() *Scope { return s.parent }
 
-func (s *Scope) declare(nm Token, n visibiliter, visible int32, p *parser, initOK bool) (r scoped) {
+func (s *Scope) declare(nm Token, n visibiliter, visible int32, p *parser, initOK bool) (r named) {
 	snm := nm.Src()
 	switch snm {
 	case "_":
@@ -165,15 +160,15 @@ func (s *Scope) declare(nm Token, n visibiliter, visible int32, p *parser, initO
 	}
 
 	if s.nodes == nil {
-		s.nodes = map[string]scoped{}
+		s.nodes = map[string]named{}
 	}
 	// trc("%v: add %s %p", nm.Position(), snm, s)
 	n.setVisible(visible)
-	s.nodes[snm] = scoped{n, nm}
+	s.nodes[snm] = named{n, nm}
 	return r
 }
 
-func (s *Scope) lookup(id Token) (r scoped) {
+func (s *Scope) lookup(id Token) (in *Scope, r named) {
 	nm := id.Src()
 	ix := int(id.index)
 	for s != nil {
@@ -184,12 +179,12 @@ func (s *Scope) lookup(id Token) (r scoped) {
 
 		sc, ok := s.nodes[nm]
 		if ok && (ix < 0 || ix > sc.n.Visible()) {
-			return sc
+			return s, sc
 		}
 
 		s = s.parent
 	}
-	return r
+	return nil, r
 }
 
 type lexicalScoper struct{ s *Scope }
@@ -1412,10 +1407,10 @@ func (n *ConstSpecListNode) Position() (r token.Position) {
 //
 //	ConstDecl = "const" ( ConstSpec | "(" { ConstSpec ";" } ")" ) .
 type ConstDeclNode struct {
-	CONST         Token
-	LPAREN        Token
-	ConstSpecList Node
-	RPAREN        Token
+	CONST     Token
+	LPAREN    Token
+	ConstSpec Node
+	RPAREN    Token
 }
 
 // Source implements Node.
@@ -1538,11 +1533,20 @@ func (p *parser) constDecl() *ConstDeclNode {
 			return nil
 		}
 	}
+	if list != nil && list.List == nil && !list.SEMICOLON.IsValid() {
+		return &ConstDeclNode{
+			CONST:     constTok,
+			LPAREN:    lparenTok,
+			ConstSpec: list.ConstSpec,
+			RPAREN:    rparenTok,
+		}
+	}
+
 	return &ConstDeclNode{
-		CONST:         constTok,
-		LPAREN:        lparenTok,
-		ConstSpecList: list,
-		RPAREN:        rparenTok,
+		CONST:     constTok,
+		LPAREN:    lparenTok,
+		ConstSpec: list,
+		RPAREN:    rparenTok,
 	}
 }
 
@@ -1557,6 +1561,7 @@ type ConstSpecNode struct {
 
 	iota int64
 
+	valuer
 	visible
 }
 
@@ -3691,6 +3696,7 @@ type ImportSpecNode struct {
 	PackageName Token
 	ImportPath  *BasicLitNode
 
+	pkg *Package
 	visible
 }
 
@@ -9038,10 +9044,10 @@ func (n *VarSpecListNode) Position() (r token.Position) {
 //
 //	VarDecl = "var" ( VarSpec | "(" { VarSpec ";" } ")" ) .
 type VarDeclNode struct {
-	VAR         Token
-	LPAREN      Token
-	VarSpecList Node
-	RPAREN      Token
+	VAR     Token
+	LPAREN  Token
+	VarSpec Node
+	RPAREN  Token
 }
 
 // Source implements Node.
@@ -9148,11 +9154,20 @@ func (p *parser) varDecl() *VarDeclNode {
 			return nil
 		}
 	}
+	if list != nil && list.List == nil && !list.SEMICOLON.IsValid() {
+		return &VarDeclNode{
+			VAR:     varTok,
+			LPAREN:  lparenTok,
+			VarSpec: list.VarSpec,
+			RPAREN:  rparenTok,
+		}
+	}
+
 	return &VarDeclNode{
-		VAR:         varTok,
-		LPAREN:      lparenTok,
-		VarSpecList: list,
-		RPAREN:      rparenTok,
+		VAR:     varTok,
+		LPAREN:  lparenTok,
+		VarSpec: list,
+		RPAREN:  rparenTok,
 	}
 }
 
