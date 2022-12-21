@@ -46,6 +46,9 @@ import (
 //    all_test.go:1129: pkg count 516, heap 454,607,112
 //    all_test.go:1129: pkg count 516, heap 454,709,968
 //    all_test.go:1129: pkg count 516, heap 455,312,784
+//    all_test.go:1129: pkg count 516, heap 456,016,824
+//    all_test.go:1129: pkg count 516, heap 455,954,544
+//    all_test.go:1129: pkg count 516, heap 456,016,592
 
 //                                         <total> x 16,603,469 =   892,265,816 á  54
 //                                         <total> x 16,024,194 =   887,787,224 á  55
@@ -85,6 +88,8 @@ import (
 //                                         <total> x 12,640,847 =   501,008,776 á  40
 //                                         <total> x 12,603,003 =   499,658,832 á  40
 //                                         <total> x 12,603,001 =   502,473,720 á  40
+//                                         <total> x 12,602,667 =   505,274,416 á  40
+//                                         <total> x 12,603,389 =   505,302,936 á  40
 
 const parserBudget = 1e7
 
@@ -434,7 +439,10 @@ func (p *parser) parse() (ast *AST, err error) {
 type Expression interface {
 	Node
 	Value
-	typ
+	Type() Type
+	checkExpr(*ctx, *Expression) (constant.Value, Type)
+	clone() Expression
+	setType(Type, *ctx, Node) Type
 }
 
 type BinaryExpression struct {
@@ -946,7 +954,7 @@ func (n *BasicLitNode) Position() (r token.Position) {
 		return r
 	}
 
-	return n.Position()
+	return Token(*n).Position()
 }
 
 func (n *BasicLitNode) Ch() token.Token { return Token(*n).Ch() }
@@ -1561,6 +1569,7 @@ type ConstSpecNode struct {
 
 	iota int64
 
+	t Type
 	valuer
 	visible
 }
@@ -4928,6 +4937,29 @@ func (p *parser) operand(preBlock bool) Expression {
 		TypeArgs:     typeArgs,
 		LiteralValue: literalValue,
 	}
+}
+
+// IotaNode represents the production
+//
+//	IotaNode = identifier .
+type IotaNode struct {
+	Iota Token
+	lexicalScoper
+
+	t Type
+	v int64
+}
+
+// Source implements Node.
+func (n *IotaNode) Source(full bool) string { return nodeSource(n, full) }
+
+// Position implements Node.
+func (n *IotaNode) Position() (r token.Position) {
+	if n == nil || !n.Iota.IsValid() {
+		return r
+	}
+
+	return n.Iota.Position()
 }
 
 // OperandNameNode represents the production

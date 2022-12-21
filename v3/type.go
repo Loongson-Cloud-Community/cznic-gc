@@ -128,7 +128,7 @@ type typeNode interface {
 
 type typ interface {
 	Type() Type
-	check(*ctx, *Expression) Type
+	checkType(*ctx) Type
 	setType(Type, *ctx, Node) Type
 }
 
