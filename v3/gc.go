@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:generate stringer -output stringer.go -linecomment -type=Kind,guard,ScopeKind,ChanDir,TypeCheck
+//go:generate stringer -output stringer.go -linecomment -type=Kind,ScopeKind,ChanDir,TypeCheck
 
 package gc // modernc.org/gc/v3
 
@@ -96,7 +96,6 @@ type ConfigOption func(*Config) error
 // configured.
 type Config struct {
 	abi           *ABI
-	any           *InterfaceType
 	buildTagMap   map[string]bool
 	buildTags     []string
 	buildTagsKey  string // Zero byte separated
@@ -154,7 +153,6 @@ func NewConfig(opts ...ConfigOption) (r *Config, err error) {
 	case "386", "arm":
 		r.arch32bit = true
 	}
-	r.any = &InterfaceType{cfg: r}
 
 	//  During a particular build, the following build tags are satisfied:
 	//
@@ -221,9 +219,9 @@ func NewConfig(opts ...ConfigOption) (r *Config, err error) {
 
 	r.builtin.isBuiltin = true
 	r.builtin.Scope.kind = UniverseScope
-	if err := r.builtin.check(newCtx(r)); err != nil {
-		return nil, err
-	}
+	//TODO if err := r.builtin.check(newCtx(r)); err != nil {
+	//TODO 	return nil, err
+	//TODO }
 
 	return r, nil
 }

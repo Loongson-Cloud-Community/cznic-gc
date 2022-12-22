@@ -49,6 +49,10 @@ import (
 //    all_test.go:1129: pkg count 516, heap 456,016,824
 //    all_test.go:1129: pkg count 516, heap 455,954,544
 //    all_test.go:1129: pkg count 516, heap 456,016,592
+//    all_test.go:1129: pkg count 516, heap 457,121,224
+
+//    all_test.go:1129: pkg count 516, heap 427,262,960
+//    all_test.go:1129: pkg count 516, heap 428,421,448
 
 //                                         <total> x 16,603,469 =   892,265,816 á  54
 //                                         <total> x 16,024,194 =   887,787,224 á  55
@@ -90,14 +94,14 @@ import (
 //                                         <total> x 12,603,001 =   502,473,720 á  40
 //                                         <total> x 12,602,667 =   505,274,416 á  40
 //                                         <total> x 12,603,389 =   505,302,936 á  40
+//                                         <total> x 12,604,481 =   507,314,552 á  40
+
+//                                         <total> x 12,590,468 =   454,314,392 á  36
+//                                         <total> x 12,590,509 =   456,934,200 á  36
 
 const parserBudget = 1e7
 
 var (
-	_ Expression = (*BinaryExpression)(nil)
-	_ Expression = (*OperandNameNode)(nil)
-	_ Expression = (*ParenthesizedExpression)(nil)
-
 	noBack    bool
 	panicBack bool
 )
@@ -436,25 +440,16 @@ func (p *parser) parse() (ast *AST, err error) {
 	return nil, p.s.errs
 }
 
-type Expression interface {
-	Node
-	Value
-	Type() Type
-	checkExpr(*ctx, *Expression) (constant.Value, Type)
-	clone() Expression
-	setType(Type, *ctx, Node) Type
-}
-
-type BinaryExpression struct {
+type BinaryExpressionNode struct {
 	LHS Expression
 	Op  Token
 	RHS Expression
-	typer
-	valuer
+	typeCache
+	valueCache
 }
 
 // Position implements Node.
-func (n *BinaryExpression) Position() (r token.Position) {
+func (n *BinaryExpressionNode) Position() (r token.Position) {
 	if n == nil {
 		return r
 	}
@@ -463,7 +458,7 @@ func (n *BinaryExpression) Position() (r token.Position) {
 }
 
 // Source implements Node.
-func (n *BinaryExpression) Source(full bool) string { return nodeSource(n, full) }
+func (n *BinaryExpressionNode) Source(full bool) string { return nodeSource(n, full) }
 
 func (p *parser) additiveExpression(preBlock bool) (r Expression) {
 	var multiplicativeExpression Expression
@@ -498,7 +493,7 @@ func (p *parser) additiveExpression(preBlock bool) (r Expression) {
 					p.back(ix)
 					goto _1
 				}
-				r = &BinaryExpression{LHS: r, Op: op, RHS: multiplicativeExpression}
+				r = &BinaryExpressionNode{LHS: r, Op: op, RHS: multiplicativeExpression}
 				goto _0
 			}
 		_1:
@@ -826,7 +821,6 @@ type ArrayTypeNode struct {
 	ArrayLength Expression
 	RBRACK      Token
 	ElementType Node
-	typer
 }
 
 // Source implements Node.
@@ -1097,7 +1091,6 @@ type ChannelTypeNode struct {
 	CHAN        Token
 	ARROW       Token
 	ElementType Node
-	typer
 }
 
 // Source implements Node.
@@ -1338,8 +1331,6 @@ func (p *parser) commClause() *CommClauseNode {
 type CompositeLitNode struct {
 	LiteralType  Node
 	LiteralValue *LiteralValueNode
-	typer
-	valuer
 }
 
 // Source implements Node.
@@ -1568,9 +1559,6 @@ type ConstSpecNode struct {
 	Expression Expression
 
 	iota int64
-
-	t Type
-	valuer
 	visible
 }
 
@@ -1767,8 +1755,6 @@ type ConversionNode struct {
 	Expression Expression
 	COMMA      Token
 	RPAREN     Token
-	typer
-	valuer
 }
 
 // Source implements Node.
@@ -2379,7 +2365,7 @@ func (p *parser) expression(preBlock bool) (r Expression) {
 					p.back(ix)
 					goto _1
 				}
-				r = &BinaryExpression{LHS: r, Op: lorTok, RHS: logicalAndExpression}
+				r = &BinaryExpressionNode{LHS: r, Op: lorTok, RHS: logicalAndExpression}
 				goto _0
 			}
 		_1:
@@ -2958,8 +2944,6 @@ type FunctionLitNode struct {
 	FUNC         Token
 	Signature    *SignatureNode
 	FunctionBody *FunctionBodyNode
-	typer
-	valuer
 }
 
 // Source implements Node.
@@ -3050,7 +3034,6 @@ func (p *parser) functionName() *FunctionNameNode {
 type FunctionTypeNode struct {
 	FUNC      Token
 	Signature *SignatureNode
-	typer
 }
 
 // Source implements Node.
@@ -3937,7 +3920,6 @@ type InterfaceTypeNode struct {
 	LBRACE            Token
 	InterfaceElemList *InterfaceElemListNode
 	RBRACE            Token
-	typer
 }
 
 // Source implements Node.
@@ -4344,7 +4326,6 @@ type LiteralValueNode struct {
 	LBRACE           Token
 	KeyedElementList *KeyedElementListNode
 	RBRACE           Token
-	typer
 }
 
 // Source implements Node.
@@ -4457,7 +4438,7 @@ func (p *parser) logicalAndExpression(preBlock bool) (r Expression) {
 					p.back(ix)
 					goto _1
 				}
-				r = &BinaryExpression{LHS: r, Op: landTok, RHS: relationalExpression}
+				r = &BinaryExpressionNode{LHS: r, Op: landTok, RHS: relationalExpression}
 				goto _0
 			}
 		_1:
@@ -4475,7 +4456,6 @@ type MapTypeNode struct {
 	KeyType     Node
 	RBRACK      Token
 	ElementType Node
-	typer
 }
 
 // Source implements Node.
@@ -4693,8 +4673,6 @@ type MethodExprNode struct {
 	ReceiverType Node
 	PERIOD       Token
 	MethodName   Token
-	typer
-	valuer
 }
 
 // Source implements Node.
@@ -4786,7 +4764,7 @@ func (p *parser) multiplicativeExpression(preBlock bool) (r Expression) {
 					p.back(ix)
 					goto _1
 				}
-				r = &BinaryExpression{LHS: r, Op: op, RHS: unaryExpr}
+				r = &BinaryExpressionNode{LHS: r, Op: op, RHS: unaryExpr}
 				goto _0
 			}
 		_1:
@@ -4802,8 +4780,6 @@ type OperandNode struct {
 	OperandName  Expression
 	TypeArgs     *TypeArgsNode
 	LiteralValue *LiteralValueNode
-	typer
-	valuer
 }
 
 // Source implements Node.
@@ -4818,17 +4794,17 @@ func (n *OperandNode) Position() (r token.Position) {
 	return n.OperandName.Position()
 }
 
-type ParenthesizedExpression struct {
+type ParenthesizedExpressionNode struct {
 	LPAREN     Token
 	Expression Expression
 	RPAREN     Token
 }
 
 // Source implements Node.
-func (n *ParenthesizedExpression) Source(full bool) string { return nodeSource(n, full) }
+func (n *ParenthesizedExpressionNode) Source(full bool) string { return nodeSource(n, full) }
 
 // Position implements Node.
-func (n *ParenthesizedExpression) Position() (r token.Position) {
+func (n *ParenthesizedExpressionNode) Position() (r token.Position) {
 	if n == nil {
 		return r
 	}
@@ -4919,7 +4895,7 @@ func (p *parser) operand(preBlock bool) Expression {
 				goto _8
 			}
 		}
-		return &ParenthesizedExpression{LPAREN: lparenTok, Expression: expression, RPAREN: rparenTok}
+		return &ParenthesizedExpressionNode{LPAREN: lparenTok, Expression: expression, RPAREN: rparenTok}
 	_8:
 		expression = nil
 		lparenTok = Token{}
@@ -4945,9 +4921,6 @@ func (p *parser) operand(preBlock bool) Expression {
 type IotaNode struct {
 	Iota Token
 	lexicalScoper
-
-	t Type
-	v int64
 }
 
 // Source implements Node.
@@ -5423,7 +5396,6 @@ func (n *ParametersNode) declare(p *parser, s *Scope) {
 type PointerTypeNode struct {
 	MUL      Token
 	BaseType Node
-	typer
 }
 
 // Source implements Node.
@@ -5476,8 +5448,6 @@ func (p *parser) postStmt() Node {
 type PrimaryExprNode struct {
 	PrimaryExpr Expression
 	Postfix     Node
-	typer
-	valuer
 }
 
 // Source implements Node.
@@ -6039,7 +6009,7 @@ func (p *parser) relationalExpression(preBlock bool) (r Expression) {
 					p.back(ix)
 					goto _1
 				}
-				r = &BinaryExpression{LHS: r, Op: op, RHS: additiveExpression}
+				r = &BinaryExpressionNode{LHS: r, Op: op, RHS: additiveExpression}
 				goto _0
 			}
 		_1:
@@ -6478,7 +6448,6 @@ func (p *parser) expr2ident(e Expression) (r Token) {
 type SignatureNode struct {
 	Parameters *ParametersNode
 	Result     *ResultNode
-	typer
 }
 
 // Source implements Node.
@@ -6845,7 +6814,6 @@ type SliceTypeNode struct {
 	LBRACK      Token
 	RBRACK      Token
 	ElementType Node
-	typer
 }
 
 // Source implements Node.
@@ -7287,7 +7255,6 @@ type StructTypeNode struct {
 	LBRACE        Token
 	FieldDeclList *FieldDeclListNode
 	RBRACE        Token
-	typer
 }
 
 // Source implements Node.
@@ -7999,7 +7966,6 @@ type TypeDefNode struct {
 	TypeNode       Node
 
 	pkg *Package
-	typer
 	visible
 }
 
@@ -8222,7 +8188,7 @@ func (p *parser) typeList() *TypeListNode {
 	return list
 }
 
-func (p *parser) typeLit() typeNode {
+func (p *parser) typeLit() Node {
 	var (
 		arrayType     *ArrayTypeNode
 		structType    *StructTypeNode
@@ -8912,7 +8878,8 @@ func (p *parser) typeTerm() *TypeTermNode {
 type UnaryExprNode struct {
 	Op        Token
 	UnaryExpr Expression
-	valuer
+	typeCache
+	valueCache
 }
 
 // Source implements Node.
