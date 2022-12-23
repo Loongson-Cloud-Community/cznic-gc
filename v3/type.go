@@ -10,6 +10,7 @@ var (
 
 var (
 	_ Type = (*InvalidType)(nil)
+	//_ Type = (*TypeDefNode)(nil)
 
 	typeCheckLoop = &InvalidType{}
 )
@@ -109,6 +110,11 @@ type Type interface {
 	// it is analogous to unsafe.Sizeof.
 	Size() uintptr
 
+	// String returns a string representation of the type.  The string
+	// representation is not guaranteed to be unique among types. To test for type
+	// identity, compare the Types directly.
+	String() string
+
 	check(c *ctx) Type
 }
 
@@ -118,6 +124,7 @@ func (n *InvalidType) Align() int        { return 1 }
 func (n *InvalidType) FieldAlign() int   { return 1 }
 func (n *InvalidType) Kind() Kind        { return InvalidKind }
 func (n *InvalidType) Size() uintptr     { return 1 }
+func (n *InvalidType) String() string    { return "<invalid type>" }
 func (n *InvalidType) check(c *ctx) Type { return n }
 
 // ChanDir represents a channel direction.

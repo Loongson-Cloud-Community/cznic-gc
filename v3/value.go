@@ -50,7 +50,8 @@ type valuer interface {
 
 type Expression interface {
 	Node
+	checkExpr(c *ctx) Expression
+	clone() Expression
 	typer
 	valuer
-	checkExpr(c *ctx) Expression
 }

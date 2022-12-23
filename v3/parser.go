@@ -52,7 +52,7 @@ import (
 //    all_test.go:1129: pkg count 516, heap 457,121,224
 
 //    all_test.go:1129: pkg count 516, heap 427,262,960
-//    all_test.go:1129: pkg count 516, heap 428,421,448
+//    all_test.go:1129: pkg count 516, heap 428,417,224
 
 //                                         <total> x 16,603,469 =   892,265,816 á  54
 //                                         <total> x 16,024,194 =   887,787,224 á  55
@@ -97,7 +97,8 @@ import (
 //                                         <total> x 12,604,481 =   507,314,552 á  40
 
 //                                         <total> x 12,590,468 =   454,314,392 á  36
-//                                         <total> x 12,590,509 =   456,934,200 á  36
+//                                         <total> x 12,591,896 =   456,980,832 á  36
+//                                         <total> x 12,592,887 =   457,017,120 á  36
 
 const parserBudget = 1e7
 

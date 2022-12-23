@@ -217,7 +217,6 @@ func NewConfig(opts ...ConfigOption) (r *Config, err error) {
 		return nil, err
 	}
 
-	r.builtin.isBuiltin = true
 	r.builtin.Scope.kind = UniverseScope
 	//TODO if err := r.builtin.check(newCtx(r)); err != nil {
 	//TODO 	return nil, err
@@ -554,8 +553,8 @@ type Package struct {
 	mu             sync.Mutex
 	typeCheck      TypeCheck
 
-	isBuiltin bool
-	isChecked bool
+	// isBuiltin bool
+	// isChecked bool
 }
 
 // NewPackage returns a Package, possibly cached, for importPath@version or an
@@ -652,7 +651,7 @@ func (c *Config) newPackage(dir, importPath, version string, fileFilter FileFilt
 			return
 		}
 
-		//TODO err = pkg.check(newCtx(c))
+		//TODO err = r.check(newCtx(c))
 	}()
 
 	c.parallel.throttle(func() {
