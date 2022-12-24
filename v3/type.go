@@ -4,13 +4,28 @@
 
 package gc // modernc.org/gc/v3
 
+import (
+	"go/token"
+)
+
 var (
 	Invalid = &InvalidType{}
 )
 
 var (
+	_ Type = (*ArrayTypeNode)(nil)
+	_ Type = (*ChannelTypeNode)(nil)
+	_ Type = (*FunctionTypeNode)(nil)
+	_ Type = (*InterfaceTypeNode)(nil)
 	_ Type = (*InvalidType)(nil)
-	//_ Type = (*TypeDefNode)(nil)
+	_ Type = (*MapTypeNode)(nil)
+	_ Type = (*ParenthesizedTypeNode)(nil)
+	_ Type = (*PointerTypeNode)(nil)
+	_ Type = (*SliceTypeNode)(nil)
+	_ Type = (*StructTypeNode)(nil)
+	_ Type = (*TypeDefNode)(nil)
+	_ Type = (*TypeNameNode)(nil)
+	_ Type = (*TypeNode)(nil)
 
 	typeCheckLoop = &InvalidType{}
 )
@@ -95,6 +110,8 @@ type typer interface {
 }
 
 type Type interface {
+	Node
+
 	// Align returns the alignment in bytes of a value of this type when allocated
 	// in memory.
 	Align() int
@@ -120,12 +137,84 @@ type Type interface {
 
 type InvalidType struct{}
 
-func (n *InvalidType) Align() int        { return 1 }
-func (n *InvalidType) FieldAlign() int   { return 1 }
-func (n *InvalidType) Kind() Kind        { return InvalidKind }
-func (n *InvalidType) Size() uintptr     { return 1 }
-func (n *InvalidType) String() string    { return "<invalid type>" }
-func (n *InvalidType) check(c *ctx) Type { return n }
+func (n *InvalidType) Align() int                   { return 1 }
+func (n *InvalidType) FieldAlign() int              { return 1 }
+func (n *InvalidType) Kind() Kind                   { return InvalidKind }
+func (n *InvalidType) Position() (r token.Position) { return r }
+func (n *InvalidType) Size() uintptr                { return 1 }
+func (n *InvalidType) Source(full bool) string      { return "<invalid type>" }
+func (n *InvalidType) String() string               { return "<invalid type>" }
+func (n *InvalidType) check(c *ctx) Type            { return n }
+
+func (n *TypeNode) Align() int        { panic(todo("")) }
+func (n *TypeNode) FieldAlign() int   { panic(todo("")) }
+func (n *TypeNode) Kind() Kind        { panic(todo("")) }
+func (n *TypeNode) Size() uintptr     { panic(todo("")) }
+func (n *TypeNode) String() string    { panic(todo("")) }
+func (n *TypeNode) check(c *ctx) Type { panic(todo("")) }
+
+func (n *TypeNameNode) Align() int        { panic(todo("")) }
+func (n *TypeNameNode) FieldAlign() int   { panic(todo("")) }
+func (n *TypeNameNode) Kind() Kind        { panic(todo("")) }
+func (n *TypeNameNode) Size() uintptr     { panic(todo("")) }
+func (n *TypeNameNode) String() string    { panic(todo("")) }
+func (n *TypeNameNode) check(c *ctx) Type { panic(todo("")) }
+
+func (n *ParenthesizedTypeNode) Align() int        { panic(todo("")) }
+func (n *ParenthesizedTypeNode) FieldAlign() int   { panic(todo("")) }
+func (n *ParenthesizedTypeNode) Kind() Kind        { panic(todo("")) }
+func (n *ParenthesizedTypeNode) Size() uintptr     { panic(todo("")) }
+func (n *ParenthesizedTypeNode) String() string    { panic(todo("")) }
+func (n *ParenthesizedTypeNode) check(c *ctx) Type { panic(todo("")) }
+
+func (n *SliceTypeNode) Align() int        { panic(todo("")) }
+func (n *SliceTypeNode) FieldAlign() int   { panic(todo("")) }
+func (n *SliceTypeNode) Kind() Kind        { panic(todo("")) }
+func (n *SliceTypeNode) Size() uintptr     { panic(todo("")) }
+func (n *SliceTypeNode) String() string    { panic(todo("")) }
+func (n *SliceTypeNode) check(c *ctx) Type { panic(todo("")) }
+
+func (n *ArrayTypeNode) Align() int        { panic(todo("")) }
+func (n *ArrayTypeNode) FieldAlign() int   { panic(todo("")) }
+func (n *ArrayTypeNode) Kind() Kind        { panic(todo("")) }
+func (n *ArrayTypeNode) Size() uintptr     { panic(todo("")) }
+func (n *ArrayTypeNode) String() string    { panic(todo("")) }
+func (n *ArrayTypeNode) check(c *ctx) Type { panic(todo("")) }
+
+func (n *StructTypeNode) Align() int        { panic(todo("")) }
+func (n *StructTypeNode) FieldAlign() int   { panic(todo("")) }
+func (n *StructTypeNode) Kind() Kind        { panic(todo("")) }
+func (n *StructTypeNode) Size() uintptr     { panic(todo("")) }
+func (n *StructTypeNode) String() string    { panic(todo("")) }
+func (n *StructTypeNode) check(c *ctx) Type { panic(todo("")) }
+
+func (n *PointerTypeNode) Align() int        { panic(todo("")) }
+func (n *PointerTypeNode) FieldAlign() int   { panic(todo("")) }
+func (n *PointerTypeNode) Kind() Kind        { panic(todo("")) }
+func (n *PointerTypeNode) Size() uintptr     { panic(todo("")) }
+func (n *PointerTypeNode) String() string    { panic(todo("")) }
+func (n *PointerTypeNode) check(c *ctx) Type { panic(todo("")) }
+
+func (n *FunctionTypeNode) Align() int        { panic(todo("")) }
+func (n *FunctionTypeNode) FieldAlign() int   { panic(todo("")) }
+func (n *FunctionTypeNode) Kind() Kind        { panic(todo("")) }
+func (n *FunctionTypeNode) Size() uintptr     { panic(todo("")) }
+func (n *FunctionTypeNode) String() string    { panic(todo("")) }
+func (n *FunctionTypeNode) check(c *ctx) Type { panic(todo("")) }
+
+func (n *InterfaceTypeNode) Align() int        { panic(todo("")) }
+func (n *InterfaceTypeNode) FieldAlign() int   { panic(todo("")) }
+func (n *InterfaceTypeNode) Kind() Kind        { panic(todo("")) }
+func (n *InterfaceTypeNode) Size() uintptr     { panic(todo("")) }
+func (n *InterfaceTypeNode) String() string    { panic(todo("")) }
+func (n *InterfaceTypeNode) check(c *ctx) Type { panic(todo("")) }
+
+func (n *MapTypeNode) Align() int        { panic(todo("")) }
+func (n *MapTypeNode) FieldAlign() int   { panic(todo("")) }
+func (n *MapTypeNode) Kind() Kind        { panic(todo("")) }
+func (n *MapTypeNode) Size() uintptr     { panic(todo("")) }
+func (n *MapTypeNode) String() string    { panic(todo("")) }
+func (n *MapTypeNode) check(c *ctx) Type { panic(todo("")) }
 
 // ChanDir represents a channel direction.
 type ChanDir int
@@ -136,3 +225,17 @@ const (
 	SendOnly
 	RecvOnly
 )
+
+func (n *ChannelTypeNode) Align() int        { panic(todo("")) }
+func (n *ChannelTypeNode) FieldAlign() int   { panic(todo("")) }
+func (n *ChannelTypeNode) Kind() Kind        { panic(todo("")) }
+func (n *ChannelTypeNode) Size() uintptr     { panic(todo("")) }
+func (n *ChannelTypeNode) String() string    { panic(todo("")) }
+func (n *ChannelTypeNode) check(c *ctx) Type { panic(todo("")) }
+
+func (n *TypeDefNode) Align() int        { panic(todo("")) }
+func (n *TypeDefNode) FieldAlign() int   { panic(todo("")) }
+func (n *TypeDefNode) Kind() Kind        { panic(todo("")) }
+func (n *TypeDefNode) Size() uintptr     { panic(todo("")) }
+func (n *TypeDefNode) String() string    { panic(todo("")) }
+func (n *TypeDefNode) check(c *ctx) Type { panic(todo("")) }

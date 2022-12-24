@@ -55,3 +55,211 @@ type Expression interface {
 	typer
 	valuer
 }
+
+func (n *BasicLitNode) Type() Type {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *BasicLitNode) Value() constant.Value {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *BasicLitNode) checkExpr(c *ctx) Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *BasicLitNode) clone() Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *OperandNameNode) Type() Type {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *OperandNameNode) Value() constant.Value {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *OperandNameNode) checkExpr(c *ctx) Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *OperandNameNode) clone() Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *ParenthesizedExpressionNode) Type() Type {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *ParenthesizedExpressionNode) Value() constant.Value {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *ParenthesizedExpressionNode) checkExpr(c *ctx) Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *ParenthesizedExpressionNode) clone() Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *LiteralValueNode) Type() Type {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *LiteralValueNode) Value() constant.Value {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *LiteralValueNode) checkExpr(c *ctx) Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *LiteralValueNode) clone() Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *KeyedElementNode) Type() Type {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *KeyedElementNode) Value() constant.Value {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *KeyedElementNode) checkExpr(c *ctx) Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *KeyedElementNode) clone() Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *CompositeLitNode) Type() Type {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *CompositeLitNode) Value() constant.Value {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *CompositeLitNode) checkExpr(c *ctx) Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *CompositeLitNode) clone() Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *FunctionLitNode) Type() Type {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *FunctionLitNode) Value() constant.Value {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *FunctionLitNode) checkExpr(c *ctx) Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *FunctionLitNode) clone() Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *OperandNode) Type() Type {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *OperandNode) Value() constant.Value {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *OperandNode) checkExpr(c *ctx) Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *OperandNode) clone() Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *OperandQualifiedNameNode) Type() Type {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *OperandQualifiedNameNode) Value() constant.Value {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *OperandQualifiedNameNode) checkExpr(c *ctx) Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *OperandQualifiedNameNode) clone() Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *ConversionNode) Type() Type {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *ConversionNode) Value() constant.Value {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *ConversionNode) checkExpr(c *ctx) Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *ConversionNode) clone() Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *MethodExprNode) Type() Type {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *MethodExprNode) Value() constant.Value {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *MethodExprNode) checkExpr(c *ctx) Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *MethodExprNode) clone() Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *PrimaryExprNode) Type() Type {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *PrimaryExprNode) Value() constant.Value {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *PrimaryExprNode) checkExpr(c *ctx) Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *PrimaryExprNode) clone() Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *BinaryExpressionNode) checkExpr(c *ctx) Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *BinaryExpressionNode) clone() Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *UnaryExprNode) checkExpr(c *ctx) Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *UnaryExprNode) clone() Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
