@@ -51,7 +51,7 @@ import (
 //    all_test.go:1129: pkg count 516, heap 457,121,224
 
 //    all_test.go:1129: pkg count 516, heap 427,262,960
-//    all_test.go:1129: pkg count 516, heap 428,385,000
+//    all_test.go:1129: pkg count 516, heap 428,477,400
 
 //                                         <total> x 16,603,469 =   892,265,816 á  54
 //                                         <total> x 16,024,194 =   887,787,224 á  55
@@ -97,7 +97,7 @@ import (
 
 //                                         <total> x 12,590,468 =   454,314,392 á  36
 //                                         <total> x 12,591,896 =   456,980,832 á  36
-//                                         <total> x 12,594,655 =   457,076,704 á  36
+//                                         <total> x 12,596,905 =   457,156,200 á  36
 
 const parserBudget = 1e7
 
@@ -444,6 +444,7 @@ type BinaryExpressionNode struct {
 	LHS Expression
 	Op  Token
 	RHS Expression
+
 	typeCache
 	valueCache
 }
@@ -3920,6 +3921,8 @@ type InterfaceTypeNode struct {
 	LBRACE            Token
 	InterfaceElemList *InterfaceElemListNode
 	RBRACE            Token
+
+	guard
 }
 
 // Source implements Node.
@@ -8869,6 +8872,7 @@ func (p *parser) typeTerm() *TypeTermNode {
 type UnaryExprNode struct {
 	Op        Token
 	UnaryExpr Expression
+
 	typeCache
 	valueCache
 }

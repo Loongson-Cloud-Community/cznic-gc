@@ -20,7 +20,7 @@ var (
 		"s390x":   binary.BigEndian,
 	}
 
-	abiTypes = map[[2]string]map[Kind]AbiType{
+	abiTypes = map[[2]string]map[Kind]ABIType{
 		// go1.19.1
 		{"freebsd", "386"}: {
 			Bool:          {1, 1, 1},
@@ -650,10 +650,10 @@ type ABI struct {
 	ByteOrder binary.ByteOrder
 	goarch    string
 	goos      string
-	Types     map[Kind]AbiType
+	Types     map[Kind]ABIType
 }
 
-type AbiType struct {
+type ABIType struct {
 	Size       int64
 	Align      int64
 	FieldAlign int64
@@ -671,7 +671,7 @@ func NewABI(os, arch string) (*ABI, error) {
 		return nil, fmt.Errorf("unsupported os/arch: %s/%s", os, arch)
 	}
 
-	types := make(map[Kind]AbiType, len(types0))
+	types := make(map[Kind]ABIType, len(types0))
 	for k, v := range types0 {
 		types[k] = v
 	}

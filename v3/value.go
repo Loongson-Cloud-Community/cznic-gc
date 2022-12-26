@@ -24,7 +24,9 @@ var (
 	_ Expression = (*PrimaryExprNode)(nil)
 	_ Expression = (*UnaryExprNode)(nil)
 
-	unknown = constant.MakeUnknown()
+	falseVal = constant.MakeBool(false)
+	trueVal  = constant.MakeBool(true)
+	unknown  = constant.MakeUnknown()
 )
 
 type valueCache struct {
@@ -39,7 +41,7 @@ func (n *valueCache) Value() constant.Value {
 	return unknown
 }
 
-func (n *valueCache) set(v constant.Value) constant.Value {
+func (n *valueCache) setValue(v constant.Value) constant.Value {
 	n.v = v
 	return v
 }
