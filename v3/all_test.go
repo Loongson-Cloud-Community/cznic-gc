@@ -47,7 +47,7 @@ var (
 	oSrc               = flag.String("src", defaultSrc, "")
 	oTrc               = flag.Bool("trc", false, "")
 	oTrcObjects        = flag.Bool("trco", false, "")
-	oTrcExpectedErrors = flag.Bool("trce", false, "")
+	oTrcExpectedErrors = flag.Bool("trcee", false, "")
 
 	digits  = expand(unicode.Nd)
 	letters = expand(unicode.L)
@@ -65,6 +65,7 @@ func TestMain(m *testing.M) {
 	flag.BoolVar(&noBack, "noback", false, "panic on parser back")
 	flag.BoolVar(&panicBack, "panicback", false, "panic on parser back")
 	flag.BoolVar(&trcTODOs, "trctodo", false, "")
+	flag.BoolVar(&trcErrors, "trce", false, "")
 	flag.Parse()
 	if s := *oRE; s != "" {
 		re = regexp.MustCompile(s)

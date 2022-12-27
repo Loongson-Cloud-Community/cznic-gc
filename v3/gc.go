@@ -25,6 +25,10 @@ import (
 	"github.com/hashicorp/golang-lru/v2"
 )
 
+var (
+	trcErrors bool
+)
+
 type FileFilter func(cfg *Config, importPath string, matchedFSPaths []string, withTestFiles bool) (pkgFiles []string, err error)
 
 type TypeCheck int
@@ -218,9 +222,9 @@ func NewConfig(opts ...ConfigOption) (r *Config, err error) {
 	}
 
 	r.builtin.Scope.kind = UniverseScope
-	// if err := r.builtin.check(newCtx(r)); err != nil {
-	// 	return nil, err
-	// }
+	//TODO if err := r.builtin.check(newCtx(r)); err != nil {
+	//TODO 	return nil, err
+	//TODO }
 
 	return r, nil
 }

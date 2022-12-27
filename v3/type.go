@@ -24,6 +24,7 @@ var (
 	_ Type = (*PredefinedType)(nil)
 	_ Type = (*SliceTypeNode)(nil)
 	_ Type = (*StructTypeNode)(nil)
+	_ Type = (*TupleType)(nil)
 	_ Type = (*TypeDefNode)(nil)
 	_ Type = (*TypeNameNode)(nil)
 	_ Type = (*TypeNode)(nil)
@@ -301,6 +302,32 @@ func (n *StructTypeNode) check(c *ctx) Type {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
 
+type TupleType struct {
+	Types []Type
+}
+
+func newTupleType(types []Type) *TupleType { return &TupleType{types} }
+
+func (n *TupleType) Align() int      { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+func (n *TupleType) FieldAlign() int { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+func (n *TupleType) Kind() Kind      { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+
+func (n *TupleType) Position() (r token.Position) {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *TupleType) Size() int64 { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+
+func (n *TupleType) Source(full bool) string {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *TupleType) String() string { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+
+func (n *TupleType) check(c *ctx) Type {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
 func (n *TypeDefNode) Align() int      { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *TypeDefNode) FieldAlign() int { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *TypeDefNode) Kind() Kind      { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
@@ -378,12 +405,26 @@ func (n *TypeNameNode) check(c *ctx) Type {
 				return c.newPredefinedType(n, Uint)
 			case "uintptr":
 				return c.newPredefinedType(n, Uintptr)
+			case "Type":
+				// ok
 			default:
 				panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 			}
 		}
 
-		panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+		pkg, _, nmd := c.lookup(n.LexicalScope(), x)
+		switch y := nmd.n.(type) {
+		case *TypeDefNode:
+			if pkg != c.pkg {
+				return y
+			}
+
+			return y.check(c)
+		case nil:
+			panic(todo("%v: %T %s", x.Position(), y, x.Source(false)))
+		default:
+			panic(todo("%v: %T %s", y.Position(), y, y.Source(false)))
+		}
 	default:
 		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
 	}

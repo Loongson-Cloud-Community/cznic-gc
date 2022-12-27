@@ -237,6 +237,9 @@ func (e errList) Error() string {
 }
 
 func (e *errList) err(pos token.Position, msg string, args ...interface{}) {
+	if trcErrors {
+		trc("FAIL "+msg, args...)
+	}
 	switch {
 	case len(args) == 0:
 		*e = append(*e, ErrWithPosition{pos, fmt.Errorf("%s", msg)})

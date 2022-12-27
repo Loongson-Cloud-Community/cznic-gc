@@ -35,10 +35,22 @@ func (c *ctx) err(n Node, msg string, args ...interface{}) {
 func (c *ctx) isBuiltin() bool { return c.pkg.Scope.kind == UniverseScope }
 
 func (c *ctx) lookup(sc *Scope, id Token) (pkg *Package, in *Scope, r named) {
+	sc0 := sc
 	pkg = c.pkg
-	switch in, r = sc.lookup(id); x := r.n.(type) {
-	default:
-		panic(todo("%v: %q %T", id.Position(), id.Src(), x))
+	for {
+		switch in, nm := sc.lookup(id); x := nm.n.(type) {
+		case *TypeDefNode:
+			if sc.kind == UniverseScope {
+				if sc0.kind != UniverseScope && token.IsExported(id.Src()) {
+					// trc("%v: %q %v %v", id.Position(), id.Src(), sc0.kind, sc.kind)
+					return nil, nil, r
+				}
+			}
+
+			return pkg, in, nm
+		default:
+			panic(todo("%v: %q %T", id.Position(), id.Src(), x))
+		}
 	}
 }
 
@@ -81,10 +93,10 @@ func (n *SourceFileNode) check(c *ctx) {
 			x.check(c)
 		case *ConstDeclNode:
 			x.check(c)
-		// 	case *VarDeclNode:
-		// 		x.check(c)
-		// 	case *FunctionDeclNode:
-		// 		x.check(c)
+		case *VarDeclNode:
+			x.check(c)
+		case *FunctionDeclNode:
+			x.check(c)
 		// 	case *MethodDeclNode:
 		// 		x.check(c)
 		default:
@@ -92,6 +104,57 @@ func (n *SourceFileNode) check(c *ctx) {
 		}
 	}
 	panic(todo("%v: %T %v", n.Position(), n, n.Source(false)))
+}
+
+func (n *FunctionDeclNode) check(c *ctx) {
+	if n == nil {
+		return
+	}
+
+	n.Signature.check(c, nil)
+}
+
+func (n *SignatureNode) check(c *ctx, _ *Expression) Type {
+	if n == nil {
+		return Invalid
+	}
+
+	if !n.enter(c, n) {
+		return n.Type()
+	}
+
+	// in := n.Parameters.check(c, nil)
+	// out := n.Result.check(c)
+	// return n.setType(newTupleType([]Type{in, out}), c, n)
+	panic(todo("%v: %T %v", n.Position(), n, n.Source(false)))
+}
+
+func (n *VarDeclNode) check(c *ctx) {
+	if n == nil {
+		return
+	}
+
+	switch x := n.VarSpec.(type) {
+	case *VarSpecNode:
+		x.check(c)
+	default:
+		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+	}
+	// for l := n.VarSpecList; l != nil; l = l.List {
+	// 	l.check(c)
+	// }
+}
+
+func (n *VarSpecNode) check(c *ctx) {
+	switch {
+	case n.TypeNode == nil:
+		panic(todo("%v: %T %v", n.Position(), n, n.Source(false)))
+	default:
+		n.TypeNode.check(c)
+		if n.ExpressionList != nil {
+			panic(todo("%v: %T %v", n.Position(), n, n.Source(false)))
+		}
+	}
 }
 
 func (n *ConstDeclNode) check(c *ctx) {
