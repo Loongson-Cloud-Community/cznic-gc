@@ -3924,6 +3924,8 @@ type InterfaceTypeNode struct {
 	RBRACE            Token
 
 	guard
+
+	methods map[string]*MethodElemNode
 }
 
 // Source implements Node.
@@ -4626,6 +4628,8 @@ func (p *parser) methodDecl() *MethodDeclNode {
 type MethodElemNode struct {
 	MethodName Token
 	Signature  *SignatureNode
+
+	typ Type
 }
 
 // Source implements Node.
@@ -6039,7 +6043,11 @@ func (n *ResultNode) Position() (r token.Position) {
 		return r
 	}
 
-	panic("TODO")
+	if n.Parameters != nil {
+		return n.Parameters.Position()
+	}
+
+	return n.TypeNode.Position()
 }
 
 func (p *parser) result() *ResultNode {

@@ -5,7 +5,9 @@
 package gc // modernc.org/gc/v3
 
 import (
+	"fmt"
 	"go/token"
+	"strings"
 )
 
 var (
@@ -21,7 +23,7 @@ var (
 	_ Type = (*MapTypeNode)(nil)
 	_ Type = (*ParenthesizedTypeNode)(nil)
 	_ Type = (*PointerTypeNode)(nil)
-	_ Type = (*PredefinedType)(nil)
+	_ Type = (*PredeclaredType)(nil)
 	_ Type = (*SliceTypeNode)(nil)
 	_ Type = (*StructTypeNode)(nil)
 	_ Type = (*TupleType)(nil)
@@ -130,8 +132,7 @@ type Type interface {
 	Size() int64
 
 	// String returns a string representation of the type.  The string
-	// representation is not guaranteed to be unique among types. To test for type
-	// identity, compare the Types directly.
+	// representation is not guaranteed to be unique among types.
 	String() string
 
 	check(c *ctx) Type
@@ -157,9 +158,11 @@ const (
 )
 
 func (n *ChannelTypeNode) Align() int { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+
 func (n *ChannelTypeNode) FieldAlign() int {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
+
 func (n *ChannelTypeNode) Kind() Kind     { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *ChannelTypeNode) Size() int64    { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *ChannelTypeNode) String() string { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
@@ -168,9 +171,11 @@ func (n *ChannelTypeNode) check(c *ctx) Type {
 }
 
 func (n *FunctionTypeNode) Align() int { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+
 func (n *FunctionTypeNode) FieldAlign() int {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
+
 func (n *FunctionTypeNode) Kind() Kind  { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *FunctionTypeNode) Size() int64 { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *FunctionTypeNode) String() string {
@@ -181,9 +186,11 @@ func (n *FunctionTypeNode) check(c *ctx) Type {
 }
 
 func (n *InterfaceTypeNode) Align() int { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+
 func (n *InterfaceTypeNode) FieldAlign() int {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
+
 func (n *InterfaceTypeNode) Kind() Kind  { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *InterfaceTypeNode) Size() int64 { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *InterfaceTypeNode) String() string {
@@ -200,14 +207,52 @@ func (n *InterfaceTypeNode) check(c *ctx) Type {
 
 	defer func() { n.guard = guardChecked }()
 
-	n.InterfaceElemList.check(c)
+	n.InterfaceElemList.check(c, n)
 	return n
 }
 
-func (n *InterfaceElemListNode) check(c *ctx) {
-	for l := n; l != nil; l = l.List {
-		panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+func (n *InterfaceElemListNode) check(c *ctx, t *InterfaceTypeNode) {
+	if n == nil {
+		return
 	}
+
+	for l := n; l != nil; l = l.List {
+		l.InterfaceElem.check(c, t)
+	}
+}
+
+func (n *InterfaceElemNode) check(c *ctx, t *InterfaceTypeNode) {
+	if n == nil {
+		return
+	}
+
+	n.MethodElem.check(c, t)
+	n.TypeElem.check(c)
+}
+
+func (n *MethodElemNode) check(c *ctx, t *InterfaceTypeNode) {
+	if n == nil {
+		return
+	}
+
+	nm := n.MethodName.Src()
+	if ex := t.methods[nm]; ex != nil {
+		panic(todo(""))
+	}
+
+	if t.methods == nil {
+		t.methods = map[string]*MethodElemNode{}
+	}
+	t.methods[nm] = n
+	n.typ = n.Signature.check(c)
+}
+
+func (n *TypeElemListNode) check(c *ctx) {
+	if n == nil {
+		return
+	}
+
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
 
 type InvalidType struct{}
@@ -231,56 +276,79 @@ func (n *MapTypeNode) check(c *ctx) Type { panic(todo("%v: %T %s", n.Position(),
 func (n *ParenthesizedTypeNode) Align() int {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
+
 func (n *ParenthesizedTypeNode) FieldAlign() int {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
+
 func (n *ParenthesizedTypeNode) Kind() Kind {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
+
 func (n *ParenthesizedTypeNode) Size() int64 {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
+
 func (n *ParenthesizedTypeNode) String() string {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
+
 func (n *ParenthesizedTypeNode) check(c *ctx) Type {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
 
 func (n *PointerTypeNode) Align() int { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+
 func (n *PointerTypeNode) FieldAlign() int {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
+
 func (n *PointerTypeNode) Kind() Kind     { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *PointerTypeNode) Size() int64    { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *PointerTypeNode) String() string { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+
 func (n *PointerTypeNode) check(c *ctx) Type {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
 
-type PredefinedType struct {
+type PredeclaredType struct {
 	Node
-	t ABIType
+	kind Kind
+	t    ABIType
 }
 
-func (c *ctx) newPredefinedType(n Node, kind Kind) *PredefinedType {
+func (c *ctx) newPredeclaredType(n Node, kind Kind) *PredeclaredType {
 	t, ok := c.cfg.abi.Types[kind]
 	if !ok && !isAnyUntypedKind(kind) {
 		panic(todo("%v: internal error %s: %s", n.Position(), n.Source(false), kind))
 	}
 
-	return &PredefinedType{
+	return &PredeclaredType{
 		Node: n,
+		kind: kind,
 		t:    t,
 	}
 }
 
-func (n *PredefinedType) Align() int      { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
-func (n *PredefinedType) FieldAlign() int { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
-func (n *PredefinedType) Kind() Kind      { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
-func (n *PredefinedType) Size() int64     { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
-func (n *PredefinedType) String() string  { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
-func (n *PredefinedType) check(c *ctx) Type {
+func (n *PredeclaredType) Align() int { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+
+func (n *PredeclaredType) FieldAlign() int {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *PredeclaredType) Kind() Kind  { return n.kind }
+func (n *PredeclaredType) Size() int64 { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+
+func (n *PredeclaredType) String() string {
+	switch n.Kind() {
+	case String:
+		return n.Kind().String()
+	default:
+		panic(todo("%v: %s %s", n.Position(), n.Kind(), n.Source(false)))
+	}
+}
+
+func (n *PredeclaredType) check(c *ctx) Type {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
 
@@ -303,26 +371,32 @@ func (n *StructTypeNode) check(c *ctx) Type {
 }
 
 type TupleType struct {
+	Node
 	Types []Type
 }
 
-func newTupleType(types []Type) *TupleType { return &TupleType{types} }
+func newTupleType(n Node, types []Type) *TupleType { return &TupleType{n, types} }
 
 func (n *TupleType) Align() int      { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *TupleType) FieldAlign() int { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *TupleType) Kind() Kind      { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 
-func (n *TupleType) Position() (r token.Position) {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
-}
-
 func (n *TupleType) Size() int64 { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 
-func (n *TupleType) Source(full bool) string {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+func (n *TupleType) Source(full bool) (r string) {
+	if n.Node != nil {
+		r = n.Node.Source(full)
+	}
+	return r
 }
 
-func (n *TupleType) String() string { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+func (n *TupleType) String() string {
+	var a []string
+	for _, v := range n.Types {
+		a = append(a, v.String())
+	}
+	return fmt.Sprintf("(%s)", strings.Join(a, ", "))
+}
 
 func (n *TupleType) check(c *ctx) Type {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
@@ -349,7 +423,7 @@ func (n *TypeDefNode) check(c *ctx) Type {
 	}
 
 	switch x := n.TypeNode.check(c).(type) {
-	case *PredefinedType:
+	case *PredeclaredType:
 		n.TypeNode = x
 	}
 	return n
@@ -372,39 +446,39 @@ func (n *TypeNameNode) check(c *ctx) Type {
 		if c.isBuiltin() {
 			switch nm {
 			case "bool":
-				return c.newPredefinedType(n, Bool)
+				return c.newPredeclaredType(n, Bool)
 			case "uint8":
-				return c.newPredefinedType(n, Uint8)
+				return c.newPredeclaredType(n, Uint8)
 			case "uint16":
-				return c.newPredefinedType(n, Uint16)
+				return c.newPredeclaredType(n, Uint16)
 			case "uint32":
-				return c.newPredefinedType(n, Uint32)
+				return c.newPredeclaredType(n, Uint32)
 			case "uint64":
-				return c.newPredefinedType(n, Uint64)
+				return c.newPredeclaredType(n, Uint64)
 			case "int8":
-				return c.newPredefinedType(n, Int8)
+				return c.newPredeclaredType(n, Int8)
 			case "int16":
-				return c.newPredefinedType(n, Int16)
+				return c.newPredeclaredType(n, Int16)
 			case "int32":
-				return c.newPredefinedType(n, Int32)
+				return c.newPredeclaredType(n, Int32)
 			case "int64":
-				return c.newPredefinedType(n, Int64)
+				return c.newPredeclaredType(n, Int64)
 			case "float32":
-				return c.newPredefinedType(n, Float32)
+				return c.newPredeclaredType(n, Float32)
 			case "float64":
-				return c.newPredefinedType(n, Float64)
+				return c.newPredeclaredType(n, Float64)
 			case "complex64":
-				return c.newPredefinedType(n, Complex64)
+				return c.newPredeclaredType(n, Complex64)
 			case "complex128":
-				return c.newPredefinedType(n, Complex128)
+				return c.newPredeclaredType(n, Complex128)
 			case "string":
-				return c.newPredefinedType(n, String)
+				return c.newPredeclaredType(n, String)
 			case "int":
-				return c.newPredefinedType(n, Int)
+				return c.newPredeclaredType(n, Int)
 			case "uint":
-				return c.newPredefinedType(n, Uint)
+				return c.newPredeclaredType(n, Uint)
 			case "uintptr":
-				return c.newPredefinedType(n, Uintptr)
+				return c.newPredeclaredType(n, Uintptr)
 			case "Type":
 				// ok
 			default:

@@ -6,6 +6,7 @@ package gc // modernc.org/gc/v3
 
 import (
 	"go/constant"
+	"go/token"
 )
 
 var (
@@ -63,7 +64,8 @@ func (n *BasicLitNode) Type() Type {
 }
 
 func (n *BasicLitNode) Value() constant.Value {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	t := (*Token)(n)
+	return constant.MakeFromLiteral(t.Src(), token.Token(t.ch), 0)
 }
 
 func (n *BasicLitNode) checkExpr(c *ctx) Expression {

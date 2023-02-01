@@ -741,7 +741,7 @@ func testGoParser(p *testParallel, t *testing.T, root string, gld *golden) {
 					return
 				}
 
-				p.recordMaxDuration(path, time.Since(t0), -1)
+				p.recordMaxDuration(path, time.Since(t0), -1) // Number of tokens unknown.
 			}()
 
 			b, err := os.ReadFile(path)

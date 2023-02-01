@@ -3604,6 +3604,7 @@
 /usr/local/go/src/internal/poll/sendfile_solaris.go
 /usr/local/go/src/internal/poll/sendfile_windows.go
 /usr/local/go/src/internal/poll/sock_cloexec.go
+/usr/local/go/src/internal/poll/sock_cloexec_accept.go
 /usr/local/go/src/internal/poll/sockopt.go
 /usr/local/go/src/internal/poll/sockopt_linux.go
 /usr/local/go/src/internal/poll/sockopt_unix.go
@@ -5352,6 +5353,8 @@
 /usr/local/go/src/syscall/syscall_js.go
 /usr/local/go/src/syscall/syscall_linux.go
 /usr/local/go/src/syscall/syscall_linux_386.go
+/usr/local/go/src/syscall/syscall_linux_accept.go
+/usr/local/go/src/syscall/syscall_linux_accept4.go
 /usr/local/go/src/syscall/syscall_linux_amd64.go
 /usr/local/go/src/syscall/syscall_linux_arm.go
 /usr/local/go/src/syscall/syscall_linux_arm64.go
@@ -7799,8 +7802,11 @@
 /usr/local/go/test/fixedbugs/issue5614.dir/y.go
 /usr/local/go/test/fixedbugs/issue5614.go
 /usr/local/go/test/fixedbugs/issue56141.go
+/usr/local/go/test/fixedbugs/issue56727.go
+/usr/local/go/test/fixedbugs/issue56768.go
 /usr/local/go/test/fixedbugs/issue5698.go
 /usr/local/go/test/fixedbugs/issue5704.go
+/usr/local/go/test/fixedbugs/issue57184.go
 /usr/local/go/test/fixedbugs/issue5753.go
 /usr/local/go/test/fixedbugs/issue5755.dir/a.go
 /usr/local/go/test/fixedbugs/issue5755.dir/main.go

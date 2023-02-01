@@ -222,9 +222,9 @@ func NewConfig(opts ...ConfigOption) (r *Config, err error) {
 	}
 
 	r.builtin.Scope.kind = UniverseScope
-	//TODO if err := r.builtin.check(newCtx(r)); err != nil {
-	//TODO 	return nil, err
-	//TODO }
+	if err := r.builtin.check(newCtx(r)); err != nil {
+		return nil, err
+	}
 
 	return r, nil
 }

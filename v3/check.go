@@ -15,12 +15,14 @@ type ctx struct {
 	ast  *AST
 	cfg  *Config
 	errs errList
+	iota int64
 	pkg  *Package
 }
 
 func newCtx(cfg *Config) *ctx {
 	return &ctx{
-		cfg: cfg,
+		cfg:  cfg,
+		iota: -1, // -> Invalid
 	}
 }
 
@@ -97,13 +99,12 @@ func (n *SourceFileNode) check(c *ctx) {
 			x.check(c)
 		case *FunctionDeclNode:
 			x.check(c)
-		// 	case *MethodDeclNode:
-		// 		x.check(c)
+		// 		// 	case *MethodDeclNode:
+		// 		// 		x.check(c)
 		default:
 			panic(todo("%v: %T %s", x.Position(), x, x.Source(false)))
 		}
 	}
-	panic(todo("%v: %T %v", n.Position(), n, n.Source(false)))
 }
 
 func (n *FunctionDeclNode) check(c *ctx) {
@@ -111,10 +112,26 @@ func (n *FunctionDeclNode) check(c *ctx) {
 		return
 	}
 
-	n.Signature.check(c, nil)
+	if c.isBuiltin() {
+		switch nm := n.FunctionName.IDENT.Src(); nm {
+		case
+			"append", "cap", "close", "complex", "copy",
+			"delete", "imag", "len", "make", "new",
+			"panic", "print", "println", "real", "recover":
+
+			n.Signature.t = c.newPredeclaredType(n, Function)
+		default:
+			panic(todo("%v: %q %s", n.Position(), nm, n.Source(false)))
+		}
+		return
+	}
+
+	t := n.Signature.check(c)
+	trc("", t)
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
 
-func (n *SignatureNode) check(c *ctx, _ *Expression) Type {
+func (n *SignatureNode) check(c *ctx) Type {
 	if n == nil {
 		return Invalid
 	}
@@ -123,10 +140,45 @@ func (n *SignatureNode) check(c *ctx, _ *Expression) Type {
 		return n.Type()
 	}
 
-	// in := n.Parameters.check(c, nil)
-	// out := n.Result.check(c)
-	// return n.setType(newTupleType([]Type{in, out}), c, n)
-	panic(todo("%v: %T %v", n.Position(), n, n.Source(false)))
+	in := n.Parameters.check(c)
+	out := n.Result.check(c)
+	return n.setType(newTupleType(n.Parameters, []Type{in, out}))
+}
+
+func (n *ResultNode) check(c *ctx) Type {
+	if n == nil {
+		return Invalid
+	}
+
+	switch {
+	case n.Parameters != nil:
+		panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	case n.TypeNode != nil:
+		return n.TypeNode.check(c)
+	default:
+		panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	}
+}
+
+func (n *ParametersNode) check(c *ctx) Type {
+	if n == nil {
+		return Invalid
+	}
+
+	r := newTupleType(n, nil)
+	for l := n.ParameterDeclList; l != nil; l = l.List {
+		r.Types = append(r.Types, l.ParameterDecl.check(c)...)
+	}
+	return r
+}
+
+func (n *ParameterDeclNode) check(c *ctx) []Type {
+	if n == nil {
+		return nil
+	}
+
+	t := n.TypeNode.check(c)
+	panic(todo("%v: %T %v", n.Position(), t, t))
 }
 
 func (n *VarDeclNode) check(c *ctx) {
@@ -140,21 +192,33 @@ func (n *VarDeclNode) check(c *ctx) {
 	default:
 		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
 	}
-	// for l := n.VarSpecList; l != nil; l = l.List {
-	// 	l.check(c)
-	// }
 }
 
 func (n *VarSpecNode) check(c *ctx) {
-	switch {
-	case n.TypeNode == nil:
-		panic(todo("%v: %T %v", n.Position(), n, n.Source(false)))
-	default:
-		n.TypeNode.check(c)
-		if n.ExpressionList != nil {
-			panic(todo("%v: %T %v", n.Position(), n, n.Source(false)))
-		}
+	if n == nil {
+		return
 	}
+
+	if c.isBuiltin() {
+		switch nm := n.IDENT.Src(); nm {
+		case "nil":
+			n.TypeNode = c.newPredeclaredType(n, UntypedNil)
+		default:
+			panic(todo("%v: %q", n.IDENT.Position(), nm))
+		}
+		return
+	}
+
+	panic(todo("", c.isBuiltin()))
+	// 	switch {
+	// 	case n.TypeNode == nil:
+	// 		panic(todo("%v: %T %v", n.Position(), n, n.Source(false)))
+	// 	default:
+	// 		n.TypeNode.check(c)
+	// 		if n.ExpressionList != nil {
+	// 			panic(todo("%v: %T %v", n.Position(), n, n.Source(false)))
+	// 		}
+	// 	}
 }
 
 func (n *ConstDeclNode) check(c *ctx) {
@@ -168,10 +232,10 @@ func (n *ConstDeclNode) check(c *ctx) {
 		for l := x; l != nil; l = l.List {
 			switch y := l.ConstSpec.(type) {
 			case *ConstSpecNode:
+				y.check(c, prev)
 				if y.Expression != nil || y.TypeNode != nil {
 					prev = y
 				}
-				y.check(c, prev)
 			default:
 				panic(todo("%v: %T %s", n.Position(), y, n.Source(false)))
 			}
@@ -185,13 +249,17 @@ func (n *ConstDeclNode) check(c *ctx) {
 }
 
 func (n *ConstSpecNode) check(c *ctx, prev Node) {
+	if n == nil {
+		return
+	}
+
 	if c.isBuiltin() {
 		switch n.IDENT.Src() {
 		case "true":
 			switch x := n.Expression.(type) {
 			case *BinaryExpressionNode:
 				x.setValue(trueVal)
-				x.setType(c.newPredefinedType(x, UntypedBool))
+				x.setType(c.newPredeclaredType(x, UntypedBool))
 			default:
 				panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
 			}
@@ -199,7 +267,7 @@ func (n *ConstSpecNode) check(c *ctx, prev Node) {
 			switch x := n.Expression.(type) {
 			case *BinaryExpressionNode:
 				x.setValue(falseVal)
-				x.setType(c.newPredefinedType(x, UntypedBool))
+				x.setType(c.newPredeclaredType(x, UntypedBool))
 			default:
 				panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
 			}
@@ -216,60 +284,62 @@ func (n *ConstSpecNode) check(c *ctx, prev Node) {
 		return
 	}
 
-	// switch {
-	// case n.TypeNode != nil:
-	// 	n.t = typeNodeCheck(n.TypeNode, c)
-	// default:
-	// 	switch x := prev.(type) {
-	// 	case *ConstSpecNode:
-	// 		n.t = x.t
-	// 	case nil:
-	// 		n.t = nil
-	// 	default:
-	// 		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
-	// 	}
-	// }
+	// var t Type
+	switch {
+	case n.TypeNode != nil:
+		// 	n.t = typeNodeCheck(n.TypeNode, c)
+		panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	default:
+		switch x := prev.(type) {
+		// 	case *ConstSpecNode:
+		// 		n.t = x.t
+		case nil:
+			// ok
+		default:
+			panic(todo("%v: %T %s", prev.Position(), x, prev.Source(false)))
+		}
+	}
 
-	// save := c.iotaval
-	// c.iotaval = iotaval{val: n.iota, valid: true}
+	save := c.iota
+	c.iota = n.iota
 
-	// defer func() { c.iotaval = save }()
+	defer func() { c.iota = save }()
 
-	// var e Expression
-	// var pe *Expression
-	// switch {
-	// case n.Expression != nil:
-	// 	e = n.Expression
-	// 	pe = &n.Expression
-	// default:
-	// 	switch x := prev.(type) {
-	// 	case *ConstSpecNode:
-	// 		e = x.Expression.clone()
-	// 		pe = &e
-	// 	default:
-	// 		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
-	// 	}
-	// }
-	// ev, et := e.checkExpr(c, pe)
-	// e = *pe
-	// if ev.Kind() == constant.Unknown {
-	// 	c.err(e, "%s is not a constant", e.Source(false))
-	// 	n.t = Invalid
-	// 	n.setValue(unknown)
-	// 	return Invalid
-	// }
-	// switch {
-	// case n.t == nil:
-	// 	n.t = et
-	// default:
-	// 	if !c.isAssignable(e, e, et) {
-	// 		c.err(n.Expression, "cannot assign %v (type %v) to type %v", ev, et, n.Type())
-	// 		return Invalid
-	// 	} else {
-	// 		n.setValue(convertValue(c, e, ev, n.Type()))
-	// 	}
-	// }
-	// return n.Type()
+	// 	// var e Expression
+	// 	// var pe *Expression
+	// 	// switch {
+	// 	// case n.Expression != nil:
+	// 	// 	e = n.Expression
+	// 	// 	pe = &n.Expression
+	// 	// default:
+	// 	// 	switch x := prev.(type) {
+	// 	// 	case *ConstSpecNode:
+	// 	// 		e = x.Expression.clone()
+	// 	// 		pe = &e
+	// 	// 	default:
+	// 	// 		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+	// 	// 	}
+	// 	// }
+	// 	// ev, et := e.checkExpr(c, pe)
+	// 	// e = *pe
+	// 	// if ev.Kind() == constant.Unknown {
+	// 	// 	c.err(e, "%s is not a constant", e.Source(false))
+	// 	// 	n.t = Invalid
+	// 	// 	n.setValue(unknown)
+	// 	// 	return Invalid
+	// 	// }
+	// 	// switch {
+	// 	// case n.t == nil:
+	// 	// 	n.t = et
+	// 	// default:
+	// 	// 	if !c.isAssignable(e, e, et) {
+	// 	// 		c.err(n.Expression, "cannot assign %v (type %v) to type %v", ev, et, n.Type())
+	// 	// 		return Invalid
+	// 	// 	} else {
+	// 	// 		n.setValue(convertValue(c, e, ev, n.Type()))
+	// 	// 	}
+	// 	// }
+	// 	// return n.Type()
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
 
@@ -282,19 +352,58 @@ func (n *TypeDeclNode) check(c *ctx) {
 		switch x := l.TypeSpec.(type) {
 		case *TypeDefNode:
 			if c.isBuiltin() {
-				switch x.IDENT.Src() {
+				switch nm := x.IDENT.Src(); nm {
+				case "bool":
+					x.TypeNode = c.newPredeclaredType(x, Bool)
+				case "int":
+					x.TypeNode = c.newPredeclaredType(x, Int)
+				case "int8":
+					x.TypeNode = c.newPredeclaredType(x, Int8)
+				case "int16":
+					x.TypeNode = c.newPredeclaredType(x, Int16)
+				case "int32":
+					x.TypeNode = c.newPredeclaredType(x, Int32)
+				case "int64":
+					x.TypeNode = c.newPredeclaredType(x, Int64)
+				case "uint":
+					x.TypeNode = c.newPredeclaredType(x, Uint)
+				case "uint8":
+					x.TypeNode = c.newPredeclaredType(x, Uint8)
+				case "uint16":
+					x.TypeNode = c.newPredeclaredType(x, Uint16)
+				case "uint32":
+					x.TypeNode = c.newPredeclaredType(x, Uint32)
+				case "uint64":
+					x.TypeNode = c.newPredeclaredType(x, Uint64)
+				case "uintptr":
+					x.TypeNode = c.newPredeclaredType(x, Uintptr)
+				case "string":
+					x.TypeNode = c.newPredeclaredType(x, String)
+				case "float32":
+					x.TypeNode = c.newPredeclaredType(x, Float32)
+				case "float64":
+					x.TypeNode = c.newPredeclaredType(x, Float64)
+				case "complex64":
+					x.TypeNode = c.newPredeclaredType(x, Complex64)
+				case "complex128":
+					x.TypeNode = c.newPredeclaredType(x, Complex128)
 				case "comparable":
-					switch y := x.TypeNode.(type) {
-					case *InterfaceTypeNode:
-						y.guard = guardChecked
-						continue
-					default:
-						panic(todo("%v: %T %s", y.Position(), y, y.Source(false)))
+					x.TypeNode = c.newPredeclaredType(x, Interface)
+				case "error":
+					x.check(c)
+				default:
+					if token.IsExported(nm) {
+						delete(c.pkg.Scope.nodes, nm)
+						return
 					}
-				}
-			}
 
-			x.check(c)
+					panic(todo("%v: %T %s", x.Position(), x, x.Source(false)))
+				}
+				return
+			}
+			//
+			// 			x.check(c)
+			panic(todo(""))
 		case *AliasDeclNode:
 			x.check(c)
 		default:
@@ -384,6 +493,10 @@ func (n *ImportSpecNode) check(c *ctx) (*Package, error) {
 }
 
 func (n *PackageClauseNode) check(c *ctx) {
+	if n == nil {
+		return
+	}
+
 	nm := n.PackageName.Src()
 	if ex := c.pkg.Name; ex.IsValid() && ex.Src() != nm {
 		c.err(n.PackageName, "found different packages %q and %q", ex.Src(), nm)
