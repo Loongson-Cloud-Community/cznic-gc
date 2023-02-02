@@ -65,6 +65,7 @@ func TestMain(m *testing.M) {
 	flag.BoolVar(&noBack, "noback", false, "panic on parser back")
 	flag.BoolVar(&panicBack, "panicback", false, "panic on parser back")
 	flag.BoolVar(&trcTODOs, "trctodo", false, "")
+	flag.BoolVar(&extendedErrors, "exterr", false, "")
 	flag.BoolVar(&trcErrors, "trce", false, "")
 	flag.Parse()
 	if s := *oRE; s != "" {

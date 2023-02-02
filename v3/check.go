@@ -5,9 +5,12 @@
 package gc // modernc.org/gc/v3
 
 import (
+	"fmt"
 	"go/constant"
 	"go/token"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -17,13 +20,17 @@ type ctx struct {
 	errs errList
 	iota int64
 	pkg  *Package
+
+	untypedInt Type // Set by newCtx
 }
 
-func newCtx(cfg *Config) *ctx {
-	return &ctx{
+func newCtx(cfg *Config) (r *ctx) {
+	r = &ctx{
 		cfg:  cfg,
 		iota: -1, // -> Invalid
 	}
+	r.untypedInt = r.newPredeclaredType(znode, UntypedInt)
+	return r
 }
 
 func (c *ctx) err(n Node, msg string, args ...interface{}) {
@@ -31,10 +38,21 @@ func (c *ctx) err(n Node, msg string, args ...interface{}) {
 	if n != nil {
 		pos = n.Position()
 	}
-	c.errs.err(pos, msg, args...)
+	s := fmt.Sprintf(msg, args...)
+	if trcTODOs && strings.HasPrefix(s, "TODO") {
+		fmt.Fprintf(os.Stderr, "%v: %s (%v)\n", pos, s, origin(2))
+		os.Stderr.Sync()
+	}
+	switch {
+	case extendedErrors:
+		c.errs.err(pos, "%s (%v: %v: %v)", s, origin(4), origin(3), origin(2))
+	default:
+		c.errs.err(pos, s)
+	}
 }
 
 func (c *ctx) isBuiltin() bool { return c.pkg.Scope.kind == UniverseScope }
+func (c *ctx) isUnsafe() bool  { return c.pkg.isUnsafe }
 
 func (c *ctx) lookup(sc *Scope, id Token) (pkg *Package, in *Scope, r named) {
 	sc0 := sc
@@ -63,7 +81,7 @@ func (n *Package) check(c *ctx) (err error) {
 
 	c.pkg = n
 	trc("PKG %q", n.ImportPath)
-	defer func() { trc("PKG %q -> %s", n.ImportPath, err) }()
+	defer func() { trc("PKG %q -> %v", n.ImportPath, err) }()
 	for _, v := range n.GoFiles {
 		path := filepath.Join(n.FSPath, v.Name())
 		n.AST[path].check(c)
@@ -126,9 +144,10 @@ func (n *FunctionDeclNode) check(c *ctx) {
 		return
 	}
 
-	t := n.Signature.check(c)
-	trc("", t)
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	n.Signature.check(c)
+	if n.TypeParameters != nil {
+		panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	}
 }
 
 func (n *SignatureNode) check(c *ctx) Type {
@@ -172,13 +191,16 @@ func (n *ParametersNode) check(c *ctx) Type {
 	return r
 }
 
-func (n *ParameterDeclNode) check(c *ctx) []Type {
+func (n *ParameterDeclNode) check(c *ctx) (r []Type) {
 	if n == nil {
 		return nil
 	}
 
 	t := n.TypeNode.check(c)
-	panic(todo("%v: %T %v", n.Position(), t, t))
+	for l := n.IdentifierList; l != nil; l = l.List {
+		r = append(r, t)
+	}
+	return r
 }
 
 func (n *VarDeclNode) check(c *ctx) {
@@ -209,16 +231,17 @@ func (n *VarSpecNode) check(c *ctx) {
 		return
 	}
 
-	panic(todo("", c.isBuiltin()))
-	// 	switch {
-	// 	case n.TypeNode == nil:
-	// 		panic(todo("%v: %T %v", n.Position(), n, n.Source(false)))
-	// 	default:
-	// 		n.TypeNode.check(c)
-	// 		if n.ExpressionList != nil {
-	// 			panic(todo("%v: %T %v", n.Position(), n, n.Source(false)))
-	// 		}
-	// 	}
+	if n.TypeNode != nil {
+		c.err(n, "TODO %v", n.TypeNode.Source(false))
+	}
+	var e []Expression
+	for l := n.ExpressionList; l != nil; l = l.List {
+		e = append(e, l.Expression.checkExpr(c))
+	}
+	switch len(e) {
+	default:
+		c.err(n, "TODO %v", len(e))
+	}
 }
 
 func (n *ConstDeclNode) check(c *ctx) {
@@ -284,63 +307,61 @@ func (n *ConstSpecNode) check(c *ctx, prev Node) {
 		return
 	}
 
-	// var t Type
-	switch {
-	case n.TypeNode != nil:
-		// 	n.t = typeNodeCheck(n.TypeNode, c)
-		panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
-	default:
-		switch x := prev.(type) {
-		// 	case *ConstSpecNode:
-		// 		n.t = x.t
-		case nil:
-			// ok
-		default:
-			panic(todo("%v: %T %s", prev.Position(), x, prev.Source(false)))
-		}
-	}
-
 	save := c.iota
 	c.iota = n.iota
 
 	defer func() { c.iota = save }()
 
-	// 	// var e Expression
-	// 	// var pe *Expression
-	// 	// switch {
-	// 	// case n.Expression != nil:
-	// 	// 	e = n.Expression
-	// 	// 	pe = &n.Expression
-	// 	// default:
-	// 	// 	switch x := prev.(type) {
-	// 	// 	case *ConstSpecNode:
-	// 	// 		e = x.Expression.clone()
-	// 	// 		pe = &e
-	// 	// 	default:
-	// 	// 		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
-	// 	// 	}
-	// 	// }
-	// 	// ev, et := e.checkExpr(c, pe)
-	// 	// e = *pe
-	// 	// if ev.Kind() == constant.Unknown {
-	// 	// 	c.err(e, "%s is not a constant", e.Source(false))
-	// 	// 	n.t = Invalid
-	// 	// 	n.setValue(unknown)
-	// 	// 	return Invalid
-	// 	// }
-	// 	// switch {
-	// 	// case n.t == nil:
-	// 	// 	n.t = et
-	// 	// default:
-	// 	// 	if !c.isAssignable(e, e, et) {
-	// 	// 		c.err(n.Expression, "cannot assign %v (type %v) to type %v", ev, et, n.Type())
-	// 	// 		return Invalid
-	// 	// 	} else {
-	// 	// 		n.setValue(convertValue(c, e, ev, n.Type()))
-	// 	// 	}
-	// 	// }
-	// 	// return n.Type()
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	switch {
+	case n.Expression != nil:
+		n.Expression = n.Expression.checkExpr(c)
+		if n.TypeNode == nil {
+			n.TypeNode = n.Expression.Type()
+			return
+		}
+
+		t := n.TypeNode.check(c)
+		trc("", t)
+		panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	default:
+		// var e Expression
+		// var pe *Expression
+		// switch {
+		// case n.Expression != nil:
+		// 	e = n.Expression
+		// 	pe = &n.Expression
+		// default:
+		// 	switch x := prev.(type) {
+		// 	case *ConstSpecNode:
+		// 		e = x.Expression.clone()
+		// 		pe = &e
+		// 	default:
+		// 		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+		// 	}
+		// }
+		// ev, et := e.checkExpr(c, pe)
+		// e = *pe
+		// if ev.Kind() == constant.Unknown {
+		// 	c.err(e, "%s is not a constant", e.Source(false))
+		// 	n.t = Invalid
+		// 	n.setValue(unknown)
+		// 	return Invalid
+		// }
+		// switch {
+		// case n.t == nil:
+		// 	n.t = et
+		// default:
+
+		// 		c.err(n.Expression, "cannot assign %v (type %v) to type %v", ev, et, n.Type())
+		// 		return Invalid
+		// 	} else {
+		// 		n.setValue(convertValue(c, e, ev, n.Type()))
+		// 	}
+		// }
+		// return n.Type()
+		panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	}
+
 }
 
 func (n *TypeDeclNode) check(c *ctx) {
@@ -351,12 +372,15 @@ func (n *TypeDeclNode) check(c *ctx) {
 	for l := n.TypeSpecList; l != nil; l = l.List {
 		switch x := l.TypeSpec.(type) {
 		case *TypeDefNode:
-			if c.isBuiltin() {
+			switch {
+			case c.isBuiltin():
+				x.pkg = c.pkg
 				switch nm := x.IDENT.Src(); nm {
 				case "bool":
 					x.TypeNode = c.newPredeclaredType(x, Bool)
 				case "int":
 					x.TypeNode = c.newPredeclaredType(x, Int)
+					c.cfg.int = x.TypeNode
 				case "int8":
 					x.TypeNode = c.newPredeclaredType(x, Int8)
 				case "int16":
@@ -367,6 +391,7 @@ func (n *TypeDeclNode) check(c *ctx) {
 					x.TypeNode = c.newPredeclaredType(x, Int64)
 				case "uint":
 					x.TypeNode = c.newPredeclaredType(x, Uint)
+					c.cfg.uint = x.TypeNode
 				case "uint8":
 					x.TypeNode = c.newPredeclaredType(x, Uint8)
 				case "uint16":
@@ -399,11 +424,22 @@ func (n *TypeDeclNode) check(c *ctx) {
 
 					panic(todo("%v: %T %s", x.Position(), x, x.Source(false)))
 				}
-				return
+			case c.isUnsafe():
+				switch nm := x.IDENT.Src(); nm {
+				case "ArbitraryType":
+					t := x.TypeNode.check(c)
+					panic(todo("", t))
+				default:
+					panic(todo("%v: %T %s", x.Position(), x, x.Source(false)))
+				}
+			default:
+				switch {
+				case x.TypeParameters != nil:
+					panic(todo("%v: %T %s", x.Position(), x, x.Source(false)))
+				default:
+					x.check(c)
+				}
 			}
-			//
-			// 			x.check(c)
-			panic(todo(""))
 		case *AliasDeclNode:
 			x.check(c)
 		default:
@@ -478,7 +514,15 @@ func (n *ImportSpecNode) check(c *ctx) (*Package, error) {
 	case n.PERIOD.IsValid():
 		panic(todo("", n.Position(), n.Source(false)))
 	case n.PackageName.IsValid():
-		panic(todo("", n.Position(), n.Source(false)))
+		//TODO version
+		check := c.pkg.typeCheck
+		switch check {
+		case TypeCheckAll:
+			// nop
+		default:
+			panic(todo("", check))
+		}
+		return c.cfg.newPackage(c.pkg.FSPath, constant.StringVal(n.ImportPath.Value()), "", nil, false, check, c.pkg.guard)
 	default:
 		//TODO version
 		check := c.pkg.typeCheck

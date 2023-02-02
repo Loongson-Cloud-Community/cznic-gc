@@ -19,6 +19,7 @@ import (
 
 var (
 	_ Node = (*Token)(nil)
+	_ Node = (*nonode)(nil)
 
 	keywords = map[string]token.Token{
 		"break":       BREAK,
@@ -49,7 +50,13 @@ var (
 	}
 
 	lineCommentTag = []byte("line ")
+	znode          = &nonode{}
 )
+
+type nonode struct{}
+
+func (*nonode) Position() (r token.Position) { return r }
+func (*nonode) Source(full bool) string      { return "" }
 
 // Token represents a lexeme, its position and its semantic value.
 type Token struct { // 16 bytes on 64 bit arch

@@ -129,7 +129,7 @@ const (
 
 var (
 	trcTODOs       bool
-	extendedErrors = true
+	extendedErrors bool
 )
 
 // origin returns caller's short position, skipping skip frames.
@@ -214,7 +214,7 @@ func extractPos(s string) (p token.Position, ok bool) {
 	return token.Position{Filename: prefix + a[0], Line: line, Column: col}, true
 }
 
-// errorf constructs an error value. If ExtendedErrors is true, the error will
+// errorf constructs an error value. If extendedErrors is true, the error will
 // contain its origin.
 func errorf(s string, args ...interface{}) error {
 	switch {

@@ -108,16 +108,19 @@ type Config struct {
 	env           map[string]string
 	fs            fs.FS
 	goarch        string
+	gocompiler    string // "gc", "gccgo"
 	goos          string
 	gopath        string
 	gopathKey     string // Zero byte separated
 	goroot        string
-	gocompiler    string // "gc", "gccgo"
 	goversion     string
 	lookup        func(rel, importPath, version string) (fsPath string, err error)
 	parallel      *parallel
 	searchGoPaths []string
 	searchGoroot  []string
+
+	int  Type // Set by NewConfig
+	uint Type // Set by NewConfig
 
 	arch32bit  bool
 	configured bool
@@ -557,7 +560,7 @@ type Package struct {
 	mu             sync.Mutex
 	typeCheck      TypeCheck
 
-	// isBuiltin bool
+	isUnsafe bool // ImportPath == "usnafe"
 	// isChecked bool
 }
 
@@ -642,6 +645,7 @@ func (c *Config) newPackage(dir, importPath, version string, fileFilter FileFilt
 		Version:    version,
 		cfg:        c,
 		guard:      guard,
+		isUnsafe:   importPath == "unsafe",
 		typeCheck:  typeCheck,
 	}
 

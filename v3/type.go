@@ -78,6 +78,10 @@ const (
 	UntypedString  // untyped string
 )
 
+type typeSetter interface {
+	setType(t Type) Type
+}
+
 type typeCache struct {
 	t Type
 }
@@ -87,6 +91,7 @@ func (n *typeCache) Type() Type {
 		return n.t
 	}
 
+	n.t = Invalid
 	return Invalid
 }
 
@@ -143,7 +148,20 @@ func (n *ArrayTypeNode) FieldAlign() int { panic(todo("%v: %T %s", n.Position(),
 func (n *ArrayTypeNode) Kind() Kind      { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *ArrayTypeNode) Size() int64     { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *ArrayTypeNode) String() string  { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+
 func (n *ArrayTypeNode) check(c *ctx) Type {
+	if n == nil {
+		return Invalid
+	}
+
+	n.ArrayLength = n.ArrayLength.checkExpr(c)
+	v := c.convertValue(n.ArrayLength, n.ArrayLength.Value(), c.cfg.int)
+	if !known(v) {
+		return Invalid
+	}
+
+	et := n.ElementType.check(c)
+	trc("", et)
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
 
@@ -341,7 +359,10 @@ func (n *PredeclaredType) Size() int64 { panic(todo("%v: %T %s", n.Position(), n
 
 func (n *PredeclaredType) String() string {
 	switch n.Kind() {
-	case String:
+	case
+		String,
+		UntypedInt:
+
 		return n.Kind().String()
 	default:
 		panic(todo("%v: %s %s", n.Position(), n.Kind(), n.Source(false)))
@@ -366,6 +387,7 @@ func (n *StructTypeNode) FieldAlign() int { panic(todo("%v: %T %s", n.Position()
 func (n *StructTypeNode) Kind() Kind      { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *StructTypeNode) Size() int64     { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *StructTypeNode) String() string  { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+
 func (n *StructTypeNode) check(c *ctx) Type {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
@@ -406,7 +428,7 @@ func (n *TypeDefNode) Align() int      { panic(todo("%v: %T %s", n.Position(), n
 func (n *TypeDefNode) FieldAlign() int { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *TypeDefNode) Kind() Kind      { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *TypeDefNode) Size() int64     { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
-func (n *TypeDefNode) String() string  { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+func (n *TypeDefNode) String() string  { return fmt.Sprintf("%s.%s", n.pkg.ImportPath, n.IDENT.Src()) }
 
 func (n *TypeDefNode) check(c *ctx) Type {
 	if n == nil {
@@ -540,5 +562,138 @@ func (n *guard) enter(c *ctx, nd Node) bool {
 		return false
 	default:
 		return false
+	}
+}
+
+func isAnyArithmeticType(t Type) bool { return isArithmeticType(t) || isUntypedArithmeticType(t) }
+
+func isUntypedArithmeticType(t Type) bool {
+	switch t.Kind() {
+	case UntypedInt, UntypedFloat, UntypedComplex:
+		return true
+	default:
+		return false
+	}
+}
+
+func isArithmeticType(t Type) bool {
+	return isIntegerType(t) || isFloatType(t) || isComplexType(t)
+}
+
+func isComplexType(t Type) bool {
+	switch t.Kind() {
+	case Complex64, Complex128:
+		return true
+	default:
+		return false
+	}
+}
+
+func isFloatType(t Type) bool {
+	switch t.Kind() {
+	case Float32, Float64:
+		return true
+	default:
+		return false
+	}
+}
+
+func isIntegerType(t Type) bool {
+	switch t.Kind() {
+	case Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *ctx) isIdentical(n Node, t, u Type) bool {
+	tk := t.Kind()
+	uk := u.Kind()
+	if tk != uk {
+		return false
+	}
+
+	if t == u {
+		return true
+	}
+
+	if isAnyUntypedKind(tk) && isAnyUntypedKind(uk) && tk == uk {
+		return true
+	}
+
+	switch x := t.(type) {
+	// case *ArrayTypeNode:
+	// 	switch y := u.(type) {
+	// 	case *ArrayTypeNode:
+	// 		return x.Len == y.Len && c.isIdentical(n, x.Elem, y.Elem)
+	// 	}
+	// case *StructType:
+	// 	switch y := u.(type) {
+	// 	case *StructType:
+	// 		if len(x.Fields) != len(y.Fields) {
+	// 			return false
+	// 		}
+
+	// 		for i, v := range x.Fields {
+	// 			w := y.Fields[i]
+	// 			if v.Name != w.Name || !c.isIdentical(n, v.Type(), w.Type()) {
+	// 				return false
+	// 			}
+	// 		}
+
+	// 		return true
+	// 	}
+	// case *FunctionType:
+	// 	switch y := u.(type) {
+	// 	case *FunctionType:
+	// 		in, out := x.Parameters.Types, x.Result.Types
+	// 		in2, out2 := y.Parameters.Types, y.Result.Types
+	// 		if len(in) != len(in2) || len(out) != len(out2) {
+	// 			return false
+	// 		}
+
+	// 		for i, v := range in {
+	// 			if !c.isIdentical(n, v, in2[i]) {
+	// 				return false
+	// 			}
+	// 		}
+
+	// 		for i, v := range out {
+	// 			if !c.isIdentical(n, v, out2[i]) {
+	// 				return false
+	// 			}
+	// 		}
+
+	// 		return true
+	// 	}
+	// case *PointerType:
+	// 	switch y := u.(type) {
+	// 	case *PointerType:
+	// 		return c.isIdentical(n, x.Elem, y.Elem)
+	// 	}
+	default:
+		c.err(n, "TODO %v %v", x, u)
+	}
+
+	return false
+}
+
+func (c *ctx) mustIdentical(n Node, t, u Type) bool {
+	if !c.isIdentical(n, t, u) {
+		c.err(n, "incompatible types: %v and %v", t, u)
+		return false
+	}
+
+	return true
+}
+
+func (c *ctx) checkType(n Node) Type {
+	switch x := n.(type) {
+	case *ArrayTypeNode:
+		return x.check(c)
+	default:
+		c.err(n, "TODO %T", x)
+		return Invalid
 	}
 }

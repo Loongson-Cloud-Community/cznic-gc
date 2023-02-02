@@ -6,7 +6,7 @@ package gc // modernc.org/gc/v3
 
 import (
 	"go/constant"
-	"go/token"
+	"math"
 )
 
 var (
@@ -24,11 +24,14 @@ var (
 	_ Expression = (*ParenthesizedExpressionNode)(nil)
 	_ Expression = (*PrimaryExprNode)(nil)
 	_ Expression = (*UnaryExprNode)(nil)
+	_ Expression = (*ValueExpression)(nil)
 
 	falseVal = constant.MakeBool(false)
 	trueVal  = constant.MakeBool(true)
 	unknown  = constant.MakeUnknown()
 )
+
+func known(v constant.Value) bool { return v != nil && v.Kind() != constant.Unknown }
 
 type valueCache struct {
 	v constant.Value
@@ -59,17 +62,41 @@ type Expression interface {
 	valuer
 }
 
-func (n *BasicLitNode) Type() Type {
+type ValueExpression struct {
+	Node
+	typeCache
+	valueCache
+}
+
+func (n *ValueExpression) checkExpr(c *ctx) Expression {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *ValueExpression) clone() Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *BasicLitNode) Type() Type {
+	switch n.Ch() {
+	case CHAR:
+		return n.ctx.newPredeclaredType(n, Int32)
+	case INT:
+		return n.ctx.newPredeclaredType(n, UntypedInt)
+	default:
+		panic(todo("%v: %T %s %v", n.Position(), n, n.Source(false), n.Ch()))
+	}
 }
 
 func (n *BasicLitNode) Value() constant.Value {
-	t := (*Token)(n)
-	return constant.MakeFromLiteral(t.Src(), token.Token(t.ch), 0)
+	return constant.MakeFromLiteral(n.Src(), n.Ch(), 0)
 }
 
 func (n *BasicLitNode) checkExpr(c *ctx) Expression {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	n.ctx = c
+	if !known(n.Value()) {
+		c.err(n, "invalid literal: %s", n.Source(false))
+	}
+	return n
 }
 
 func (n *BasicLitNode) clone() Expression {
@@ -85,7 +112,30 @@ func (n *OperandNameNode) Value() constant.Value {
 }
 
 func (n *OperandNameNode) checkExpr(c *ctx) Expression {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	in, named := n.LexicalScope().lookup(n.Name)
+	switch x := named.n.(type) {
+	case *ConstSpecNode:
+		switch in.kind {
+		case UniverseScope:
+			switch n.Name.Src() {
+			case "iota":
+				if c.iota < 0 {
+					panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+				}
+
+				r := &ValueExpression{Node: x}
+				r.t = c.untypedInt
+				r.v = constant.MakeInt64(c.iota)
+				return r
+			default:
+				panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+			}
+		default:
+			panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+		}
+	default:
+		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+	}
 }
 
 func (n *OperandNameNode) clone() Expression {
@@ -149,7 +199,16 @@ func (n *CompositeLitNode) Value() constant.Value {
 }
 
 func (n *CompositeLitNode) checkExpr(c *ctx) Expression {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	if n == nil {
+		return nil
+	}
+
+	if !n.enter(c, n) {
+		return n
+	}
+
+	n.setType(c.checkType(n.LiteralType))
+	return n
 }
 
 func (n *CompositeLitNode) clone() Expression {
@@ -252,8 +311,107 @@ func (n *PrimaryExprNode) clone() Expression {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
 
-func (n *BinaryExpressionNode) checkExpr(c *ctx) Expression {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+func (n *BinaryExpressionNode) checkExpr(c *ctx) (r Expression) {
+	if n == nil {
+		return nil
+	}
+
+	if n.typeCache.Type() != Invalid {
+		return n
+	}
+
+	n.LHS = n.LHS.checkExpr(c)
+	n.RHS = n.RHS.checkExpr(c)
+	lv := n.LHS.Value()
+	lt := n.LHS.Type()
+	rv := n.RHS.Value()
+	rt := n.RHS.Type()
+
+	defer func() {
+		if known(lv) && known(rv) && r != nil && !known(r.Value()) {
+			c.err(n.Op, "operation value not determined: %v %s %v", lv, n.Op.Src(), rv)
+		}
+	}()
+
+	switch n.Op.Ch() {
+	case SHL, SHR:
+		var u uint64
+		var uOk bool
+		n.t = lt
+		// The right operand in a shift expression must have integer type or be an
+		// untyped constant representable by a value of type uint.
+		switch {
+		case isIntegerType(rt):
+			// ok
+		case known(rv):
+			if isAnyArithmeticType(rt) {
+				rv = c.convertValue(n.RHS, rv, c.cfg.uint)
+				if known(rv) {
+					u, uOk = constant.Uint64Val(rv)
+				}
+				break
+			}
+
+			c.err(n.Op, "TODO %v", n.Op.Src())
+			return n
+		default:
+			panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+			return n
+		}
+
+		// If the left operand of a non-constant shift expression is an untyped
+		// constant, it is first implicitly converted to the type it would assume if
+		// the shift expression were replaced by its left operand alone.
+		switch {
+		case known(lv) && !known(rv):
+			panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+			// c.err(n.Op, "TODO %v", n.Op.Ch.str())
+			// return n
+		case known(lv) && known(rv):
+			if !uOk {
+				panic(todo(""))
+			}
+
+			n.t = lt
+			n.v = constant.Shift(lv, n.Op.Ch(), uint(u))
+		default:
+			trc("", known(lv), known(rv), u, uOk)
+			panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+			// n.t = lt
+			// n.v = constant.BinaryOp(lv, n.Op.Ch(), rv)
+		}
+	case ADD, SUB, MUL, QUO, REM:
+		if !isAnyArithmeticType(lt) || !isAnyArithmeticType(rt) {
+			c.err(n.Op, "TODO %v %v", lt, rt)
+			break
+		}
+
+		// For other binary operators, the operand types must be identical unless the
+		// operation involves shifts or untyped constants.
+		//
+		// Except for shift operations, if one operand is an untyped constant and the
+		// other operand is not, the constant is implicitly converted to the type of
+		// the other operand.
+		switch {
+		case isAnyUntypedType(lt) && isAnyUntypedType(rt):
+			n.v = constant.BinaryOp(lv, n.Op.Ch(), rv)
+			switch n.v.Kind() {
+			case constant.Int:
+				n.t = c.untypedInt
+			default:
+				c.err(n.Op, "TODO %v %v %q %v %v -> %v %v", lv, lt, n.Op.Src(), rv, rt, n.v, n.v.Kind())
+			}
+		case isAnyUntypedType(lt) && !isAnyUntypedType(rt):
+			c.err(n.Op, "TODO %v %v %q %v %v", lv, lt, n.Op.Src(), rv, rt)
+		case !isAnyUntypedType(lt) && isAnyUntypedType(rt):
+			c.err(n.Op, "TODO %v %v %q %v %v", lv, lt, n.Op.Src(), rv, rt)
+		default: // case !isAnyUntypedType(lt) && !isAnyUntypedType(rt):
+			c.err(n.Op, "TODO %v %v %q %v %v", lv, lt, n.Op.Src(), rv, rt)
+		}
+	default:
+		c.err(n.Op, "TODO %v %v %q %v %v", lv, lt, n.Op.Src(), rv, rt)
+	}
+	return n
 }
 
 func (n *BinaryExpressionNode) clone() Expression {
@@ -266,4 +424,223 @@ func (n *UnaryExprNode) checkExpr(c *ctx) Expression {
 
 func (n *UnaryExprNode) clone() Expression {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (c *ctx) convertValue(n Node, v constant.Value, to Type) (r constant.Value) {
+	if !known(v) {
+		return unknown
+	}
+
+	switch to.Kind() {
+	case
+		Complex128,
+		Complex64,
+		Function,
+		Interface,
+		Map,
+		Pointer,
+		Slice,
+		String,
+		Struct,
+		Tuple,
+		UnsafePointer,
+		UntypedBool,
+		UntypedComplex,
+		UntypedFloat,
+		UntypedInt,
+		UntypedNil,
+		UntypedRune,
+		UntypedString:
+
+		c.err(n, "TODO %v -> %v", v, to)
+	case Int:
+		w := constant.ToInt(v)
+		if !known(w) {
+			c.err(n, "cannot convert %s to %s", v, to)
+			return unknown
+		}
+
+		i64, ok := constant.Int64Val(w)
+		if !ok {
+			c.err(n, "value %s overflows %s", v, to)
+			return unknown
+		}
+
+		switch c.cfg.goarch {
+		case "386", "arm":
+			if i64 < math.MinInt32 || i64 > math.MaxInt32 {
+				c.err(n, "value %s overflows %s", v, to)
+				return unknown
+			}
+		}
+		return w
+	case Int8:
+		w := constant.ToInt(v)
+		if !known(w) {
+			c.err(n, "cannot convert %s to %s", v, to)
+			return unknown
+		}
+
+		i64, ok := constant.Int64Val(w)
+		if !ok {
+			c.err(n, "value %s overflows %s", v, to)
+			return unknown
+		}
+
+		if i64 < math.MinInt8 || i64 > math.MaxInt8 {
+			c.err(n, "value %s overflows %s", v, to)
+			return unknown
+		}
+
+		return w
+	case Int16:
+		w := constant.ToInt(v)
+		if !known(w) {
+			c.err(n, "cannot convert %s to %s", v, to)
+			return unknown
+		}
+
+		i64, ok := constant.Int64Val(w)
+		if !ok {
+			c.err(n, "value %s overflows %s", v, to)
+			return unknown
+		}
+
+		if i64 < math.MinInt16 || i64 > math.MaxInt16 {
+			c.err(n, "value %s overflows %s", v, to)
+			return unknown
+		}
+
+		return w
+	case Int32:
+		w := constant.ToInt(v)
+		if !known(w) {
+			c.err(n, "cannot convert %s to %s", v, to)
+			return unknown
+		}
+
+		i64, ok := constant.Int64Val(w)
+		if !ok {
+			c.err(n, "value %s overflows %s", v, to)
+			return unknown
+		}
+
+		if i64 < math.MinInt32 || i64 > math.MaxInt32 {
+			c.err(n, "value %s overflows %s", v, to)
+			return unknown
+		}
+
+		return w
+	case Int64:
+		w := constant.ToInt(v)
+		if !known(w) {
+			c.err(n, "cannot convert %s to %s", v, to)
+			return unknown
+		}
+
+		if _, ok := constant.Int64Val(w); !ok {
+			c.err(n, "value %s overflows %s", v, to)
+			return unknown
+		}
+
+		return w
+	case Uint, Uintptr:
+		w := constant.ToInt(v)
+		if !known(w) {
+			c.err(n, "cannot convert %s to %s", v, to)
+			return unknown
+		}
+
+		u64, ok := constant.Uint64Val(w)
+		if !ok {
+			c.err(n, "value %s overflows %s", v, to)
+			return unknown
+		}
+
+		switch c.cfg.goarch {
+		case "386", "arm":
+			if u64 > math.MaxUint32 {
+				c.err(n, "value %s overflows %s", v, to)
+				return unknown
+			}
+		}
+		return w
+	case Uint8:
+		w := constant.ToInt(v)
+		if !known(w) {
+			c.err(n, "cannot convert %s to %s", v, to)
+			return unknown
+		}
+
+		u64, ok := constant.Uint64Val(w)
+		if !ok {
+			c.err(n, "value %s overflows %s", v, to)
+			return unknown
+		}
+
+		if u64 > math.MaxUint8 {
+			c.err(n, "value %s overflows %s", v, to)
+			return unknown
+		}
+
+		return w
+	case Uint16:
+		w := constant.ToInt(v)
+		if !known(w) {
+			c.err(n, "cannot convert %s to %s", v, to)
+			return unknown
+		}
+
+		u64, ok := constant.Uint64Val(w)
+		if !ok {
+			c.err(n, "value %s overflows %s", v, to)
+			return unknown
+		}
+
+		if u64 > math.MaxUint16 {
+			c.err(n, "value %s overflows %s", v, to)
+			return unknown
+		}
+
+		return w
+	case Uint32:
+		w := constant.ToInt(v)
+		if !known(w) {
+			c.err(n, "cannot convert %s to %s", v, to)
+			return unknown
+		}
+
+		u64, ok := constant.Uint64Val(w)
+		if !ok {
+			c.err(n, "value %s overflows %s", v, to)
+			return unknown
+		}
+
+		if u64 > math.MaxUint32 {
+			c.err(n, "value %s overflows %s", v, to)
+			return unknown
+		}
+
+		return w
+	case Uint64:
+		w := constant.ToInt(v)
+		if !known(w) {
+			c.err(n, "cannot convert %s to %s", v, to)
+			return unknown
+		}
+
+		if _, ok := constant.Uint64Val(w); !ok {
+			c.err(n, "value %s overflows %s", v, to)
+			return unknown
+		}
+
+		return w
+	case Float32, Float64:
+		return constant.ToFloat(v)
+	case Bool:
+		if v.Kind() == constant.Bool {
+			return v
+		}
+	}
+	return unknown
 }

@@ -52,6 +52,9 @@ import (
 
 //    all_test.go:1129: pkg count 516, heap 427,262,960
 //    all_test.go:1130: pkg count 516, heap 428,998,600
+//    all_test.go:1130: pkg count 551, heap 448,395,152
+//    all_test.go:1130: pkg count 551, heap 451,817,616
+//    all_test.go:1131: pkg count 551, heap 452,091,200
 
 //                                         <total> x 16,603,469 =   892,265,816 á  54
 //                                         <total> x 16,024,194 =   887,787,224 á  55
@@ -99,6 +102,9 @@ import (
 //                                         <total> x 12,591,896 =   456,980,832 á  36
 //                                         <total> x 12,597,633 =   457,211,632 á  36
 //                                         <total> x 12,597,637 =   458,714,592 á  36
+//                                         <total> x 12,931,431 =   471,180,992 á  36
+//                                         <total> x 12,931,309 =   481,877,912 á  37
+//                                         <total> x 12,933,798 =   482,402,192 á  37
 
 const parserBudget = 1e7
 
@@ -939,22 +945,25 @@ func (p *parser) assignment(expressionList *ExpressionListNode, preBlock bool) *
 // BasicLitNode represents the production
 //
 //	BasicLit = int_lit | float_lit | imaginary_lit | rune_lit | string_lit .
-type BasicLitNode Token
-
-// Source implements Node.
-func (n *BasicLitNode) Source(full bool) string { return nodeSource(n, full) }
-
-// Position implements Node.
-func (n *BasicLitNode) Position() (r token.Position) {
-	if !n.IsValid() {
-		return r
-	}
-
-	return Token(*n).Position()
+type BasicLitNode struct {
+	Token
+	ctx *ctx
 }
 
-func (n *BasicLitNode) Ch() token.Token { return Token(*n).Ch() }
-func (n *BasicLitNode) IsValid() bool   { return Token(*n).IsValid() }
+//TODO- // Source implements Node.
+//TODO- func (n *BasicLitNode) Source(full bool) string { return nodeSource(n, full) }
+//TODO-
+//TODO- // Position implements Node.
+//TODO- func (n *BasicLitNode) Position() (r token.Position) {
+//TODO- 	if !n.IsValid() {
+//TODO- 		return r
+//TODO- 	}
+//TODO-
+//TODO- 	return Token(*n).Position()
+//TODO- }
+//TODO-
+//TODO- func (n *BasicLitNode) Ch() token.Token { return Token(*n).Ch() }
+//TODO- func (n *BasicLitNode) IsValid() bool   { return Token(*n).IsValid() }
 
 func (p *parser) basicLit() Expression {
 	// ebnf.Alternative int_lit | float_lit | imaginary_lit | rune_lit | string_lit ctx [CHAR, FLOAT, IMAG, INT, STRING]
@@ -963,7 +972,7 @@ func (p *parser) basicLit() Expression {
 	if v.Kind() == constant.Unknown {
 		p.err(t.Position(), "invalid literal: %s", t.Src())
 	}
-	return (*BasicLitNode)(&t)
+	return &BasicLitNode{Token: t}
 }
 
 // BlockNode represents the production
@@ -1333,6 +1342,8 @@ func (p *parser) commClause() *CommClauseNode {
 type CompositeLitNode struct {
 	LiteralType  Node
 	LiteralValue *LiteralValueNode
+
+	typeCache
 }
 
 // Source implements Node.
