@@ -145,7 +145,7 @@ type Type interface {
 
 func (n *ArrayTypeNode) Align() int      { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *ArrayTypeNode) FieldAlign() int { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
-func (n *ArrayTypeNode) Kind() Kind      { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+func (n *ArrayTypeNode) Kind() Kind      { return Array }
 func (n *ArrayTypeNode) Size() int64     { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *ArrayTypeNode) String() string  { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 
@@ -160,9 +160,8 @@ func (n *ArrayTypeNode) check(c *ctx) Type {
 		return Invalid
 	}
 
-	et := n.ElementType.check(c)
-	trc("", et)
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	n.ElementType.check(c)
+	return n
 }
 
 // ChanDir represents a channel direction.
@@ -200,7 +199,18 @@ func (n *FunctionTypeNode) String() string {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
 func (n *FunctionTypeNode) check(c *ctx) Type {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	if !n.enter(c, n) {
+		if n.guard == guardChecking {
+			return Invalid
+		}
+
+		return n
+	}
+
+	defer func() { n.guard = guardChecked }()
+
+	n.Signature.check(c)
+	return n
 }
 
 func (n *InterfaceTypeNode) Align() int { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
@@ -326,7 +336,23 @@ func (n *PointerTypeNode) Size() int64    { panic(todo("%v: %T %s", n.Position()
 func (n *PointerTypeNode) String() string { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 
 func (n *PointerTypeNode) check(c *ctx) Type {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	if !n.enter(c, n) {
+		if n.guard == guardChecking {
+			return Invalid
+		}
+
+		return n
+	}
+
+	defer func() { n.guard = guardChecked }()
+
+	switch x := n.BaseType.(type) {
+	case *TypeNameNode:
+		x.checkDefined(c)
+	default:
+		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+	}
+	return n
 }
 
 type PredeclaredType struct {
@@ -379,7 +405,28 @@ func (n *SliceTypeNode) Kind() Kind      { panic(todo("%v: %T %s", n.Position(),
 func (n *SliceTypeNode) Size() int64     { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *SliceTypeNode) String() string  { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *SliceTypeNode) check(c *ctx) Type {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	if !n.enter(c, n) {
+		if n.guard == guardChecking {
+			return Invalid
+		}
+
+		return n
+	}
+
+	defer func() { n.guard = guardChecked }()
+
+	switch x := n.ElementType.(type) {
+	case *TypeNameNode:
+		x.checkDefined(c)
+	default:
+		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+	}
+	return n
+}
+
+type Field struct {
+	Declaration *FieldDeclNode
+	Name        string
 }
 
 func (n *StructTypeNode) Align() int      { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
@@ -389,7 +436,37 @@ func (n *StructTypeNode) Size() int64     { panic(todo("%v: %T %s", n.Position()
 func (n *StructTypeNode) String() string  { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 
 func (n *StructTypeNode) check(c *ctx) Type {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	if !n.enter(c, n) {
+		if n.guard == guardChecking {
+			return Invalid
+		}
+
+		return n
+	}
+
+	defer func() { n.guard = guardChecked }()
+
+	for l := n.FieldDeclList; l != nil; l = l.List {
+		n.fields = append(n.fields, l.check(c)...)
+	}
+	return n
+}
+
+func (n *FieldDeclListNode) check(c *ctx) []Field {
+	return n.FieldDecl.check(c)
+}
+
+func (n *FieldDeclNode) check(c *ctx) (r []Field) {
+	switch {
+	case n.EmbeddedField != nil:
+		panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	default:
+		n.TypeNode.check(c)
+		for l := n.IdentifierList; l != nil; l = l.List {
+			r = append(r, Field{n, l.IDENT.Src()})
+		}
+	}
+	return r
 }
 
 type TupleType struct {
@@ -456,6 +533,20 @@ func (n *TypeNameNode) FieldAlign() int { panic(todo("%v: %T %s", n.Position(), 
 func (n *TypeNameNode) Kind() Kind      { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *TypeNameNode) Size() int64     { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *TypeNameNode) String() string  { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+
+func (n *TypeNameNode) checkDefined(c *ctx) bool {
+	switch x := n.Name.(type) {
+	case Token:
+		switch _, nmd := n.LexicalScope().lookup(x); y := nmd.n.(type) {
+		case *TypeDefNode, *AliasDeclNode:
+			return true
+		default:
+			panic(todo("%v: %T %s", y.Position(), y, y.Source(false)))
+		}
+	default:
+		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+	}
+}
 
 func (n *TypeNameNode) check(c *ctx) Type {
 	if n == nil {

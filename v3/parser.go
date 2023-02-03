@@ -55,6 +55,7 @@ import (
 //    all_test.go:1130: pkg count 551, heap 448,395,152
 //    all_test.go:1130: pkg count 551, heap 451,817,616
 //    all_test.go:1131: pkg count 551, heap 452,091,200
+//    all_test.go:1131: pkg count 551, heap 452,999,840
 
 //                                         <total> x 16,603,469 =   892,265,816 á  54
 //                                         <total> x 16,024,194 =   887,787,224 á  55
@@ -105,6 +106,7 @@ import (
 //                                         <total> x 12,931,431 =   471,180,992 á  36
 //                                         <total> x 12,931,309 =   481,877,912 á  37
 //                                         <total> x 12,933,798 =   482,402,192 á  37
+//                                         <total> x 12,934,587 =   483,606,808 á  37
 
 const parserBudget = 1e7
 
@@ -1573,6 +1575,8 @@ type ConstSpecNode struct {
 
 	iota int64
 	visible
+
+	guard
 }
 
 // Source implements Node.
@@ -1768,6 +1772,8 @@ type ConversionNode struct {
 	Expression Expression
 	COMMA      Token
 	RPAREN     Token
+
+	valueCache
 }
 
 // Source implements Node.
@@ -3047,6 +3053,8 @@ func (p *parser) functionName() *FunctionNameNode {
 type FunctionTypeNode struct {
 	FUNC      Token
 	Signature *SignatureNode
+
+	guard
 }
 
 // Source implements Node.
@@ -5414,7 +5422,9 @@ func (n *ParametersNode) declare(p *parser, s *Scope) {
 //	PointerType = "*" BaseType .
 type PointerTypeNode struct {
 	MUL      Token
-	BaseType Node
+	BaseType Type
+
+	guard
 }
 
 // Source implements Node.
@@ -5432,7 +5442,7 @@ func (n *PointerTypeNode) Position() (r token.Position) {
 func (p *parser) pointerType() *PointerTypeNode {
 	var (
 		mulTok   Token
-		baseType Node
+		baseType Type
 	)
 	// ebnf.Sequence "*" BaseType ctx [MUL]
 	{
@@ -6839,6 +6849,8 @@ type SliceTypeNode struct {
 	LBRACK      Token
 	RBRACK      Token
 	ElementType Node
+
+	guard
 }
 
 // Source implements Node.
@@ -7280,6 +7292,9 @@ type StructTypeNode struct {
 	LBRACE        Token
 	FieldDeclList *FieldDeclListNode
 	RBRACE        Token
+	fields        []Field
+
+	guard
 }
 
 // Source implements Node.

@@ -21,7 +21,10 @@ type ctx struct {
 	iota int64
 	pkg  *Package
 
-	untypedInt Type // Set by newCtx
+	int32         Type // Set by newCtx
+	untypedFloat  Type // Set by newCtx
+	untypedInt    Type // Set by newCtx
+	untypedString Type // Set by newCtx
 }
 
 func newCtx(cfg *Config) (r *ctx) {
@@ -29,7 +32,10 @@ func newCtx(cfg *Config) (r *ctx) {
 		cfg:  cfg,
 		iota: -1, // -> Invalid
 	}
+	r.int32 = r.newPredeclaredType(znode, Int32)
+	r.untypedFloat = r.newPredeclaredType(znode, UntypedFloat)
 	r.untypedInt = r.newPredeclaredType(znode, UntypedInt)
+	r.untypedString = r.newPredeclaredType(znode, UntypedString)
 	return r
 }
 
@@ -67,7 +73,7 @@ func (c *ctx) lookup(sc *Scope, id Token) (pkg *Package, in *Scope, r named) {
 				}
 			}
 
-			return pkg, in, nm
+			return x.pkg, in, nm
 		default:
 			panic(todo("%v: %q %T", id.Position(), id.Src(), x))
 		}
@@ -117,12 +123,21 @@ func (n *SourceFileNode) check(c *ctx) {
 			x.check(c)
 		case *FunctionDeclNode:
 			x.check(c)
-		// 		// 	case *MethodDeclNode:
-		// 		// 		x.check(c)
+		case *MethodDeclNode:
+			x.check(c)
 		default:
 			panic(todo("%v: %T %s", x.Position(), x, x.Source(false)))
 		}
 	}
+}
+
+func (n *MethodDeclNode) check(c *ctx) {
+	if n == nil {
+		return
+	}
+
+	n.Receiver.check(c)
+	n.Signature.check(c)
 }
 
 func (n *FunctionDeclNode) check(c *ctx) {
@@ -171,7 +186,7 @@ func (n *ResultNode) check(c *ctx) Type {
 
 	switch {
 	case n.Parameters != nil:
-		panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+		return n.Parameters.check(c)
 	case n.TypeNode != nil:
 		return n.TypeNode.check(c)
 	default:
@@ -240,6 +255,7 @@ func (n *VarSpecNode) check(c *ctx) {
 	}
 	switch len(e) {
 	default:
+		panic(todo("", len(e)))
 		c.err(n, "TODO %v", len(e))
 	}
 }
@@ -275,6 +291,15 @@ func (n *ConstSpecNode) check(c *ctx, prev Node) {
 	if n == nil {
 		return
 	}
+
+	if !n.enter(c, n) {
+		if n.guard == guardChecking {
+			panic(todo("")) // report recursive
+		}
+		return
+	}
+
+	defer func() { n.guard = guardChecked }()
 
 	if c.isBuiltin() {
 		switch n.IDENT.Src() {
@@ -426,9 +451,8 @@ func (n *TypeDeclNode) check(c *ctx) {
 				}
 			case c.isUnsafe():
 				switch nm := x.IDENT.Src(); nm {
-				case "ArbitraryType":
-					t := x.TypeNode.check(c)
-					panic(todo("", t))
+				case "ArbitraryType", "IntegerType", "Pointer":
+					x.TypeNode.check(c)
 				default:
 					panic(todo("%v: %T %s", x.Position(), x, x.Source(false)))
 				}

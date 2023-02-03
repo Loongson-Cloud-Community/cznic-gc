@@ -79,9 +79,13 @@ func (n *ValueExpression) clone() Expression {
 func (n *BasicLitNode) Type() Type {
 	switch n.Ch() {
 	case CHAR:
-		return n.ctx.newPredeclaredType(n, Int32)
+		return n.ctx.int32
 	case INT:
-		return n.ctx.newPredeclaredType(n, UntypedInt)
+		return n.ctx.untypedInt
+	case FLOAT:
+		return n.ctx.untypedFloat
+	case STRING:
+		return n.ctx.untypedString
 	default:
 		panic(todo("%v: %T %s %v", n.Position(), n, n.Source(false), n.Ch()))
 	}
@@ -131,7 +135,7 @@ func (n *OperandNameNode) checkExpr(c *ctx) Expression {
 				panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
 			}
 		default:
-			panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+			return x.Expression
 		}
 	default:
 		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
@@ -151,7 +155,7 @@ func (n *ParenthesizedExpressionNode) Value() constant.Value {
 }
 
 func (n *ParenthesizedExpressionNode) checkExpr(c *ctx) Expression {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	return n.Expression.checkExpr(c)
 }
 
 func (n *ParenthesizedExpressionNode) clone() Expression {
@@ -207,11 +211,29 @@ func (n *CompositeLitNode) checkExpr(c *ctx) Expression {
 		return n
 	}
 
-	n.setType(c.checkType(n.LiteralType))
+	t := n.setType(c.checkType(n.LiteralType))
+	n.LiteralValue.check(c, t)
 	return n
 }
 
 func (n *CompositeLitNode) clone() Expression {
+	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+}
+
+func (n *LiteralValueNode) check(c *ctx, t Type) {
+	if n == nil {
+		return
+	}
+
+	switch t.Kind() {
+	case Array:
+		n.checkArray(c, t.(*ArrayTypeNode))
+	default:
+		panic(todo("%v: %T %s %v", n.Position(), n, n.Source(false), t.Kind()))
+	}
+}
+
+func (n *LiteralValueNode) checkArray(c *ctx, t *ArrayTypeNode) {
 	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
 }
 
@@ -264,15 +286,15 @@ func (n *OperandQualifiedNameNode) clone() Expression {
 }
 
 func (n *ConversionNode) Type() Type {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
-}
-
-func (n *ConversionNode) Value() constant.Value {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	return n.TypeNode
 }
 
 func (n *ConversionNode) checkExpr(c *ctx) Expression {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	t := n.TypeNode.check(c)
+	n.Expression = n.Expression.checkExpr(c)
+	v := n.Expression.Value()
+	n.v = c.convertValue(n.Expression, v, t)
+	return n
 }
 
 func (n *ConversionNode) clone() Expression {
@@ -304,7 +326,38 @@ func (n *PrimaryExprNode) Value() constant.Value {
 }
 
 func (n *PrimaryExprNode) checkExpr(c *ctx) Expression {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	switch x := n.PrimaryExpr.(type) {
+	case *OperandNameNode:
+		_, named := x.LexicalScope().lookup(x.Name)
+		switch y := named.n.(type) {
+		case *TypeDefNode:
+			switch z := n.Postfix.(type) {
+			case *ArgumentsNode:
+				cnv := &ConversionNode{
+					TypeNode: &TypeNameNode{
+						Name:          x.Name,
+						lexicalScoper: x.lexicalScoper,
+					},
+					LPAREN:     z.LPAREN,
+					Expression: z.Expression,
+					RPAREN:     z.RPAREN,
+				}
+				return cnv.checkExpr(c)
+			default:
+				panic(todo("%v: %T %s", n.Position(), z, n.Source(false)))
+			}
+		default:
+			panic(todo("%v: %T %s", n.Position(), y, n.Source(false)))
+		}
+	default:
+		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+	}
+
+	n.PrimaryExpr = n.PrimaryExpr.checkExpr(c)
+	switch x := n.Postfix.(type) {
+	default:
+		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+	}
 }
 
 func (n *PrimaryExprNode) clone() Expression {
@@ -398,6 +451,8 @@ func (n *BinaryExpressionNode) checkExpr(c *ctx) (r Expression) {
 			switch n.v.Kind() {
 			case constant.Int:
 				n.t = c.untypedInt
+			case constant.Float:
+				n.t = c.untypedFloat
 			default:
 				c.err(n.Op, "TODO %v %v %q %v %v -> %v %v", lv, lt, n.Op.Src(), rv, rt, n.v, n.v.Kind())
 			}
@@ -419,7 +474,22 @@ func (n *BinaryExpressionNode) clone() Expression {
 }
 
 func (n *UnaryExprNode) checkExpr(c *ctx) Expression {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	if n == nil {
+		return nil
+	}
+
+	if n.typeCache.Type() != Invalid {
+		return n
+	}
+
+	n.UnaryExpr = n.UnaryExpr.checkExpr(c)
+	v := n.UnaryExpr.Value()
+	t := n.UnaryExpr.Type()
+	switch n.Op.Ch() {
+	default:
+		trc("", v, t)
+		panic(todo("%v: %T %s", n.Op.Position(), n, n.Source(false)))
+	}
 }
 
 func (n *UnaryExprNode) clone() Expression {
