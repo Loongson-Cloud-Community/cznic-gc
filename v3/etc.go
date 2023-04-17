@@ -167,7 +167,7 @@ func todo(s string, args ...interface{}) string {
 	default:
 		s = fmt.Sprintf(s, args...)
 	}
-	r := fmt.Sprintf("%s\n\tTODO %s", origin(2), s)
+	r := fmt.Sprintf("%s\n\tTODO (%s)", origin(2), s)
 	// fmt.Fprintf(os.Stderr, "%s\n", r)
 	// os.Stdout.Sync()
 	return r
@@ -182,7 +182,7 @@ func trc(s string, args ...interface{}) string {
 	default:
 		s = fmt.Sprintf(s, args...)
 	}
-	r := fmt.Sprintf("%s: TRC %s", origin(2), s)
+	r := fmt.Sprintf("%s: TRC (%s)", origin(2), s)
 	fmt.Fprintf(os.Stderr, "%s\n", r)
 	os.Stderr.Sync()
 	return r

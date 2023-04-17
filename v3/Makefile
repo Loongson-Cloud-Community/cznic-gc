@@ -38,6 +38,7 @@ edit:
 editor:
 	gofmt -l -s -w *.go
 	go test -c -o /dev/null 2>&1 | tee log-editor
+
 race:
 	go test -v -failfast -heap -race 2>&1 | tee log-test
 	@git diff testdata/ || true

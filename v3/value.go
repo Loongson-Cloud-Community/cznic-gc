@@ -234,7 +234,7 @@ func (n *LiteralValueNode) check(c *ctx, t Type) {
 }
 
 func (n *LiteralValueNode) checkArray(c *ctx, t *ArrayTypeNode) {
-	panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+	panic(todo("%v: %T %s %s", n.Position(), n, t, n.Source(false)))
 }
 
 func (n *FunctionLitNode) Type() Type {

@@ -287,6 +287,7 @@
 /usr/local/go/misc/cgo/testshared/testdata/issue44031/main/main.go
 /usr/local/go/misc/cgo/testshared/testdata/issue47837/a/a.go
 /usr/local/go/misc/cgo/testshared/testdata/issue47837/main/main.go
+/usr/local/go/misc/cgo/testshared/testdata/issue58966/main.go
 /usr/local/go/misc/cgo/testshared/testdata/trivial/trivial.go
 /usr/local/go/misc/cgo/testso/noso_test.go
 /usr/local/go/misc/cgo/testso/overlaydir_test.go
@@ -1216,6 +1217,8 @@
 /usr/local/go/src/cmd/go/internal/robustio/robustio_windows.go
 /usr/local/go/src/cmd/go/internal/run/run.go
 /usr/local/go/src/cmd/go/internal/script/cmds.go
+/usr/local/go/src/cmd/go/internal/script/cmds_other.go
+/usr/local/go/src/cmd/go/internal/script/cmds_posix.go
 /usr/local/go/src/cmd/go/internal/script/conds.go
 /usr/local/go/src/cmd/go/internal/script/engine.go
 /usr/local/go/src/cmd/go/internal/script/errors.go
@@ -1317,7 +1320,9 @@
 /usr/local/go/src/cmd/internal/buildid/rewrite.go
 /usr/local/go/src/cmd/internal/codesign/codesign.go
 /usr/local/go/src/cmd/internal/cov/mreader.go
+/usr/local/go/src/cmd/internal/cov/read_test.go
 /usr/local/go/src/cmd/internal/cov/readcovdata.go
+/usr/local/go/src/cmd/internal/cov/testdata/small.go
 /usr/local/go/src/cmd/internal/dwarf/dwarf.go
 /usr/local/go/src/cmd/internal/dwarf/dwarf_defs.go
 /usr/local/go/src/cmd/internal/dwarf/dwarf_test.go
@@ -3906,6 +3911,7 @@
 /usr/local/go/src/mime/multipart/formdata_test.go
 /usr/local/go/src/mime/multipart/multipart.go
 /usr/local/go/src/mime/multipart/multipart_test.go
+/usr/local/go/src/mime/multipart/readmimeheader.go
 /usr/local/go/src/mime/multipart/writer.go
 /usr/local/go/src/mime/multipart/writer_test.go
 /usr/local/go/src/mime/quotedprintable/example_test.go
@@ -7919,11 +7925,18 @@
 /usr/local/go/test/fixedbugs/issue5793.go
 /usr/local/go/test/fixedbugs/issue5809.go
 /usr/local/go/test/fixedbugs/issue5820.go
+/usr/local/go/test/fixedbugs/issue58293.go
+/usr/local/go/test/fixedbugs/issue58325.go
+/usr/local/go/test/fixedbugs/issue58341.go
 /usr/local/go/test/fixedbugs/issue5841.go
 /usr/local/go/test/fixedbugs/issue5856.go
+/usr/local/go/test/fixedbugs/issue58563.dir/a.go
+/usr/local/go/test/fixedbugs/issue58563.dir/main.go
+/usr/local/go/test/fixedbugs/issue58563.go
 /usr/local/go/test/fixedbugs/issue5910.dir/a.go
 /usr/local/go/test/fixedbugs/issue5910.dir/main.go
 /usr/local/go/test/fixedbugs/issue5910.go
+/usr/local/go/test/fixedbugs/issue59293.go
 /usr/local/go/test/fixedbugs/issue5957.dir/a.go
 /usr/local/go/test/fixedbugs/issue5957.dir/b.go
 /usr/local/go/test/fixedbugs/issue5957.dir/c.go
@@ -8709,6 +8722,7 @@
 /usr/local/go/test/typeparam/issue54537.go
 /usr/local/go/test/typeparam/issue54765.go
 /usr/local/go/test/typeparam/issue55101.go
+/usr/local/go/test/typeparam/issue58513.go
 /usr/local/go/test/typeparam/list.go
 /usr/local/go/test/typeparam/list2.go
 /usr/local/go/test/typeparam/listimp.dir/a.go

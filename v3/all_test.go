@@ -12,7 +12,6 @@ import (
 	goscanner "go/scanner"
 	"go/token"
 	"io/fs"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -25,7 +24,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-	"unicode"
 
 	"github.com/pmezard/go-difflib/difflib"
 	"golang.org/x/tools/go/packages"
@@ -49,11 +47,9 @@ var (
 	oTrcObjects        = flag.Bool("trco", false, "")
 	oTrcExpectedErrors = flag.Bool("trcee", false, "")
 
-	digits  = expand(unicode.Nd)
-	letters = expand(unicode.L)
-	re      *regexp.Regexp
-	wd      string
-	probes  probeA
+	re     *regexp.Regexp
+	wd     string
+	probes probeA
 )
 
 type probeA [4]int32
@@ -78,26 +74,6 @@ func TestMain(m *testing.M) {
 	}
 
 	os.Exit(m.Run())
-}
-
-func expand(cat *unicode.RangeTable) (r []rune) {
-	for _, v := range cat.R16 {
-		for x := v.Lo; x <= v.Hi; x += v.Stride {
-			r = append(r, rune(x))
-		}
-	}
-	for _, v := range cat.R32 {
-		for x := v.Lo; x <= v.Hi; x += v.Stride {
-			r = append(r, rune(x))
-		}
-	}
-	s := rand.NewSource(42)
-	rn := rand.New(s)
-	for i := range r {
-		j := rn.Intn(len(r))
-		r[i], r[j] = r[j], r[i]
-	}
-	return r
 }
 
 type golden struct {

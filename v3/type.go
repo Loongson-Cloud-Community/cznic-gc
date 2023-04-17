@@ -147,7 +147,9 @@ func (n *ArrayTypeNode) Align() int      { panic(todo("%v: %T %s", n.Position(),
 func (n *ArrayTypeNode) FieldAlign() int { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *ArrayTypeNode) Kind() Kind      { return Array }
 func (n *ArrayTypeNode) Size() int64     { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
-func (n *ArrayTypeNode) String() string  { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+func (n *ArrayTypeNode) String() string {
+	return fmt.Sprintf("[%v]%v", n.ArrayLength.Value(), n.ElementType)
+}
 
 func (n *ArrayTypeNode) check(c *ctx) Type {
 	if n == nil {
@@ -404,6 +406,7 @@ func (n *SliceTypeNode) FieldAlign() int { panic(todo("%v: %T %s", n.Position(),
 func (n *SliceTypeNode) Kind() Kind      { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *SliceTypeNode) Size() int64     { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *SliceTypeNode) String() string  { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+
 func (n *SliceTypeNode) check(c *ctx) Type {
 	if !n.enter(c, n) {
 		if n.guard == guardChecking {
@@ -532,7 +535,7 @@ func (n *TypeNameNode) Align() int      { panic(todo("%v: %T %s", n.Position(), 
 func (n *TypeNameNode) FieldAlign() int { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *TypeNameNode) Kind() Kind      { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
 func (n *TypeNameNode) Size() int64     { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
-func (n *TypeNameNode) String() string  { panic(todo("%v: %T %s", n.Position(), n, n.Source(false))) }
+func (n *TypeNameNode) String() string  { return n.Name.Source(false) }
 
 func (n *TypeNameNode) checkDefined(c *ctx) bool {
 	switch x := n.Name.(type) {
@@ -541,10 +544,30 @@ func (n *TypeNameNode) checkDefined(c *ctx) bool {
 		case *TypeDefNode, *AliasDeclNode:
 			return true
 		default:
-			panic(todo("%v: %T %s", y.Position(), y, y.Source(false)))
+			panic(todo("%v: type=%T %s", y.Position(), y, y.Source(false)))
+		}
+	case *QualifiedIdentNode:
+		if !token.IsExported(x.IDENT.Src()) {
+			panic(todo(""))
+		}
+
+		switch _, nmd := n.LexicalScope().lookup(x.PackageName); y := nmd.n.(type) {
+		case *ImportSpecNode:
+			if y.pkg == nil {
+				panic(todo("%v: %T %s", n.Position(), n, n.Source(false)))
+			}
+
+			switch _, nmd := y.pkg.Scope.lookup(x.IDENT); z := nmd.n.(type) {
+			case *TypeDefNode, *AliasDeclNode:
+				return true
+			default:
+				panic(todo("%v: type=%T %s", z.Position(), z, z.Source(false)))
+			}
+		default:
+			panic(todo("%v: type=%T %s", y.Position(), y, y.Source(false)))
 		}
 	default:
-		panic(todo("%v: %T %s", n.Position(), x, n.Source(false)))
+		panic(todo("%v: type=%T %s", n.Position(), x, n.Source(false)))
 	}
 }
 
