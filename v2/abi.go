@@ -615,6 +615,33 @@ var (
 			Uintptr:       {8, 8, 8},
 			UnsafePointer: {8, 8, 8},
 		},
+		// go1.20.4
+		{"illumos", "amd64"}: {
+			Bool:          {1, 1, 1},
+			Chan:          {8, 8, 8},
+			Complex128:    {16, 8, 8},
+			Complex64:     {8, 4, 4},
+			Float32:       {4, 4, 4},
+			Float64:       {8, 8, 8},
+			Function:      {8, 8, 8},
+			Int:           {8, 8, 8},
+			Int16:         {2, 2, 2},
+			Int32:         {4, 4, 4},
+			Int64:         {8, 8, 8},
+			Int8:          {1, 1, 1},
+			Interface:     {16, 8, 8},
+			Map:           {8, 8, 8},
+			Pointer:       {8, 8, 8},
+			Slice:         {24, 8, 8},
+			String:        {16, 8, 8},
+			Uint:          {8, 8, 8},
+			Uint16:        {2, 2, 2},
+			Uint32:        {4, 4, 4},
+			Uint64:        {8, 8, 8},
+			Uint8:         {1, 1, 1},
+			Uintptr:       {8, 8, 8},
+			UnsafePointer: {8, 8, 8},
+		},
 	}
 )
 
