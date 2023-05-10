@@ -3,7 +3,7 @@ module modernc.org/gc/v2/internal/ebnf
 go 1.18
 
 require (
-	github.com/dustin/go-humanize v1.0.0
+	github.com/dustin/go-humanize v1.0.1
 	modernc.org/ebnf v1.1.0
 	modernc.org/ebnfutil v1.0.3
 	modernc.org/gc/v2 v2.2.0
