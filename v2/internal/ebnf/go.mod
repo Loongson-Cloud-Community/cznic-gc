@@ -6,10 +6,10 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	modernc.org/ebnf v1.1.0
 	modernc.org/ebnfutil v1.0.3
-	modernc.org/gc/v2 v2.0.0-20220516112824-550e07b9c9dd
+	modernc.org/gc/v2 v2.2.0
 )
 
 require (
 	modernc.org/strutil v1.1.3 // indirect
-	modernc.org/token v1.0.0 // indirect
+	modernc.org/token v1.1.0 // indirect
 )
