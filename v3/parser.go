@@ -234,12 +234,21 @@ var hooks = strutil.PrettyPrintHooks{
 
 func dump(n Node) string { return strutil.PrettyString(n, "", "", hooks) }
 
-// nodeSource returns the source text of n. If full is false, every non empty
-// separator is replaced by a single space.
+// NodeSource returns the source text of 'n'. If 'full' is false, every non
+// empty separator is replaced by a single space. Nodes found in 'kill' are
+// skipped, transitively.
+func NodeSource(n Node, full bool, kill map[Node]struct{}) string {
+	return nodeSource2(n, full, kill)
+}
+
 func nodeSource(n interface{}, full bool) string {
+	return nodeSource2(n, full, nil)
+}
+
+func nodeSource2(n interface{}, full bool, kill map[Node]struct{}) string {
 	var a []int32
 	var t Token
-	nodeSource0(&t.source, &a, n)
+	nodeSource0(&t.source, &a, n, kill)
 	if len(a) == 0 {
 		return ""
 	}
@@ -254,7 +263,13 @@ func nodeSource(n interface{}, full bool) string {
 	return b.String()
 }
 
-func nodeSource0(ps **source, a *[]int32, n interface{}) {
+func nodeSource0(ps **source, a *[]int32, n interface{}, kill map[Node]struct{}) {
+	if x, ok := n.(Node); ok {
+		if _, ok := kill[x]; ok {
+			return
+		}
+	}
+
 	switch x := n.(type) {
 	case nil:
 		// nop
@@ -277,16 +292,16 @@ func nodeSource0(ps **source, a *[]int32, n interface{}) {
 
 		switch t.Kind() {
 		case reflect.Pointer:
-			nodeSource0(ps, a, v.Elem().Interface())
+			nodeSource0(ps, a, v.Elem().Interface(), kill)
 		case reflect.Struct:
 			for i := 0; i < t.NumField(); i++ {
 				if token.IsExported(t.Field(i).Name) {
-					nodeSource0(ps, a, v.Field(i).Interface())
+					nodeSource0(ps, a, v.Field(i).Interface(), kill)
 				}
 			}
 		case reflect.Slice:
 			for i := 0; i < v.Len(); i++ {
-				nodeSource0(ps, a, v.Index(i).Interface())
+				nodeSource0(ps, a, v.Index(i).Interface(), kill)
 			}
 		default:
 			panic(todo("", t.Name(), t.Kind()))
