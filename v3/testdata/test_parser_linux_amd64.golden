@@ -4378,10 +4378,6 @@
 /usr/local/go/src/os/removeall_at.go
 /usr/local/go/src/os/removeall_noat.go
 /usr/local/go/src/os/removeall_test.go
-/usr/local/go/src/os/rlimit.go
-/usr/local/go/src/os/rlimit_darwin.go
-/usr/local/go/src/os/rlimit_stub.go
-/usr/local/go/src/os/rlimit_test.go
 /usr/local/go/src/os/signal/doc.go
 /usr/local/go/src/os/signal/example_test.go
 /usr/local/go/src/os/signal/example_unix_test.go
@@ -5351,6 +5347,7 @@
 /usr/local/go/src/syscall/exec_windows_test.go
 /usr/local/go/src/syscall/export_darwin_test.go
 /usr/local/go/src/syscall/export_linux_test.go
+/usr/local/go/src/syscall/export_rlimit_test.go
 /usr/local/go/src/syscall/export_unix_test.go
 /usr/local/go/src/syscall/export_windows_test.go
 /usr/local/go/src/syscall/flock.go
@@ -5378,6 +5375,10 @@
 /usr/local/go/src/syscall/ptrace_darwin.go
 /usr/local/go/src/syscall/ptrace_ios.go
 /usr/local/go/src/syscall/pwd_plan9.go
+/usr/local/go/src/syscall/rlimit.go
+/usr/local/go/src/syscall/rlimit_darwin.go
+/usr/local/go/src/syscall/rlimit_stub.go
+/usr/local/go/src/syscall/rlimit_test.go
 /usr/local/go/src/syscall/route_bsd.go
 /usr/local/go/src/syscall/route_darwin.go
 /usr/local/go/src/syscall/route_dragonfly.go
@@ -7937,10 +7938,14 @@
 /usr/local/go/test/fixedbugs/issue5910.dir/main.go
 /usr/local/go/test/fixedbugs/issue5910.go
 /usr/local/go/test/fixedbugs/issue59293.go
+/usr/local/go/test/fixedbugs/issue59334.go
+/usr/local/go/test/fixedbugs/issue59367.go
+/usr/local/go/test/fixedbugs/issue59378.go
 /usr/local/go/test/fixedbugs/issue5957.dir/a.go
 /usr/local/go/test/fixedbugs/issue5957.dir/b.go
 /usr/local/go/test/fixedbugs/issue5957.dir/c.go
 /usr/local/go/test/fixedbugs/issue5957.go
+/usr/local/go/test/fixedbugs/issue59572.go
 /usr/local/go/test/fixedbugs/issue5963.go
 /usr/local/go/test/fixedbugs/issue6004.go
 /usr/local/go/test/fixedbugs/issue6036.go

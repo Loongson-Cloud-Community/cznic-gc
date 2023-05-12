@@ -746,3 +746,8 @@ func (p *Package) matches(k *cacheKey, matches []string) bool {
 	}
 	return true
 }
+
+// ParseFile parses 'b', assuming it comes from 'path' and returns an AST or error, if any.
+func ParseFile(path string, b []byte) (*AST, error) {
+	return newParser(newScope(nil, PackageScope), path, b, false).parse()
+}
