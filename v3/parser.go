@@ -157,7 +157,7 @@ func newScope(parent *Scope, kind ScopeKind) *Scope { return &Scope{parent: pare
 
 func (s *Scope) Iterate(f func(name string, n Node) (stop bool)) {
 	for name, v := range s.nodes {
-		if !f(name, v.n) {
+		if f(name, v.n) {
 			return
 		}
 	}
