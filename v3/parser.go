@@ -155,6 +155,14 @@ type Scope struct {
 
 func newScope(parent *Scope, kind ScopeKind) *Scope { return &Scope{parent: parent, kind: kind} }
 
+func (s *Scope) Iterate(f func(name string, n Node) (stop bool)) {
+	for name, v := range s.nodes {
+		if !f(name, v.n) {
+			return
+		}
+	}
+}
+
 func (s *Scope) Kind() ScopeKind { return s.kind }
 
 func (s *Scope) Parent() *Scope { return s.parent }

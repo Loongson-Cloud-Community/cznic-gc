@@ -86,8 +86,8 @@ func (n *Package) check(c *ctx) (err error) {
 	}
 
 	c.pkg = n
-	trc("PKG %q", n.ImportPath)
-	defer func() { trc("PKG %q -> err: %v", n.ImportPath, err) }()
+	// trc("PKG %q", n.ImportPath)
+	// defer func() { trc("PKG %q -> err: %v", n.ImportPath, err) }()
 	for _, v := range n.GoFiles {
 		path := filepath.Join(n.FSPath, v.Name())
 		n.AST[path].check(c)
