@@ -105,6 +105,7 @@ type Config struct {
 	buildTagsKey  string // Zero byte separated
 	builtin       *Package
 	cache         *Cache
+	cmp           *Package // Go 1.21
 	env           map[string]string
 	fs            fs.FS
 	goarch        string
@@ -219,6 +220,13 @@ func NewConfig(opts ...ConfigOption) (r *Config, err error) {
 	r.gopathKey = strings.Join(r.searchGoPaths, "\x00")
 	for i, v := range r.searchGoPaths {
 		r.searchGoPaths[i] = filepath.Join(v, "src")
+	}
+
+	switch r.cmp, err = r.NewPackage("", "cmp", "", nil, false, TypeCheckNone); {
+	case err != nil:
+		r.cmp = nil
+	default:
+		//TODO r.cmp.Scope.kind = UniverseScope
 	}
 	if r.builtin, err = r.NewPackage("", "builtin", "", nil, false, TypeCheckNone); err != nil {
 		return nil, err

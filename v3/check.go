@@ -148,9 +148,26 @@ func (n *FunctionDeclNode) check(c *ctx) {
 	if c.isBuiltin() {
 		switch nm := n.FunctionName.IDENT.Src(); nm {
 		case
-			"append", "cap", "close", "complex", "copy",
-			"delete", "imag", "len", "make", "new",
-			"panic", "print", "println", "real", "recover":
+			"append",
+			"cap",
+			"close",
+			"complex",
+			"copy",
+			"delete",
+			"imag",
+			"len",
+			"make",
+			"new",
+			"panic",
+			"print",
+			"println",
+			"real",
+			"recover",
+
+			// Go 1.21
+			"max",
+			"min",
+			"clear":
 
 			n.Signature.t = c.newPredeclaredType(n, Function)
 		default:
@@ -515,6 +532,10 @@ func (n *ImportDeclNode) check(c *ctx) {
 		default:
 			panic(todo("%v: %T: %s", v.spec.Position(), x, x))
 		}
+		if c.pkg.ImportPath == "builtin" && v.spec.ImportPath.Src() == `"cmp"` {
+			continue
+		}
+
 		switch ex := fileScope.declare(v.pkg.Name, v.spec, 0, nil, true); {
 		case ex.declTok.IsValid():
 			c.err(n, "%s redeclared, previous declaration at %v:", v.pkg.Name.Src(), ex.declTok.Position())
@@ -554,7 +575,9 @@ func (n *ImportSpecNode) check(c *ctx) (*Package, error) {
 		case TypeCheckAll:
 			// nop
 		default:
-			panic(todo("", check))
+			if c.pkg.ImportPath == "builtin" && n.ImportPath.Src() == `"cmp"` {
+				return nil, nil
+			}
 		}
 		return c.cfg.newPackage(c.pkg.FSPath, constant.StringVal(n.ImportPath.Value()), "", nil, false, check, c.pkg.guard)
 	}

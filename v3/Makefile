@@ -33,7 +33,7 @@ clean:
 
 edit:
 	@touch log
-	@if [ -f "Session.vim" ]; then gvim -S & else gvim -p Makefile *.go & fi
+	@if [ -f "Session.vim" ]; then gvim -S & else gvim -p Makefile all_test.go gc.go & fi
 
 editor:
 	gofmt -l -s -w *.go

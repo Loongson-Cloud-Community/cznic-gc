@@ -159,6 +159,7 @@ func origin(skip int) string {
 }
 
 // todo prints and returns caller's position and an optional message tagged with TODO. Output goes to stderr.
+//
 //lint:ignore U1000 whatever
 func todo(s string, args ...interface{}) string {
 	switch {
@@ -174,6 +175,7 @@ func todo(s string, args ...interface{}) string {
 }
 
 // trc prints and returns caller's position and an optional message tagged with TRC. Output goes to stderr.
+//
 //lint:ignore U1000 whatever
 func trc(s string, args ...interface{}) string {
 	switch {
