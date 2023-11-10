@@ -4731,6 +4731,7 @@
 /usr/local/go/src/path/filepath/match.go
 /usr/local/go/src/path/filepath/match_test.go
 /usr/local/go/src/path/filepath/path.go
+/usr/local/go/src/path/filepath/path_nonwindows.go
 /usr/local/go/src/path/filepath/path_plan9.go
 /usr/local/go/src/path/filepath/path_test.go
 /usr/local/go/src/path/filepath/path_unix.go
@@ -8336,6 +8337,9 @@
 /usr/local/go/test/fixedbugs/issue62203.go
 /usr/local/go/test/fixedbugs/issue62469.go
 /usr/local/go/test/fixedbugs/issue6247.go
+/usr/local/go/test/fixedbugs/issue62498.dir/a.go
+/usr/local/go/test/fixedbugs/issue62498.dir/main.go
+/usr/local/go/test/fixedbugs/issue62498.go
 /usr/local/go/test/fixedbugs/issue6269.go
 /usr/local/go/test/fixedbugs/issue6295.dir/p0.go
 /usr/local/go/test/fixedbugs/issue6295.dir/p1.go
